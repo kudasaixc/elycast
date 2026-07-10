@@ -203,7 +203,7 @@ $env:ELYCAST_DIAGNOSTIC_FILE = 'C:\absolute\path\video.mp4'
 
 This enters the player and logs renderer stats after five seconds. For renderer changes validate: native and managed builds, real playback, focus churn, resize/fullscreen, OSD hover/click, VSR/FRUC toggles, `Present` errors, late presents and dropped frames.
 
-There is currently no unit-test project. CI is a Windows x64 compile gate.
+There is currently no unit-test project. CI provides a Windows x64 compile gate plus CodeQL analysis for the managed C# and native C++ code.
 
 ## 9. Safe-change checklist
 

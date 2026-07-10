@@ -1,0 +1,51 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '23 4 * * 1'
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze C# and C++
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: csharp,cpp
+          queries: security-extended
+
+      - name: Configure native renderer
+        run: cmake -S native/ElyFlow.Native -B native/ElyFlow.Native/build -A x64
+
+      - name: Build native renderer
+        run: cmake --build native/ElyFlow.Native/build --config Release
+
+      - name: Restore
+        run: dotnet restore "ElyCast TV Player.csproj"
+
+      - name: Build managed application
+        run: dotnet build "ElyCast TV Player.csproj" -c Release -p:Platform=x64 --no-restore
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v4
