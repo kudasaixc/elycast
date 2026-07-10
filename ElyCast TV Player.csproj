@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Elysium_Cast_IPTV</RootNamespace>
+    <AssemblyName>Elysium Cast IPTV</AssemblyName>
+    <ApplicationIcon></ApplicationIcon>
+    <!-- libvlc native binaries are x64 only here, so the app must run as x64 -->
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\FleweastAudio.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LibMPVSharp.WPF" Version="0.0.1-beta" />
+    <PackageReference Include="LibVLCSharp" Version="3.8.2" />
+    <PackageReference Include="LibVLCSharp.WPF" Version="3.8.2" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="TagLibSharp" Version="2.3.0" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.20" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="native\ElyFlow.Native\bin\$(Configuration)\ElyFlow.Native.dll"
+          Link="ElyFlow.Native.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('native\ElyFlow.Native\bin\$(Configuration)\ElyFlow.Native.dll')" />
+    <None Include="native\NVIDIA-Optical-Flow-SDK-5.0.7\Optical_Flow_SDK_5.0.7\NvOFFRUC\NvOFFRUCSample\bin\win64\NvOFFRUC.dll"
+          Link="NvOFFRUC.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('native\NVIDIA-Optical-Flow-SDK-5.0.7\Optical_Flow_SDK_5.0.7\NvOFFRUC\NvOFFRUCSample\bin\win64\NvOFFRUC.dll')" />
+    <None Include="native\NVIDIA-Optical-Flow-SDK-5.0.7\Optical_Flow_SDK_5.0.7\NvOFFRUC\NvOFFRUCSample\bin\win64\cudart64_110.dll"
+          Link="cudart64_110.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('native\NVIDIA-Optical-Flow-SDK-5.0.7\Optical_Flow_SDK_5.0.7\NvOFFRUC\NvOFFRUCSample\bin\win64\cudart64_110.dll')" />
+  </ItemGroup>
+
+  <!-- Do not silently ship a Release build with the advertised ELYFLOW backend
+       missing. The native project is built with CMake before invoking this build. -->
+  <Target Name="RequireElyFlowNative" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Error Condition="!Exists('native\ElyFlow.Native\bin\$(Configuration)\ElyFlow.Native.dll')"
+           Text="ElyFlow.Native.dll is missing for $(Configuration). Build native/ElyFlow.Native with: cmake --build native/ElyFlow.Native/build --config $(Configuration)" />
+  </Target>
+
+</Project>

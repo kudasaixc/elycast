@@ -1,0 +1,1555 @@
+<Window x:Class="Elysium_Cast_IPTV.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Elysium_Cast_IPTV"
+        Title="ElyCast TV Player"
+        Height="760" Width="1240" MinHeight="600" MinWidth="1040"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        Background="{StaticResource AppBackground}"
+        FontFamily="{StaticResource UiFont}"
+        Foreground="{StaticResource TextBrush}">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="44" ResizeBorderThickness="6"
+                      CornerRadius="0" GlassFrameThickness="0" UseAeroCaptionButtons="False"/>
+    </WindowChrome.WindowChrome>
+
+    <Grid>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition x:Name="TitleRow" Height="44"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- ============ TITLE BAR ============ -->
+            <Grid x:Name="TitleBar" Grid.Row="0" Background="Transparent">
+                <StackPanel Orientation="Horizontal" Margin="16,0" VerticalAlignment="Center">
+                    <Border Width="22" Height="22" CornerRadius="7" Background="{DynamicResource AccentBrush}">
+                        <Path Data="M 5,3 L 12,8 L 5,13 Z" Fill="White" Stretch="Uniform"
+                              Width="9" Height="9" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" FontSize="13"
+                               FontWeight="Bold" Foreground="{StaticResource TextBrush}">
+                        ELY<Run Foreground="{DynamicResource AccentBBrush}">CAST</Run>
+                    </TextBlock>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button x:Name="ConsoleBtn" Style="{StaticResource CaptionButton}" Width="54"
+                            Click="Console_Click" ToolTip="Afficher / masquer la console de debug">
+                        <Path Data="M 1,1 L 11,1 L 11,9 L 1,9 Z M 3,4 L 5,5.5 L 3,7 M 6,7 L 9,7"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.1" Stretch="Uniform" Width="15" Height="13"/>
+                    </Button>
+                    <Button x:Name="MinBtn" Style="{StaticResource CaptionButton}" Click="Min_Click">
+                        <Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1" Data="M 0,5 L 10,5"/>
+                    </Button>
+                    <Button x:Name="MaxBtn" Style="{StaticResource CaptionButton}" Click="Max_Click">
+                        <Rectangle Width="9" Height="9"
+                                   Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                   StrokeThickness="1"/>
+                    </Button>
+                    <Button x:Name="CloseBtn" Style="{StaticResource CaptionButton}" Click="Close_Click">
+                        <Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.2" Data="M 0,0 L 10,10 M 10,0 L 0,10"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- ============ CONTENT ============ -->
+            <Grid Grid.Row="1">
+
+                <!-- ====== LOGIN VIEW ====== -->
+                <Grid x:Name="LoginView">
+                    <Border Width="470" MaxHeight="640" VerticalAlignment="Center" HorizontalAlignment="Center"
+                            CornerRadius="22" Background="{StaticResource CardBrush}"
+                            BorderBrush="{StaticResource CardStroke}" BorderThickness="1"
+                            RenderTransformOrigin="0.5,0.5">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="56" ShadowDepth="0" Opacity="0.6" Color="#FF120526"/>
+                        </Border.Effect>
+                        <Border.RenderTransform>
+                            <TranslateTransform x:Name="LoginCardT" Y="24"/>
+                        </Border.RenderTransform>
+
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="36,32,36,32">
+                            <StackPanel>
+                                <TextBlock Text="Bienvenue 👋" FontSize="26" FontWeight="Bold"
+                                           Foreground="{StaticResource TextBrush}"/>
+                                <TextBlock Margin="0,6,0,0" FontSize="13" TextWrapping="Wrap"
+                                           Foreground="{StaticResource MutedBrush}"
+                                           Text="Connecte-toi via Xtream Codes ou une playlist M3U pour commencer."/>
+
+                                <StackPanel x:Name="ProfilesSection" Visibility="Collapsed">
+                                    <TextBlock Text="PROFILS ENREGISTRÉS" Margin="0,24,0,10" FontSize="11"
+                                               FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                                    <ItemsControl x:Name="ProfilesItems">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,0,8,8">
+                                                    <Button Click="LoadProfile_Click" Tag="{Binding}"
+                                                            Cursor="Hand" HorizontalContentAlignment="Left">
+                                                        <Button.Template>
+                                                            <ControlTemplate TargetType="Button">
+                                                                <Border x:Name="bd" CornerRadius="12" Padding="10,8"
+                                                                        Background="{StaticResource FieldBrush}"
+                                                                        BorderBrush="{StaticResource FieldStroke}"
+                                                                        BorderThickness="1">
+                                                                    <StackPanel Orientation="Horizontal">
+                                                                        <Border Width="32" Height="32" CornerRadius="9"
+                                                                                Background="{DynamicResource AccentBrush}">
+                                                                            <TextBlock Text="{Binding Initial}"
+                                                                                FontWeight="Bold" Foreground="White"
+                                                                                HorizontalAlignment="Center"
+                                                                                VerticalAlignment="Center"/>
+                                                                        </Border>
+                                                                        <StackPanel Margin="10,0,8,0" VerticalAlignment="Center">
+                                                                            <TextBlock Text="{Binding Name}" FontSize="13"
+                                                                                FontWeight="SemiBold"
+                                                                                Foreground="{StaticResource TextBrush}"/>
+                                                                            <TextBlock Text="{Binding Subtitle}" FontSize="11"
+                                                                                Foreground="{StaticResource MutedBrush}"/>
+                                                                        </StackPanel>
+                                                                    </StackPanel>
+                                                                </Border>
+                                                                <ControlTemplate.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                        <Setter TargetName="bd" Property="BorderBrush"
+                                                                                Value="{DynamicResource AccentABrush}"/>
+                                                                    </Trigger>
+                                                                </ControlTemplate.Triggers>
+                                                            </ControlTemplate>
+                                                        </Button.Template>
+                                                    </Button>
+                                                    <Button Click="DeleteProfile_Click" Tag="{Binding}"
+                                                            Width="18" Height="18" Cursor="Hand"
+                                                            HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                            Margin="0,-6,-6,0" ToolTip="Supprimer ce profil">
+                                                        <Button.Template>
+                                                            <ControlTemplate TargetType="Button">
+                                                                <Border x:Name="b" CornerRadius="9" Background="#FF2A1840">
+                                                                    <Path Data="M 0,0 L 6,6 M 6,0 L 0,6" Stroke="#FFD9C8FF"
+                                                                          StrokeThickness="1.2" Stretch="Uniform"
+                                                                          Width="7" Height="7"
+                                                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                </Border>
+                                                                <ControlTemplate.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                        <Setter TargetName="b" Property="Background" Value="{DynamicResource AccentABrush}"/>
+                                                                    </Trigger>
+                                                                </ControlTemplate.Triggers>
+                                                            </ControlTemplate>
+                                                        </Button.Template>
+                                                    </Button>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+
+                                <Border Margin="0,22,0,0" CornerRadius="12" Background="{StaticResource FieldBrush}"
+                                        BorderBrush="{StaticResource FieldStroke}" BorderThickness="1" Padding="4" Height="44">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border x:Name="TabHighlight" Grid.Column="0" CornerRadius="9"
+                                                Background="{DynamicResource AccentBrush}"/>
+                                        <Button x:Name="XtreamTabBtn" Grid.Column="0" Content="Xtream Codes"
+                                                Background="Transparent" Foreground="White" FontWeight="SemiBold"
+                                                BorderThickness="0" Cursor="Hand" Click="XtreamTab_Click"/>
+                                        <Button x:Name="M3uTabBtn" Grid.Column="1" Content="Playlist M3U"
+                                                Background="Transparent" Foreground="{StaticResource MutedBrush}"
+                                                FontWeight="SemiBold" BorderThickness="0" Cursor="Hand" Click="M3uTab_Click"/>
+                                    </Grid>
+                                </Border>
+
+                                <StackPanel x:Name="XtreamPanel">
+                                    <TextBlock Text="URL DU SERVEUR" Margin="0,20,0,8" FontSize="11"
+                                               FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                                    <TextBox x:Name="UrlBox" Style="{StaticResource FieldBox}" Tag="http://exemple.com:8080"/>
+                                    <TextBlock Text="NOM D'UTILISATEUR" Margin="0,16,0,8" FontSize="11"
+                                               FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                                    <TextBox x:Name="UserBox" Style="{StaticResource FieldBox}" Tag="utilisateur"/>
+                                    <TextBlock Text="MOT DE PASSE" Margin="0,16,0,8" FontSize="11"
+                                               FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                                    <Grid>
+                                        <PasswordBox x:Name="PassBox" Foreground="{StaticResource TextBrush}"
+                                                     CaretBrush="{DynamicResource AccentBBrush}" FontSize="14" Height="48"
+                                                     VerticalContentAlignment="Center" PasswordChanged="PassBox_PasswordChanged">
+                                            <PasswordBox.Template>
+                                                <ControlTemplate TargetType="PasswordBox">
+                                                    <Border CornerRadius="12" Background="{StaticResource FieldBrush}"
+                                                            BorderBrush="{StaticResource FieldStroke}" BorderThickness="1.5"
+                                                            Padding="16,0">
+                                                        <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </PasswordBox.Template>
+                                        </PasswordBox>
+                                        <TextBlock x:Name="PassPlaceholder" Text="mot de passe" Margin="17,0,0,0"
+                                                   VerticalAlignment="Center" IsHitTestVisible="False"
+                                                   Foreground="{StaticResource FaintBrush}"/>
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel x:Name="M3uPanel" Visibility="Collapsed">
+                                    <TextBlock Text="FICHIER OU URL M3U" Margin="0,20,0,8" FontSize="11"
+                                               FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="M3uPathBox" Style="{StaticResource FieldBox}"
+                                                 Tag="C:\playlist.m3u ou http://…/list.m3u"/>
+                                        <Button Grid.Column="1" Content="Parcourir…" Style="{StaticResource GhostButton}"
+                                                Height="48" Width="110" Margin="8,0,0,0" Click="Browse_Click"/>
+                                    </Grid>
+                                </StackPanel>
+
+                                <CheckBox x:Name="SaveProfileCheck" Margin="2,18,0,0" Foreground="{StaticResource MutedBrush}"
+                                          Content="Enregistrer ce profil" Checked="SaveProfile_Toggle" Unchecked="SaveProfile_Toggle"/>
+                                <StackPanel x:Name="ProfileNamePanel" Visibility="Collapsed">
+                                    <TextBox x:Name="ProfileNameBox" Style="{StaticResource FieldBox}" Height="42"
+                                             Margin="0,10,0,0" Tag="Nom du profil"/>
+                                </StackPanel>
+
+                                <Button x:Name="ConnectBtn" Style="{StaticResource PrimaryButton}"
+                                        Margin="0,24,0,0" Click="Connect_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Grid Width="18" Height="18" Margin="0,0,8,0">
+                                            <Ellipse x:Name="LoginSpinner" Width="16" Height="16" Stroke="White"
+                                                     StrokeThickness="2" StrokeDashArray="3 2" Visibility="Collapsed"
+                                                     RenderTransformOrigin="0.5,0.5">
+                                                <Ellipse.RenderTransform><RotateTransform/></Ellipse.RenderTransform>
+                                            </Ellipse>
+                                            <Path x:Name="LoginIcon" Data="M 0,4 L 8,4 M 5,1 L 8,4 L 5,7" Stroke="White"
+                                                  StrokeThickness="1.6" Stretch="Uniform" Width="14" Height="14"/>
+                                        </Grid>
+                                        <TextBlock x:Name="ConnectLabel" Text="Se connecter"/>
+                                    </StackPanel>
+                                </Button>
+
+                                <TextBlock x:Name="StatusText" Margin="0,14,0,0" FontSize="12" TextWrapping="Wrap"
+                                           HorizontalAlignment="Center" TextAlignment="Center" Foreground="#FFFF8A8A"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+
+                <!-- ====== PLAYER VIEW ====== -->
+                <Grid x:Name="PlayerView" Visibility="Collapsed" Opacity="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="NavColumn" Width="76"/>
+                        <ColumnDefinition x:Name="SidebarColumn" Width="330"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- NAV RAIL -->
+                    <Border x:Name="NavRail" Grid.Column="0" Margin="14,0,0,14" CornerRadius="18"
+                            Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardStroke}"
+                            BorderThickness="1">
+                        <Grid Margin="0,14">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Grid.Row="0">
+                                <RadioButton x:Name="NavLive" Style="{StaticResource NavRadio}" IsChecked="True"
+                                             GroupName="nav" Checked="Nav_Changed" Tag="Live">
+                                    <StackPanel>
+                                        <Path Data="M2,3 H18 V14 H2 Z M7,17 H13" Stretch="Uniform" Width="22" Height="20"
+                                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                                              StrokeThickness="1.4"/>
+                                        <TextBlock Text="Live" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,0"
+                                                   Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                                    </StackPanel>
+                                </RadioButton>
+                                <RadioButton x:Name="NavMovies" Style="{StaticResource NavRadio}" GroupName="nav" Checked="Nav_Changed" Tag="Movies">
+                                    <StackPanel>
+                                        <Path Data="M2,4 H18 V16 H2 Z M2,8 H18 M5,4 V8 M9,4 V8 M13,4 V8" Stretch="Uniform"
+                                              Width="22" Height="20"
+                                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                                              StrokeThickness="1.4"/>
+                                        <TextBlock Text="Films" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,0"
+                                                   Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                                    </StackPanel>
+                                </RadioButton>
+                                <RadioButton x:Name="NavSeries" Style="{StaticResource NavRadio}" GroupName="nav" Checked="Nav_Changed" Tag="Series">
+                                    <StackPanel>
+                                        <Path Data="M4,6 H16 V15 H4 Z M6,3 H14 M4,9 H16" Stretch="Uniform" Width="22" Height="20"
+                                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                                              StrokeThickness="1.4"/>
+                                        <TextBlock Text="Séries" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,0"
+                                                   Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                                    </StackPanel>
+                                </RadioButton>
+                                <RadioButton x:Name="NavLocal" Style="{StaticResource NavRadio}" GroupName="nav" Checked="Nav_Changed" Tag="Local">
+                                    <StackPanel>
+                                        <Path Data="M3,3 H17 V16 H3 Z M6,6 H14 M6,9 H14 M6,12 H11" Stretch="Uniform" Width="22" Height="20"
+                                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                                              StrokeThickness="1.4"/>
+                                        <TextBlock Text="Local" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,0"
+                                                   Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                                    </StackPanel>
+                                </RadioButton>
+                                <RadioButton x:Name="NavFav" Style="{StaticResource NavRadio}" GroupName="nav" Checked="Nav_Changed" Tag="Fav">
+                                    <StackPanel>
+                                        <Path Data="M10,1 L12.6,6.7 L19,7.3 L14,11.6 L15.6,18 L10,14.5 L4.4,18 L6,11.6 L1,7.3 L7.4,6.7 Z"
+                                              Stretch="Uniform" Width="22" Height="20"
+                                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                                              StrokeThickness="1.3"/>
+                                        <TextBlock Text="Favoris" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,0"
+                                                   Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                                    </StackPanel>
+                                </RadioButton>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="2">
+                                <RadioButton x:Name="NavSettings" Style="{StaticResource NavRadio}" GroupName="nav"
+                                             Checked="Nav_Changed" Unchecked="Nav_Changed" Tag="Settings">
+                                    <StackPanel>
+                                        <Path Data="M2,5 H16 M2,10 H16 M2,15 H16 M6,3 H8 V7 H6 Z M11,8 H13 V12 H11 Z M5,13 H7 V17 H5 Z"
+                                              Stretch="Uniform" Width="22" Height="20"
+                                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                                              StrokeThickness="1.3"/>
+                                        <TextBlock Text="Réglages" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,0"
+                                                   Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                                    </StackPanel>
+                                </RadioButton>
+                                <Button Style="{StaticResource NavButton}" Click="Disconnect_Click"
+                                        Foreground="{StaticResource MutedBrush}">
+                                    <StackPanel>
+                                        <Path Data="M8,1 L3,1 L3,17 L8,17 M6,9 H15 M11,5 L15,9 L11,13" Stretch="Uniform"
+                                              Width="22" Height="20" Stroke="{StaticResource MutedBrush}" StrokeThickness="1.3"/>
+                                        <TextBlock Text="Quitter" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,0"
+                                                   Foreground="{StaticResource MutedBrush}"/>
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- SIDEBAR -->
+                    <Border x:Name="Sidebar" Grid.Column="1" Margin="10,0,7,14" CornerRadius="18"
+                            Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardStroke}"
+                            BorderThickness="1">
+                        <Grid Margin="16">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Grid.Row="0" Orientation="Horizontal">
+                                <TextBlock x:Name="SectionTitle" Text="Chaînes" FontSize="18" FontWeight="Bold"
+                                           Foreground="{StaticResource TextBrush}"/>
+                                <Border Margin="10,0,0,0" Padding="8,2" CornerRadius="9" VerticalAlignment="Center"
+                                        Background="#3A8B5CF6">
+                                    <TextBlock x:Name="CountText" Text="0" FontSize="11" FontWeight="SemiBold"
+                                               Foreground="#FFCBB8FF"/>
+                                </Border>
+                            </StackPanel>
+
+                            <Button x:Name="ResumeButton" Grid.Row="1" Margin="0,12,0,0" Visibility="Collapsed"
+                                    Style="{StaticResource GhostButton}" Height="44" Click="Resume_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="M3,8 A5,5 0 1 1 8,13 M3,8 L1,6 M3,8 L5,6" Stretch="Uniform" Width="15" Height="15"
+                                          Stroke="{DynamicResource AccentBBrush}" StrokeThickness="1.4" Margin="0,0,8,0"/>
+                                    <TextBlock x:Name="ResumeText" Text="Reprendre" TextTrimming="CharacterEllipsis" MaxWidth="220"/>
+                                </StackPanel>
+                            </Button>
+
+                            <StackPanel x:Name="LocalActionsPanel" Grid.Row="1" Margin="0,12,0,0"
+                                        Visibility="Collapsed">
+                                <Button Content="Ajouter des fichiers" Style="{StaticResource GhostButton}"
+                                        Height="40" Click="AddLocalFiles_Click"/>
+                                <Button Content="Retirer de la liste" Style="{StaticResource GhostButton}"
+                                        Height="36" Margin="0,8,0,0" Click="RemoveLocalFile_Click"/>
+                            </StackPanel>
+
+                            <ComboBox x:Name="CategoryCombo" Grid.Row="2" Margin="0,12,0,0"
+                                      Style="{StaticResource FieldCombo}" SelectionChanged="Category_Changed"/>
+
+                            <TextBox x:Name="SearchBox" Grid.Row="3" Margin="0,10,0,10" Style="{StaticResource SearchBox}"
+                                     Tag="Rechercher…" TextChanged="SearchBox_TextChanged"/>
+
+                            <ListBox x:Name="ItemList" Grid.Row="4" Style="{StaticResource ChannelListBox}"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                     VirtualizingStackPanel.IsVirtualizing="True"
+                                     VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                     MouseDoubleClick="ItemList_DoubleClick">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid Width="34" Height="34">
+                                                <Border CornerRadius="9" Background="#33000000">
+                                                    <TextBlock Text="{Binding Initial}" FontWeight="Bold" FontSize="14"
+                                                               Foreground="#FFB9A6FF" HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Image Source="{Binding Icon}" Stretch="UniformToFill"
+                                                       RenderOptions.BitmapScalingMode="HighQuality">
+                                                    <Image.Clip>
+                                                        <RectangleGeometry Rect="0,0,34,34" RadiusX="9" RadiusY="9"/>
+                                                    </Image.Clip>
+                                                </Image>
+                                            </Grid>
+                                            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                                                           FontSize="13" Foreground="{StaticResource TextBrush}"/>
+                                                <TextBlock Text="{Binding CategoryName}" TextTrimming="CharacterEllipsis"
+                                                           FontSize="10" Foreground="{StaticResource FaintBrush}"/>
+                                            </StackPanel>
+                                            <ToggleButton Grid.Column="2" Style="{StaticResource StarToggle}"
+                                                          VerticalAlignment="Center"
+                                                          IsChecked="{Binding IsFavorite, Mode=TwoWay}"
+                                                          Checked="Fav_Toggle" Unchecked="Fav_Toggle"
+                                                          ToolTip="Favori"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+
+                    <!-- MAIN AREA -->
+                    <Grid x:Name="VideoArea" Grid.Column="2" Margin="7,0,14,14">
+                        <Border x:Name="VideoStage" CornerRadius="18" Background="#FF030305"
+                                BorderBrush="{StaticResource CardStroke}" BorderThickness="1" ClipToBounds="True"
+                                MouseMove="Stage_MouseMove" MouseLeave="Stage_MouseLeave">
+                            <Grid>
+                                <ContentControl x:Name="VideoHost"/>
+
+                                <!-- ===== AIRSPACE OVERLAY =====
+                                     mpv renders into a native child HWND (VideoHost) which always sits
+                                     on top of in-window WPF content. To draw the OSD/menus/overlays
+                                     over the video, OverlayRoot is reparented at runtime into a
+                                     transparent borderless Window owned by this one (code-behind,
+                                     EnsureOverlayWindow). A Popup cannot be used here: WPF clamps
+                                     popups to the monitor edges, so it detached from the window
+                                     whenever it was dragged partially off-screen. This collapsed
+                                     mount only declares the content. -->
+                                <Border x:Name="OverlayMount" Visibility="Collapsed">
+                                <Grid x:Name="OverlayRoot" Background="Transparent"
+                                      MouseMove="Stage_MouseMove" MouseLeave="Stage_MouseLeave">
+
+                                <!-- idle / loading -->
+                                <Grid x:Name="VideoOverlay" Background="#FF060309">
+                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Grid Width="64" Height="64">
+                                            <Ellipse Width="64" Height="64" Stroke="#22FFFFFF" StrokeThickness="3"/>
+                                            <Ellipse x:Name="BigSpinner" Width="64" Height="64" Stroke="{DynamicResource AccentBBrush}"
+                                                     StrokeThickness="3" StrokeDashArray="20 60" Visibility="Collapsed"
+                                                     RenderTransformOrigin="0.5,0.5">
+                                                <Ellipse.RenderTransform><RotateTransform/></Ellipse.RenderTransform>
+                                            </Ellipse>
+                                            <Path x:Name="IdlePlay" Data="M 5,3 L 12,8 L 5,13 Z" Fill="#55FFFFFF"
+                                                  Stretch="Uniform" Width="22" Height="22"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <TextBlock x:Name="OverlayText" Margin="0,18,0,0" FontSize="14"
+                                                   HorizontalAlignment="Center" Foreground="{StaticResource MutedBrush}"
+                                                   Text="Sélectionne une chaîne pour lancer la lecture"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <Grid x:Name="AudioVisualizerLayer" Visibility="Collapsed" ClipToBounds="True">
+                                    <!-- Le fond reste immobile : seule la grille de contenu est secouée,
+                                         sinon la translation révélait le bord de la couche (lignes claires). -->
+                                    <Grid.Background>
+                                        <RadialGradientBrush Center="0.5,0.45" GradientOrigin="0.5,0.45" RadiusX="0.82" RadiusY="0.82">
+                                            <GradientStop Color="#FF220B18" Offset="0"/>
+                                            <GradientStop Color="#FF08070D" Offset="0.58"/>
+                                            <GradientStop Color="#FF000000" Offset="1"/>
+                                        </RadialGradientBrush>
+                                    </Grid.Background>
+
+                                    <Grid>
+                                        <Grid.RenderTransform>
+                                            <TranslateTransform x:Name="AudioVisualizerShake"/>
+                                        </Grid.RenderTransform>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <!-- Passe à * quand le fichier embarque des métadonnées. -->
+                                            <ColumnDefinition x:Name="AudioMetaColumn" Width="0"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- ===== Visualizer (adaptatif) ===== -->
+                                        <Grid Grid.Column="0">
+                                            <!-- Barres FFT + particules + ondes de choc : une seule passe
+                                                 OnRender sans allocation, redessinée à la cadence de l'écran.
+                                                 La surface se met elle-même à l'échelle de sa cellule. -->
+                                            <local:AudioVisualizerSurface x:Name="AudioSurface"/>
+
+                                            <!-- Les anneaux/disque suivent la même échelle via le Viewbox
+                                                 (Uniform, plafonné à la taille native de 560). -->
+                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" Margin="24"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <Grid Width="560" Height="560" RenderTransformOrigin="0.5,0.5">
+                                                    <Grid.RenderTransform>
+                                                        <ScaleTransform x:Name="AudioVisualizerScale" ScaleX="1" ScaleY="1"/>
+                                                    </Grid.RenderTransform>
+                                                    <Ellipse Width="516" Height="516" Stroke="#22FFFFFF" StrokeThickness="1.5"/>
+                                                    <Ellipse x:Name="AudioOuterRing" Width="472" Height="472" Stroke="#AAFFFFFF"
+                                                             StrokeThickness="2" StrokeDashArray="4 11" RenderTransformOrigin="0.5,0.5"
+                                                             CacheMode="BitmapCache">
+                                                        <Ellipse.RenderTransform>
+                                                            <RotateTransform x:Name="AudioOuterRingRotate"/>
+                                                        </Ellipse.RenderTransform>
+                                                    </Ellipse>
+                                                    <Ellipse x:Name="AudioGlowRing" Width="388" Height="388" Stroke="#FFFFC46B"
+                                                             StrokeThickness="4" Opacity="0.7" CacheMode="BitmapCache">
+                                                        <Ellipse.Effect>
+                                                            <BlurEffect Radius="15"/>
+                                                        </Ellipse.Effect>
+                                                    </Ellipse>
+                                                    <!-- Disque central : l'image remplit tout le cercle (UniformToFill),
+                                                         pulse sur les basses via AudioCenterScale. BitmapCache : l'ombre
+                                                         portée n'est rasterisée qu'une fois, la pulsation ne coûte rien. -->
+                                                    <Ellipse x:Name="AudioCenterDisc" Width="336" Height="336"
+                                                             Stroke="#44FFFFFF" StrokeThickness="2"
+                                                             RenderTransformOrigin="0.5,0.5" CacheMode="BitmapCache">
+                                                        <Ellipse.Fill>
+                                                            <ImageBrush x:Name="AudioDiscBrush" ImageSource="/Assets/FleweastAudio.png"
+                                                                        Stretch="UniformToFill"
+                                                                        RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                        </Ellipse.Fill>
+                                                        <Ellipse.RenderTransform>
+                                                            <ScaleTransform x:Name="AudioCenterScale" ScaleX="1" ScaleY="1"/>
+                                                        </Ellipse.RenderTransform>
+                                                        <Ellipse.Effect>
+                                                            <DropShadowEffect BlurRadius="46" ShadowDepth="0" Opacity="0.9" Color="#FF000000"/>
+                                                        </Ellipse.Effect>
+                                                    </Ellipse>
+                                                </Grid>
+                                            </Viewbox>
+
+                                            <StackPanel x:Name="AudioTitleBlock" HorizontalAlignment="Center"
+                                                        VerticalAlignment="Bottom" Margin="24,0,24,28">
+                                                <TextBlock x:Name="AudioVisualizerTitle" Text="Elycast Audio" FontSize="18"
+                                                           FontWeight="Bold" Foreground="White" TextAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" MaxWidth="620"/>
+                                                <TextBlock Text="ELYCAST AUDIO" FontSize="11" Margin="0,5,0,0"
+                                                           Foreground="#AAFFFFFF" HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <!-- ===== Métadonnées (pochette + titre/artiste/album) ===== -->
+                                        <Viewbox x:Name="AudioMetaPanel" Grid.Column="1" Visibility="Collapsed"
+                                                 Stretch="Uniform" StretchDirection="DownOnly"
+                                                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                 Margin="8,32,40,32">
+                                            <StackPanel Width="440">
+                                                <Border Width="400" Height="400" CornerRadius="24"
+                                                        HorizontalAlignment="Center" CacheMode="BitmapCache">
+                                                    <Border.Background>
+                                                        <ImageBrush x:Name="AudioCoverBrush" Stretch="UniformToFill"
+                                                                    RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                    </Border.Background>
+                                                    <Border.Effect>
+                                                        <DropShadowEffect BlurRadius="42" ShadowDepth="0" Opacity="0.85" Color="#FF000000"/>
+                                                    </Border.Effect>
+                                                </Border>
+                                                <TextBlock x:Name="AudioMetaTitle" Margin="0,26,0,0" FontSize="26"
+                                                           FontWeight="Bold" Foreground="White" TextAlignment="Center"
+                                                           TextWrapping="Wrap" MaxHeight="96"/>
+                                                <TextBlock x:Name="AudioMetaArtist" Margin="0,8,0,0" FontSize="16"
+                                                           Foreground="#FFCBB8FF" TextAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock x:Name="AudioMetaAlbum" Margin="0,4,0,0" FontSize="12"
+                                                           Foreground="#AAFFFFFF" TextAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </Viewbox>
+                                    </Grid>
+                                </Grid>
+
+                                <!-- stats -->
+                                <Border x:Name="StatsOverlay" Visibility="Collapsed" HorizontalAlignment="Left"
+                                        VerticalAlignment="Top" Margin="14" Padding="12,10" CornerRadius="10"
+                                        Background="#CC000000" BorderBrush="{StaticResource CardStroke}" BorderThickness="1">
+                                    <StackPanel>
+                                        <TextBlock Text="STATS LIVE" FontSize="10" FontWeight="Bold"
+                                                   Foreground="{DynamicResource AccentBBrush}" Margin="0,0,0,6"/>
+                                        <TextBlock x:Name="StatsText" FontFamily="Consolas, monospace" FontSize="12"
+                                                   Foreground="#FFD8D8F0" Text="—"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- ===== OSD (auto-hide) ===== -->
+                                <Grid x:Name="Osd" Opacity="0" IsHitTestVisible="False">
+                                    <!-- top : title -->
+                                    <Border VerticalAlignment="Top" Padding="24,16,24,32" IsHitTestVisible="False">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                <GradientStop Color="#D9000000" Offset="0"/>
+                                                <GradientStop Color="#00000000" Offset="1"/>
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                        <StackPanel>
+                                            <TextBlock x:Name="TopTitle" FontSize="20" FontWeight="Bold"
+                                                       Foreground="White" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock x:Name="TopSubtitle" FontSize="12" Margin="0,3,0,0"
+                                                       Foreground="#FFCBB8FF" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- bottom : controls -->
+                                    <Border x:Name="OsdBottomChrome" VerticalAlignment="Bottom" Padding="20,28,20,16"
+                                            Background="Transparent">
+                                        <Border.RenderTransform>
+                                            <TranslateTransform x:Name="OsdBottomOffset"/>
+                                        </Border.RenderTransform>
+                                        <StackPanel>
+                                            <!-- quick video controls -->
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,8">
+                                            <StackPanel x:Name="OsdUpscaleRow" Orientation="Horizontal" VerticalAlignment="Center"
+                                                        Visibility="Collapsed">
+                                                <Path Data="M 0,11 L 0,0 L 11,0 M 7,4 L 11,0 L 7,0 M 0,11 L 11,11 L 11,0"
+                                                      Stroke="#FFB9A6FF" StrokeThickness="1.3" Stretch="Uniform"
+                                                      Width="14" Height="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="Upscaling" FontSize="11" FontWeight="SemiBold"
+                                                           VerticalAlignment="Center" Foreground="#FFD8D8F0" Margin="0,0,10,0"/>
+                                                <ComboBox x:Name="OsdUpscaleCombo" Width="210" Height="30"
+                                                          Style="{StaticResource FieldCombo}"
+                                                          SelectionChanged="OsdUpscale_Changed"
+                                                          ToolTip="Méthode d'upscaling (s'applique en direct)"/>
+                                            </StackPanel>
+                                            <StackPanel x:Name="OsdElyColorRow" Orientation="Horizontal" VerticalAlignment="Center"
+                                                        Margin="18,0,0,0" Visibility="Collapsed">
+                                                <Path Data="M 7,0 C 10.8,0 14,3.2 14,7 C 14,10.8 10.8,14 7,14 C 3.2,14 0,10.8 0,7 C 0,3.2 3.2,0 7,0 Z M 7,2 L 7,12"
+                                                      Stroke="#FFFFC46B" StrokeThickness="1.25" Stretch="Uniform"
+                                                      Width="14" Height="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="ELYCOLOR" FontSize="11" FontWeight="SemiBold"
+                                                           VerticalAlignment="Center" Foreground="#FFFFE0B0" Margin="0,0,10,0"/>
+                                                <ComboBox x:Name="OsdElyColorCombo" Width="220" Height="30"
+                                                          Style="{StaticResource FieldCombo}"
+                                                          SelectionChanged="OsdElyColor_Changed"
+                                                          ToolTip="Filtre image ELYCOLOR (s'applique en direct)"/>
+                                            </StackPanel>
+                                            <StackPanel x:Name="OsdElySoundRow" Orientation="Horizontal" VerticalAlignment="Center"
+                                                        Margin="18,0,0,0" Visibility="Collapsed">
+                                                <Path Data="M 1,8 L 4,8 L 8,4 L 8,12 L 4,8 M 11,5 Q 14,8 11,11"
+                                                      Stroke="#FF7DF9FF" StrokeThickness="1.35" Stretch="Uniform"
+                                                      Width="15" Height="15" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                <CheckBox x:Name="OsdElySoundEnableSwitch" Style="{StaticResource Switch}"
+                                                          Content="ELYSOUND+" Margin="0,0,10,0"
+                                                          Click="ElySoundEnabled_Changed"
+                                                          ToolTip="Active/désactive tout le post-processing audio en direct"/>
+                                                <ComboBox x:Name="OsdElySoundCombo" Width="210" Height="30"
+                                                          Style="{StaticResource FieldCombo}"
+                                                          SelectionChanged="OsdElySound_Changed"
+                                                          ToolTip="Profil audio ELYSOUND+"/>
+                                            </StackPanel>
+                                            </StackPanel>
+
+                                            <!-- epg (live) -->
+                                            <ProgressBar x:Name="EpgProgress" Height="4" Minimum="0" Maximum="100" Value="0"
+                                                         Margin="0,0,0,10" Visibility="Collapsed"
+                                                         Foreground="{DynamicResource AccentABrush}"
+                                                         Background="#33FFFFFF" BorderThickness="0"/>
+
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <Button x:Name="PlayPauseBtn" Style="{StaticResource IconButton}" Click="PlayPause_Click">
+                                                        <Path x:Name="PlayPauseIcon" Data="M 5,3 L 12,8 L 5,13 Z" Fill="White"
+                                                              Stretch="Uniform" Width="14" Height="14"/>
+                                                    </Button>
+                                                    <Button x:Name="StopBtn" Style="{StaticResource IconButton}" Margin="8,0,0,0" Click="Stop_Click">
+                                                        <Rectangle Width="12" Height="12" Fill="White" RadiusX="2" RadiusY="2"/>
+                                                    </Button>
+                                                    <Button x:Name="SkipBackBtn" Style="{StaticResource IconButton}" Margin="8,0,0,0"
+                                                            Click="SkipBack_Click" ToolTip="Reculer de 30 s (flèche gauche)" Visibility="Collapsed">
+                                                        <TextBlock Text="-30" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                                                    </Button>
+                                                    <Button x:Name="SkipFwdBtn" Style="{StaticResource IconButton}" Margin="8,0,0,0"
+                                                            Click="SkipFwd_Click" ToolTip="Avancer de 30 s (flèche droite)" Visibility="Collapsed">
+                                                        <TextBlock Text="+30" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                                                    </Button>
+                                                </StackPanel>
+
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <ComboBox x:Name="AudioCombo" Width="145" Height="34" Margin="0,0,12,0"
+                                                              Style="{StaticResource FieldCombo}" DisplayMemberPath="Name"
+                                                              SelectionChanged="Audio_Changed"
+                                                              ToolTip="Piste audio" Visibility="Collapsed"/>
+                                                    <ComboBox x:Name="SubtitleCombo" Width="155" Height="34" Margin="0,0,12,0"
+                                                              Style="{StaticResource FieldCombo}" DisplayMemberPath="Name"
+                                                              SelectionChanged="Subtitle_Changed"
+                                                              ToolTip="Piste de sous-titres" Visibility="Collapsed"/>
+                                                    <Button x:Name="UpscalerBtn" Style="{StaticResource IconButton}" Margin="0,0,12,0"
+                                                            Click="UpscalerBtn_Click" ToolTip="Activer l'upscaling externe Magpie / FSR">
+                                                        <TextBlock Text="FSR" FontSize="10" FontWeight="Bold" Foreground="White"/>
+                                                    </Button>
+                                                    <Button x:Name="StatsBtn" Style="{StaticResource IconButton}" Margin="0,0,12,0"
+                                                            Click="StatsBtn_Click" ToolTip="Statistiques live">
+                                                        <Path Data="M2,14 V8 M6,14 V4 M10,14 V9 M14,14 V2" Stroke="White" StrokeThickness="1.6"
+                                                              Stretch="Uniform" Width="16" Height="16"/>
+                                                    </Button>
+                                                    <Path Data="M 0,4 L 3,4 L 7,1 L 7,11 L 3,8 L 0,8 Z M 9,3 Q 12,6 9,9"
+                                                          Stroke="#FFD8D8F0" StrokeThickness="1.2"
+                                                          Stretch="Uniform" Width="18" Height="18" Margin="0,0,10,0"/>
+                                                    <Slider x:Name="VolumeSlider" Width="120" Minimum="0" Maximum="100" Value="75"
+                                                            VerticalAlignment="Center" Style="{StaticResource VolumeSlider}"
+                                                            ValueChanged="Volume_Changed"/>
+                                                    <TextBlock x:Name="VolumePct" Text="75%" Width="40" Margin="8,0,0,0"
+                                                               VerticalAlignment="Center" TextAlignment="Right" FontSize="12"
+                                                               FontWeight="SemiBold" Foreground="#FFD8D8F0"/>
+                                                    <Button x:Name="FullscreenBtn" Style="{StaticResource IconButton}" Margin="16,0,0,0"
+                                                            Click="Fullscreen_Click">
+                                                        <Path Data="M 1,4 L 1,1 L 4,1 M 8,1 L 11,1 L 11,4 M 11,8 L 11,11 L 8,11 M 4,11 L 1,11 L 1,8"
+                                                              Stroke="White" StrokeThickness="1.4" Stretch="Uniform" Width="16" Height="16"/>
+                                                    </Button>
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <!-- seek (vod / episodes) — pinned to the very bottom of the chrome -->
+                                            <Grid x:Name="SeekArea" Visibility="Collapsed" Margin="0,10,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock x:Name="CurTime" Text="0:00" FontSize="11" VerticalAlignment="Center"
+                                                           Foreground="#FFD8D8F0" Width="58"/>
+                                                <Slider x:Name="SeekSlider" Grid.Column="1" Minimum="0" Maximum="100" Value="0"
+                                                        VerticalAlignment="Center" Style="{StaticResource VolumeSlider}"
+                                                        IsMoveToPointEnabled="True"/>
+                                                <TextBlock x:Name="TotTime" Grid.Column="2" Text="0:00" FontSize="11"
+                                                           VerticalAlignment="Center" TextAlignment="Right"
+                                                           Foreground="#FFD8D8F0" Width="58"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+
+                                <Button x:Name="CloseOverlayBtn" Visibility="Collapsed"
+                                        Panel.ZIndex="50"
+                                        HorizontalAlignment="Right" VerticalAlignment="Top"
+                                        Margin="0,16,16,0" Style="{StaticResource IconButton}"
+                                        Click="CloseOverlay_Click" ToolTip="Fermer le panneau">
+                                    <Path Data="M 3,3 L 13,13 M 13,3 L 3,13" Stroke="White"
+                                          StrokeThickness="1.8" Stretch="Uniform" Width="15" Height="15"/>
+                                </Button>
+
+                                <!-- SERIES EPISODES PANEL -->
+                                <Border x:Name="SeriesPanel" Visibility="Collapsed" Background="#F2070309"
+                                        Cursor="Arrow"
+                                        CornerRadius="18">
+                                    <Grid Margin="24">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+                                        <Grid Grid.Row="0">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Button Style="{StaticResource IconButton}" Click="CloseSeries_Click">
+                                                    <Path Data="M7,1 L2,6 L7,11 M2,6 H12" Stroke="White" StrokeThickness="1.5"
+                                                          Stretch="Uniform" Width="16" Height="16"/>
+                                                </Button>
+                                                <TextBlock x:Name="SeriesPanelTitle" Text="Série" FontSize="20" FontWeight="Bold"
+                                                           VerticalAlignment="Center" Margin="14,0,0,0"
+                                                           Foreground="{StaticResource TextBrush}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                        <ComboBox x:Name="SeasonCombo" Grid.Row="1" Margin="0,16,0,12" Width="200"
+                                                  HorizontalAlignment="Left" Style="{StaticResource FieldCombo}"
+                                                  SelectionChanged="Season_Changed"/>
+                                        <ListBox x:Name="EpisodeList" Grid.Row="2" Style="{StaticResource ChannelListBox}"
+                                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                                 MouseDoubleClick="Episode_DoubleClick">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Border Width="30" Height="30" CornerRadius="8" Background="#33000000">
+                                                            <TextBlock Text="{Binding EpisodeNum}" FontWeight="Bold"
+                                                                       Foreground="#FFB9A6FF" HorizontalAlignment="Center"
+                                                                       VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <TextBlock Grid.Column="1" Text="{Binding Title}" Margin="12,0,0,0"
+                                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                                   FontSize="13" Foreground="{StaticResource TextBrush}"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </Grid>
+                                </Border>
+
+                                <!-- SETTINGS PANEL -->
+                                <Border x:Name="SettingsPanel" Visibility="Collapsed" Background="#F2070309" CornerRadius="18"
+                                        Cursor="Arrow">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="28,24">
+                                        <StackPanel MaxWidth="820" HorizontalAlignment="Left">
+                                            <TextBlock Text="Paramètres" FontSize="24" FontWeight="Bold"
+                                                       Foreground="{StaticResource TextBrush}"/>
+
+                                            <WrapPanel Margin="0,18,0,8">
+                                                <Button x:Name="SettingsAppearanceBtn" Tag="appearance" Content="Interface"
+                                                        Style="{StaticResource GhostButton}" Width="118" Height="36"
+                                                        Margin="0,0,8,8" Click="SettingsCategory_Click"/>
+                                                <Button x:Name="SettingsPlaybackBtn" Tag="playback" Content="Lecture"
+                                                        Style="{StaticResource GhostButton}" Width="110" Height="36"
+                                                        Margin="0,0,8,8" Click="SettingsCategory_Click"/>
+                                                <Button x:Name="SettingsUpscalingBtn" Tag="upscaling" Content="Upscaling"
+                                                        Style="{StaticResource GhostButton}" Width="124" Height="36"
+                                                        Margin="0,0,8,8" Click="SettingsCategory_Click"/>
+                                                <Button x:Name="SettingsElyColorBtn" Tag="elycolor" Content="ELYCOLOR"
+                                                        Style="{StaticResource GhostButton}" Width="124" Height="36"
+                                                        Margin="0,0,8,8" Click="SettingsCategory_Click"/>
+                                                <Button x:Name="SettingsElySoundBtn" Tag="elysound" Content="ELYSOUND+"
+                                                        Style="{StaticResource GhostButton}" Width="132" Height="36"
+                                                        Margin="0,0,8,8" Click="SettingsCategory_Click"/>
+                                                <Button x:Name="SettingsElyFlowBtn" Tag="elyflow" Content="ELYFLOW"
+                                                        Style="{StaticResource GhostButton}" Width="124" Height="36"
+                                                        Margin="0,0,8,8" Click="SettingsCategory_Click"/>
+                                                <Button x:Name="SettingsSystemBtn" Tag="system" Content="Système"
+                                                        Style="{StaticResource GhostButton}" Width="112" Height="36"
+                                                        Margin="0,0,8,8" Click="SettingsCategory_Click"/>
+                                            </WrapPanel>
+
+                                            <StackPanel x:Name="SettingsAppearancePanel">
+
+                                            <TextBlock Text="COULEUR D'ACCENT" Margin="0,24,0,10" FontSize="11"
+                                                       FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                                            <ItemsControl x:Name="AccentSwatches">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Button Width="38" Height="38" Margin="0,0,10,10" Cursor="Hand"
+                                                                Click="AccentSwatch_Click" Tag="{Binding}">
+                                                            <Button.Template>
+                                                                <ControlTemplate TargetType="Button">
+                                                                    <Border x:Name="b" CornerRadius="19" BorderThickness="2"
+                                                                            BorderBrush="Transparent"
+                                                                            Background="{Binding Converter={StaticResource HexToBrush}}"/>
+                                                                    <ControlTemplate.Triggers>
+                                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                                            <Setter TargetName="b" Property="BorderBrush" Value="White"/>
+                                                                        </Trigger>
+                                                                    </ControlTemplate.Triggers>
+                                                                </ControlTemplate>
+                                                            </Button.Template>
+                                                        </Button>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                <TextBox x:Name="AccentHexBox" Style="{StaticResource FieldBox}" Width="160"
+                                                         Height="40" Tag="#FF8B5CF6"/>
+                                                <Button Content="Appliquer" Style="{StaticResource GhostButton}" Height="40"
+                                                        Width="110" Margin="8,0,0,0" Click="ApplyHex_Click"/>
+                                            </StackPanel>
+
+                                            </StackPanel>
+
+                                            <StackPanel x:Name="SettingsPlaybackPanel" Visibility="Collapsed">
+                                            <TextBlock Text="LECTURE" Margin="0,26,0,6" FontSize="11"
+                                                       FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                                            <CheckBox x:Name="StatsSwitch" Style="{StaticResource Switch}"
+                                                      Content="Afficher les statistiques live" Click="Setting_Changed"/>
+                                            <CheckBox x:Name="ReconnectSwitch" Style="{StaticResource Switch}"
+                                                      Content="Reconnexion automatique si le flux coupe" Click="Setting_Changed"/>
+                                            <CheckBox x:Name="RememberVolSwitch" Style="{StaticResource Switch}"
+                                                      Content="Mémoriser le volume" Click="Setting_Changed"/>
+
+                                            <Grid Margin="0,14,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="260"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Text="Backend vidéo" VerticalAlignment="Center"
+                                                               Foreground="{StaticResource TextBrush}"/>
+                                                    <TextBlock Text="mpv GPU vise le rendu Direct3D/libplacebo. RTX VSR ajoute l'upscaling IA du driver NVIDIA (GeForce RTX série 20+, driver 531+). VLC reste le fallback stable."
+                                                               FontSize="11" Margin="0,4,16,0" TextWrapping="Wrap"
+                                                               Foreground="{StaticResource FaintBrush}"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1">
+                                                    <ComboBox x:Name="BackendCombo" Height="40"
+                                                              Style="{StaticResource FieldCombo}"
+                                                              SelectionChanged="BackendSetting_Changed">
+                                                        <ComboBoxItem Tag="mpv-gpu" Content="mpv GPU"/>
+                                                        <ComboBoxItem Tag="vlc-bitmap" Content="VLC fallback"/>
+                                                        <ComboBoxItem Tag="rtx-sdk" Content="mpv GPU + RTX VSR"/>
+                                                        <ComboBoxItem Tag="elycore" Content="ELYCORE Renderer"/>
+                                                    </ComboBox>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                                        <Button x:Name="InstallMpvBtn" Content="Installer mpv"
+                                                                Style="{StaticResource GhostButton}" Width="116" Height="36"
+                                                                Click="InstallMpv_Click"/>
+                                                        <TextBlock x:Name="MpvStatusText" Margin="10,0,0,0" VerticalAlignment="Center"
+                                                                   FontSize="11" TextWrapping="Wrap" Width="134"
+                                                                   Foreground="{StaticResource FaintBrush}"
+                                                                   Text="mpv non vérifié"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <Grid Margin="0,10,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Format des flux live" VerticalAlignment="Center"
+                                                           Foreground="{StaticResource TextBrush}"/>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                    <RadioButton x:Name="FormatTs" GroupName="fmt" Content=".ts" Margin="0,0,16,0"
+                                                                 Foreground="{StaticResource TextBrush}" Click="Setting_Changed"/>
+                                                    <RadioButton x:Name="FormatM3u" GroupName="fmt" Content=".m3u8"
+                                                                 Foreground="{StaticResource TextBrush}" Click="Setting_Changed"/>
+                                                </StackPanel>
+                                            </Grid>
+
+                                             <Grid Margin="0,16,0,0">
+                                                 <Grid.ColumnDefinitions>
+                                                     <ColumnDefinition Width="*"/>
+                                                     <ColumnDefinition Width="180"/>
+                                                 </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Volume par défaut" VerticalAlignment="Center"
+                                                           Foreground="{StaticResource TextBrush}"/>
+                                                 <Slider x:Name="DefaultVolSlider" Grid.Column="1" Minimum="0" Maximum="100"
+                                                         Style="{StaticResource VolumeSlider}" ValueChanged="SliderSetting_Changed"/>
+                                             </Grid>
+
+                                            </StackPanel>
+
+                                            <StackPanel x:Name="SettingsUpscalingPanel" Visibility="Collapsed">
+                                             <TextBlock Text="UPSCALING EXTERNE GPU" Margin="0,26,0,6" FontSize="11"
+                                                         FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                                             <Grid Margin="0,10,0,0">
+                                                 <Grid.ColumnDefinitions>
+                                                     <ColumnDefinition Width="*"/>
+                                                     <ColumnDefinition Width="260"/>
+                                                 </Grid.ColumnDefinitions>
+                                                 <StackPanel>
+                                                     <TextBlock Text="Moteur" VerticalAlignment="Center"
+                                                                Foreground="{StaticResource TextBrush}"/>
+                                                     <TextBlock Text="Magpie applique des scalers GPU type FSR/Anime4K/FSRCNNX sur la fenêtre du player."
+                                                                FontSize="11" Margin="0,4,16,0" TextWrapping="Wrap"
+                                                                Foreground="{StaticResource FaintBrush}"/>
+                                                 </StackPanel>
+                                                 <ComboBox x:Name="UpscalerEngineCombo" Grid.Column="1" Height="40"
+                                                           Style="{StaticResource FieldCombo}"
+                                                           SelectionChanged="UpscalerSetting_Changed">
+                                                     <ComboBoxItem Tag="off" Content="Désactivé"/>
+                                                     <ComboBoxItem Tag="magpie-fsr" Content="Magpie — FSR"/>
+                                                     <ComboBoxItem Tag="magpie-fsrcnnx" Content="Magpie — FSRCNNX"/>
+                                                     <ComboBoxItem Tag="magpie-anime4k" Content="Magpie — Anime4K"/>
+                                                 </ComboBox>
+                                             </Grid>
+                                             <Grid Margin="0,12,0,0">
+                                                 <Grid.ColumnDefinitions>
+                                                     <ColumnDefinition Width="*"/>
+                                                     <ColumnDefinition Width="Auto"/>
+                                                     <ColumnDefinition Width="Auto"/>
+                                                 </Grid.ColumnDefinitions>
+                                                 <TextBox x:Name="MagpiePathBox" Style="{StaticResource FieldBox}" Height="40"
+                                                          Tag="Chemin vers Magpie.exe"/>
+                                                 <Button Content="Parcourir" Grid.Column="1" Style="{StaticResource GhostButton}"
+                                                         Width="100" Height="40" Margin="8,0,0,0" Click="BrowseMagpie_Click"/>
+                                                 <Button x:Name="InstallMagpieBtn" Content="Installer" Grid.Column="2"
+                                                         Style="{StaticResource GhostButton}" Width="96" Height="40"
+                                                         Margin="8,0,0,0" Click="InstallMagpie_Click"/>
+                                             </Grid>
+                                             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                                 <Button Content="Lancer / activer l'upscaler" Style="{StaticResource GhostButton}"
+                                                         Width="220" Height="40" Click="ActivateUpscaler_Click"/>
+                                                 <TextBlock x:Name="UpscalerStatusText" Margin="12,0,0,0" VerticalAlignment="Center"
+                                                            FontSize="12" Foreground="{StaticResource FaintBrush}"
+                                                            Text="Magpie non vérifié"/>
+                                             </StackPanel>
+
+                                             <TextBlock Text="UPSCALING mpv (interne, GPU)" Margin="0,26,0,6" FontSize="11"
+                                                        FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                                             <TextBlock Text="La résolution cible pré-agrandit le flux sur GPU (RTX VSR sur le backend RTX, processeur vidéo D3D11 sinon) — fonctionne avec toutes les méthodes. L'algorithme choisi (FSR, NVIDIA, FSRCNNX, Anime4K…) travaille ensuite vers la taille de la fenêtre, et l'affinage CAS / NVSharpen reste actif quand rien n'est agrandi. Shaders téléchargés automatiquement au premier usage."
+                                                        FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap"
+                                                        Foreground="{StaticResource FaintBrush}"/>
+                                             <Grid Margin="0,4,0,0">
+                                                 <Grid.ColumnDefinitions>
+                                                     <ColumnDefinition Width="*"/>
+                                                     <ColumnDefinition Width="220"/>
+                                                 </Grid.ColumnDefinitions>
+                                                 <TextBlock Text="Résolution cible" VerticalAlignment="Center"
+                                                            Foreground="{StaticResource TextBrush}"/>
+                                                 <ComboBox x:Name="UpscaleTargetCombo" Grid.Column="1" Height="40"
+                                                           Style="{StaticResource FieldCombo}"
+                                                           SelectionChanged="UpscaleSetting_Changed">
+                                                     <ComboBoxItem Tag="0" Content="Native (taille de la fenêtre)"/>
+                                                     <ComboBoxItem Tag="1080" Content="1080p (Full HD)"/>
+                                                     <ComboBoxItem Tag="1440" Content="1440p (2K)"/>
+                                                     <ComboBoxItem Tag="2160" Content="2160p (4K)"/>
+                                                     <ComboBoxItem Tag="4320" Content="4320p (8K)"/>
+                                                 </ComboBox>
+                                             </Grid>
+                                             <Grid Margin="0,10,0,0">
+                                                 <Grid.ColumnDefinitions>
+                                                     <ColumnDefinition Width="*"/>
+                                                     <ColumnDefinition Width="220"/>
+                                                 </Grid.ColumnDefinitions>
+                                                 <TextBlock Text="Méthode d'upscaling" VerticalAlignment="Center"
+                                                            Foreground="{StaticResource TextBrush}"/>
+                                                 <ComboBox x:Name="UpscaleMethodCombo" Grid.Column="1" Height="40"
+                                                           Style="{StaticResource FieldCombo}"
+                                                           SelectionChanged="UpscaleSetting_Changed">
+                                                     <ComboBoxItem Tag="none" Content="Aucun (désactivé)"/>
+                                                     <ComboBoxItem Tag="anime4k-hq" Content="Anime4K — Qualité (anime)"/>
+                                                     <ComboBoxItem Tag="anime4k-fast" Content="Anime4K — Rapide (anime)"/>
+                                                     <ComboBoxItem Tag="anime4k-denoise" Content="Anime4K — Débruitage (anime compressé)"/>
+                                                     <ComboBoxItem Tag="anime4k-deblur" Content="Anime4K — Déflou (anime flou)"/>
+                                                     <ComboBoxItem Tag="fsrcnnx" Content="FSRCNNX (CNN, polyvalent)"/>
+                                                     <ComboBoxItem Tag="fsrcnnx-hq" Content="FSRCNNX HQ (CNN, lourd)"/>
+                                                     <ComboBoxItem Tag="fsr" Content="AMD FSR + CAS (net, sport/live)"/>
+                                                     <ComboBoxItem Tag="nvscaler" Content="NVIDIA Image Scaling"/>
+                                                     <ComboBoxItem Tag="ewa_lanczossharp" Content="EWA Lanczos (net, défaut)"/>
+                                                     <ComboBoxItem Tag="ewa_lanczos" Content="EWA Lanczos (doux)"/>
+                                                     <ComboBoxItem Tag="lanczos" Content="Lanczos"/>
+                                                     <ComboBoxItem Tag="spline36" Content="Spline36"/>
+                                                     <ComboBoxItem Tag="mitchell" Content="Mitchell (doux)"/>
+                                                     <ComboBoxItem Tag="catmull_rom" Content="Catmull-Rom"/>
+                                                     <ComboBoxItem Tag="bilinear" Content="Bilinéaire (rapide)"/>
+                                                 </ComboBox>
+                                             </Grid>
+                                             <Grid Margin="0,10,0,0">
+                                                 <Grid.ColumnDefinitions>
+                                                     <ColumnDefinition Width="*"/>
+                                                     <ColumnDefinition Width="220"/>
+                                                 </Grid.ColumnDefinitions>
+                                                 <TextBlock Text="Netteté / lissage" VerticalAlignment="Center"
+                                                            Foreground="{StaticResource TextBrush}"/>
+                                                 <ComboBox x:Name="UpscaleSharpenCombo" Grid.Column="1" Height="40"
+                                                           Style="{StaticResource FieldCombo}"
+                                                           SelectionChanged="UpscaleSetting_Changed">
+                                                     <ComboBoxItem Tag="off" Content="Aucun (lissage naturel)"/>
+                                                     <ComboBoxItem Tag="low" Content="Netteté légère"/>
+                                                     <ComboBoxItem Tag="medium" Content="Netteté moyenne"/>
+                                                     <ComboBoxItem Tag="high" Content="Netteté forte"/>
+                                                 </ComboBox>
+                                             </Grid>
+
+                                             <TextBlock Text="Modes affichés dans la barre de lecture" Margin="0,14,0,2"
+                                                        FontSize="11" Foreground="{StaticResource TextBrush}"/>
+                                             <TextBlock Text="Coche les modes à afficher dans le sélecteur rapide sous la barre de lecture."
+                                                        FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap"
+                                                        Foreground="{StaticResource FaintBrush}"/>
+                                             <WrapPanel x:Name="OsdModesPanel"/>
+                                            </StackPanel>
+
+                                            <StackPanel x:Name="SettingsElyColorPanel" Visibility="Collapsed">
+                                                <TextBlock Text="ELYCOLOR" Margin="0,26,0,6" FontSize="11"
+                                                           FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                                                <TextBlock Text="Filtres image appliqués en direct via mpv : saturation, luminosité, contraste, gamma et teinte. Les filtres utilisateur peuvent aussi retenir le backend, l'upscaling et la résolution cible."
+                                                           FontSize="11" Margin="0,0,0,12" TextWrapping="Wrap"
+                                                           Foreground="{StaticResource FaintBrush}"/>
+
+                                                <Grid Margin="0,4,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="260"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Filtre actif" VerticalAlignment="Center"
+                                                               Foreground="{StaticResource TextBrush}"/>
+                                                    <ComboBox x:Name="ElyColorFilterCombo" Grid.Column="1" Height="40"
+                                                              Style="{StaticResource FieldCombo}"
+                                                              SelectionChanged="ElyColorFilter_Changed"/>
+                                                </Grid>
+
+                                                <Grid Margin="0,18,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="260"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Preset utilisateur à modifier" VerticalAlignment="Center"
+                                                               Foreground="{StaticResource TextBrush}"/>
+                                                    <ComboBox x:Name="ElyColorCustomSelectCombo" Grid.Column="1" Height="40"
+                                                              Style="{StaticResource FieldCombo}"
+                                                              SelectionChanged="ElyColorCustom_Changed"/>
+                                                </Grid>
+
+                                                <TextBlock Text="Création / édition" Margin="0,18,0,8" FontSize="11"
+                                                           Foreground="{StaticResource TextBrush}"/>
+                                                <TextBox x:Name="ElyColorNameBox" Style="{StaticResource FieldBox}" Height="40"
+                                                         Tag="Nom du filtre"/>
+                                                <CheckBox x:Name="ElyColorPipelineSwitch" Style="{StaticResource Switch}"
+                                                          Margin="0,10,0,0"
+                                                          Content="Inclure la configuration vidéo dans ce filtre"/>
+
+                                                <Grid Margin="0,12,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="220"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Backend" VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                    <ComboBox x:Name="ElyColorBackendCombo" Grid.Column="1" Height="40"
+                                                              Style="{StaticResource FieldCombo}">
+                                                        <ComboBoxItem Tag="mpv-gpu" Content="mpv GPU"/>
+                                                        <ComboBoxItem Tag="rtx-sdk" Content="mpv GPU + RTX VSR"/>
+                                                        <ComboBoxItem Tag="elycore" Content="ELYCORE Renderer"/>
+                                                        <ComboBoxItem Tag="vlc-bitmap" Content="VLC fallback"/>
+                                                    </ComboBox>
+                                                </Grid>
+
+                                                <Grid Margin="0,10,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="220"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Upscaling externe" VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                    <ComboBox x:Name="ElyColorExternalUpscalerCombo" Grid.Column="1" Height="40"
+                                                              Style="{StaticResource FieldCombo}">
+                                                        <ComboBoxItem Tag="off" Content="Désactivé"/>
+                                                        <ComboBoxItem Tag="magpie-fsr" Content="Magpie - FSR"/>
+                                                        <ComboBoxItem Tag="magpie-fsrcnnx" Content="Magpie - FSRCNNX"/>
+                                                        <ComboBoxItem Tag="magpie-anime4k" Content="Magpie - Anime4K"/>
+                                                    </ComboBox>
+                                                </Grid>
+
+                                                <Grid Margin="0,10,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="220"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Résolution cible" VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                    <ComboBox x:Name="ElyColorTargetCombo" Grid.Column="1" Height="40"
+                                                              Style="{StaticResource FieldCombo}">
+                                                        <ComboBoxItem Tag="0" Content="Native"/>
+                                                        <ComboBoxItem Tag="1080" Content="1080p"/>
+                                                        <ComboBoxItem Tag="1440" Content="1440p"/>
+                                                        <ComboBoxItem Tag="2160" Content="2160p"/>
+                                                        <ComboBoxItem Tag="4320" Content="4320p"/>
+                                                    </ComboBox>
+                                                </Grid>
+
+                                                <Grid Margin="0,10,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="220"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Méthode d'upscaling" VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                    <ComboBox x:Name="ElyColorMethodCombo" Grid.Column="1" Height="40"
+                                                              Style="{StaticResource FieldCombo}">
+                                                        <ComboBoxItem Tag="none" Content="Aucun"/>
+                                                        <ComboBoxItem Tag="anime4k-hq" Content="Anime4K Qualité"/>
+                                                        <ComboBoxItem Tag="anime4k-fast" Content="Anime4K Rapide"/>
+                                                        <ComboBoxItem Tag="anime4k-denoise" Content="Anime4K Débruitage"/>
+                                                        <ComboBoxItem Tag="anime4k-deblur" Content="Anime4K Déflou"/>
+                                                        <ComboBoxItem Tag="fsrcnnx" Content="FSRCNNX"/>
+                                                        <ComboBoxItem Tag="fsrcnnx-hq" Content="FSRCNNX HQ"/>
+                                                        <ComboBoxItem Tag="fsr" Content="AMD FSR + CAS"/>
+                                                        <ComboBoxItem Tag="nvscaler" Content="NVIDIA Image Scaling"/>
+                                                        <ComboBoxItem Tag="ewa_lanczossharp" Content="EWA Lanczos net"/>
+                                                        <ComboBoxItem Tag="lanczos" Content="Lanczos"/>
+                                                        <ComboBoxItem Tag="spline36" Content="Spline36"/>
+                                                        <ComboBoxItem Tag="mitchell" Content="Mitchell"/>
+                                                        <ComboBoxItem Tag="catmull_rom" Content="Catmull-Rom"/>
+                                                        <ComboBoxItem Tag="bilinear" Content="Bilinéaire"/>
+                                                    </ComboBox>
+                                                </Grid>
+
+                                                <Grid Margin="0,10,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="220"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Netteté" VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                    <ComboBox x:Name="ElyColorSharpenCombo" Grid.Column="1" Height="40"
+                                                              Style="{StaticResource FieldCombo}">
+                                                        <ComboBoxItem Tag="off" Content="Aucune"/>
+                                                        <ComboBoxItem Tag="low" Content="Légère"/>
+                                                        <ComboBoxItem Tag="medium" Content="Moyenne"/>
+                                                        <ComboBoxItem Tag="high" Content="Forte"/>
+                                                    </ComboBox>
+                                                </Grid>
+
+                                                <TextBlock Text="Jauges image" Margin="0,18,0,8" FontSize="11"
+                                                           Foreground="{StaticResource TextBrush}"/>
+
+                                                <Grid Margin="0,4,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="48"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Saturation" VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                    <Slider x:Name="ElyColorSaturationSlider" Grid.Column="1" Minimum="-100" Maximum="100"
+                                                            Style="{StaticResource VolumeSlider}" ValueChanged="ElyColorSlider_Changed"/>
+                                                    <TextBlock x:Name="ElyColorSaturationValue" Grid.Column="2" Text="0"
+                                                               HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                                                </Grid>
+                                                <Grid Margin="0,8,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="48"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Luminosité" VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                    <Slider x:Name="ElyColorBrightnessSlider" Grid.Column="1" Minimum="-100" Maximum="100"
+                                                            Style="{StaticResource VolumeSlider}" ValueChanged="ElyColorSlider_Changed"/>
+                                                    <TextBlock x:Name="ElyColorBrightnessValue" Grid.Column="2" Text="0"
+                                                               HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                                                </Grid>
+                                                <Grid Margin="0,8,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="48"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Contraste" VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                    <Slider x:Name="ElyColorContrastSlider" Grid.Column="1" Minimum="-100" Maximum="100"
+                                                            Style="{StaticResource VolumeSlider}" ValueChanged="ElyColorSlider_Changed"/>
+                                                    <TextBlock x:Name="ElyColorContrastValue" Grid.Column="2" Text="0"
+                                                               HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                                                </Grid>
+                                                <Grid Margin="0,8,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="48"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Gamma" VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                    <Slider x:Name="ElyColorGammaSlider" Grid.Column="1" Minimum="-100" Maximum="100"
+                                                            Style="{StaticResource VolumeSlider}" ValueChanged="ElyColorSlider_Changed"/>
+                                                    <TextBlock x:Name="ElyColorGammaValue" Grid.Column="2" Text="0"
+                                                               HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                                                </Grid>
+                                                <Grid Margin="0,8,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="48"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Teinte" VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                    <Slider x:Name="ElyColorHueSlider" Grid.Column="1" Minimum="-100" Maximum="100"
+                                                            Style="{StaticResource VolumeSlider}" ValueChanged="ElyColorSlider_Changed"/>
+                                                    <TextBlock x:Name="ElyColorHueValue" Grid.Column="2" Text="0"
+                                                               HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                                                </Grid>
+
+                                                <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+                                                    <Button Content="Capturer l'actuel" Style="{StaticResource GhostButton}"
+                                                            Height="42" Width="160" Click="CaptureElyColor_Click"/>
+                                                    <Button Content="Enregistrer" Style="{StaticResource GhostButton}"
+                                                            Height="42" Width="130" Margin="10,0,0,0" Click="SaveElyColor_Click"/>
+                                                    <Button Content="Supprimer" Style="{StaticResource GhostButton}"
+                                                            Height="42" Width="120" Margin="10,0,0,0" Click="DeleteElyColor_Click"/>
+                                                </StackPanel>
+                                            </StackPanel>
+
+                                            <StackPanel x:Name="SettingsElySoundPanel" Visibility="Collapsed">
+                                                <TextBlock Text="ELYSOUND+" Margin="0,26,0,6" FontSize="11"
+                                                           FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                                                <TextBlock Text="Post-processing audio applique en direct via mpv : egaliseur, presence, largeur stereo, compression, limiteur et virtualiseur surround. Le switch global coupe tout instantanement pour comparer."
+                                                           FontSize="11" Margin="0,0,0,12" TextWrapping="Wrap"
+                                                           Foreground="{StaticResource FaintBrush}"/>
+
+                                                <CheckBox x:Name="ElySoundEnabledSwitch" Style="{StaticResource Switch}"
+                                                          Content="Activer ELYSOUND+" Click="ElySoundEnabled_Changed"/>
+                                                <CheckBox x:Name="ElySoundVirtualSwitch" Style="{StaticResource Switch}"
+                                                          Margin="0,8,0,0"
+                                                          Content="Virtualiseur surround" Click="ElySoundSetting_Changed"/>
+
+                                                <Grid Margin="0,16,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="260"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Profil actif" VerticalAlignment="Center"
+                                                               Foreground="{StaticResource TextBrush}"/>
+                                                    <ComboBox x:Name="ElySoundPresetCombo" Grid.Column="1" Height="40"
+                                                              Style="{StaticResource FieldCombo}"
+                                                              SelectionChanged="ElySoundPreset_Changed"/>
+                                                </Grid>
+
+                                                <TextBlock Text="Egaliseur custom" Margin="0,20,0,8" FontSize="11"
+                                                           Foreground="{StaticResource TextBrush}"/>
+                                                <Grid Margin="0,4,0,0" Height="268">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="44"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Grid Grid.Column="0" Height="190" VerticalAlignment="Top" Margin="0,22,10,0">
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="*"/>
+                                                            <RowDefinition Height="*"/>
+                                                            <RowDefinition Height="*"/>
+                                                            <RowDefinition Height="*"/>
+                                                            <RowDefinition Height="*"/>
+                                                        </Grid.RowDefinitions>
+                                                        <TextBlock Text="+12" FontSize="10" Foreground="{StaticResource FaintBrush}" VerticalAlignment="Top"/>
+                                                        <TextBlock Grid.Row="1" Text="+6" FontSize="10" Foreground="{StaticResource FaintBrush}" VerticalAlignment="Center"/>
+                                                        <TextBlock Grid.Row="2" Text="0" FontSize="10" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
+                                                        <TextBlock Grid.Row="3" Text="-6" FontSize="10" Foreground="{StaticResource FaintBrush}" VerticalAlignment="Center"/>
+                                                        <TextBlock Grid.Row="4" Text="-12" FontSize="10" Foreground="{StaticResource FaintBrush}" VerticalAlignment="Bottom"/>
+                                                    </Grid>
+
+                                                    <Grid Grid.Column="1">
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="22"/>
+                                                            <RowDefinition Height="190"/>
+                                                            <RowDefinition Height="56"/>
+                                                        </Grid.RowDefinitions>
+                                                        <Grid Grid.Row="1" IsHitTestVisible="False" Opacity="0.62">
+                                                            <Grid.RowDefinitions>
+                                                                <RowDefinition Height="*"/>
+                                                                <RowDefinition Height="*"/>
+                                                                <RowDefinition Height="*"/>
+                                                                <RowDefinition Height="*"/>
+                                                                <RowDefinition Height="*"/>
+                                                            </Grid.RowDefinitions>
+                                                            <Border BorderBrush="#18FFFFFF" BorderThickness="0,1,0,0"/>
+                                                            <Border Grid.Row="1" BorderBrush="#18FFFFFF" BorderThickness="0,1,0,0"/>
+                                                            <Border Grid.Row="2" BorderBrush="#55FFFFFF" BorderThickness="0,1,0,0"/>
+                                                            <Border Grid.Row="3" BorderBrush="#18FFFFFF" BorderThickness="0,1,0,0"/>
+                                                            <Border Grid.Row="4" BorderBrush="#18FFFFFF" BorderThickness="0,1,0,1"/>
+                                                        </Grid>
+                                                        <UniformGrid Grid.RowSpan="3" Columns="7" HorizontalAlignment="Left">
+                                                            <StackPanel Width="82" HorizontalAlignment="Center">
+                                                                <TextBlock x:Name="ElySoundPreampValue" Text="0" FontSize="11" TextAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                                                                <Slider x:Name="ElySoundPreampSlider" Minimum="-12" Maximum="6"
+                                                                        Style="{StaticResource VerticalEqSlider}" ValueChanged="ElySoundSlider_Changed"/>
+                                                                <TextBlock Text="PRE" FontSize="11" FontWeight="SemiBold" TextAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                                <TextBlock Text="gain" FontSize="10" TextAlignment="Center" Foreground="{StaticResource FaintBrush}"/>
+                                                            </StackPanel>
+                                                            <StackPanel Width="82" HorizontalAlignment="Center">
+                                                                <TextBlock x:Name="ElySoundBassValue" Text="0" FontSize="11" TextAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                                                                <Slider x:Name="ElySoundBassSlider" Minimum="-12" Maximum="12"
+                                                                        Style="{StaticResource VerticalEqSlider}" ValueChanged="ElySoundSlider_Changed"/>
+                                                                <TextBlock Text="64 Hz" FontSize="11" FontWeight="SemiBold" TextAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                                <TextBlock Text="sub/bass" FontSize="10" TextAlignment="Center" Foreground="{StaticResource FaintBrush}"/>
+                                                            </StackPanel>
+                                                            <StackPanel Width="82" HorizontalAlignment="Center">
+                                                                <TextBlock x:Name="ElySoundLowMidValue" Text="0" FontSize="11" TextAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                                                                <Slider x:Name="ElySoundLowMidSlider" Minimum="-12" Maximum="12"
+                                                                        Style="{StaticResource VerticalEqSlider}" ValueChanged="ElySoundSlider_Changed"/>
+                                                                <TextBlock Text="320 Hz" FontSize="11" FontWeight="SemiBold" TextAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                                <TextBlock Text="corps" FontSize="10" TextAlignment="Center" Foreground="{StaticResource FaintBrush}"/>
+                                                            </StackPanel>
+                                                            <StackPanel Width="82" HorizontalAlignment="Center">
+                                                                <TextBlock x:Name="ElySoundMidValue" Text="0" FontSize="11" TextAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                                                                <Slider x:Name="ElySoundMidSlider" Minimum="-12" Maximum="12"
+                                                                        Style="{StaticResource VerticalEqSlider}" ValueChanged="ElySoundSlider_Changed"/>
+                                                                <TextBlock Text="950 Hz" FontSize="11" FontWeight="SemiBold" TextAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                                <TextBlock Text="voix" FontSize="10" TextAlignment="Center" Foreground="{StaticResource FaintBrush}"/>
+                                                            </StackPanel>
+                                                            <StackPanel Width="82" HorizontalAlignment="Center">
+                                                                <TextBlock x:Name="ElySoundPresenceValue" Text="0" FontSize="11" TextAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                                                                <Slider x:Name="ElySoundPresenceSlider" Minimum="-12" Maximum="12"
+                                                                        Style="{StaticResource VerticalEqSlider}" ValueChanged="ElySoundSlider_Changed"/>
+                                                                <TextBlock Text="2.6 kHz" FontSize="11" FontWeight="SemiBold" TextAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                                <TextBlock Text="presence" FontSize="10" TextAlignment="Center" Foreground="{StaticResource FaintBrush}"/>
+                                                            </StackPanel>
+                                                            <StackPanel Width="82" HorizontalAlignment="Center">
+                                                                <TextBlock x:Name="ElySoundTrebleValue" Text="0" FontSize="11" TextAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                                                                <Slider x:Name="ElySoundTrebleSlider" Minimum="-12" Maximum="12"
+                                                                        Style="{StaticResource VerticalEqSlider}" ValueChanged="ElySoundSlider_Changed"/>
+                                                                <TextBlock Text="5.2 kHz" FontSize="11" FontWeight="SemiBold" TextAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                                <TextBlock Text="aigus" FontSize="10" TextAlignment="Center" Foreground="{StaticResource FaintBrush}"/>
+                                                            </StackPanel>
+                                                            <StackPanel Width="82" HorizontalAlignment="Center">
+                                                                <TextBlock x:Name="ElySoundClarityValue" Text="0" FontSize="11" TextAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                                                                <Slider x:Name="ElySoundClaritySlider" Minimum="-6" Maximum="12"
+                                                                        Style="{StaticResource VerticalEqSlider}" ValueChanged="ElySoundSlider_Changed"/>
+                                                                <TextBlock Text="9.5 kHz" FontSize="11" FontWeight="SemiBold" TextAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                                <TextBlock Text="air" FontSize="10" TextAlignment="Center" Foreground="{StaticResource FaintBrush}"/>
+                                                            </StackPanel>
+                                                        </UniformGrid>
+                                                    </Grid>
+                                                </Grid>
+                                                <Grid Margin="0,8,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="54"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Largeur" VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                    <Slider x:Name="ElySoundWidthSlider" Grid.Column="1" Minimum="0" Maximum="60"
+                                                            Style="{StaticResource VolumeSlider}" ValueChanged="ElySoundSlider_Changed"/>
+                                                    <TextBlock x:Name="ElySoundWidthValue" Grid.Column="2" Text="0"
+                                                               HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                                                </Grid>
+                                                <Grid Margin="0,8,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="54"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Compression" VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                    <Slider x:Name="ElySoundCompressorSlider" Grid.Column="1" Minimum="0" Maximum="60"
+                                                            Style="{StaticResource VolumeSlider}" ValueChanged="ElySoundSlider_Changed"/>
+                                                    <TextBlock x:Name="ElySoundCompressorValue" Grid.Column="2" Text="0"
+                                                               HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                                                </Grid>
+                                                <Grid Margin="0,8,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="54"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Limiteur" VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                                                    <Slider x:Name="ElySoundLimiterSlider" Grid.Column="1" Minimum="70" Maximum="100"
+                                                            Style="{StaticResource VolumeSlider}" ValueChanged="ElySoundSlider_Changed"/>
+                                                    <TextBlock x:Name="ElySoundLimiterValue" Grid.Column="2" Text="0"
+                                                               HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                                                </Grid>
+                                            </StackPanel>
+
+                                            <StackPanel x:Name="SettingsElyFlowPanel" Visibility="Collapsed">
+                                                <TextBlock Text="ELYFLOW" Margin="0,26,0,6" FontSize="11"
+                                                           FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                                                <TextBlock Text="NVIDIA FRUC produit une image intermédiaire par image source (×2 : 24→48, 30→60). La cible manuelle concerne uniquement le moteur mpv pacing ; demander 120–360 FPS ne crée pas davantage d'images FRUC et gaspillerait du GPU."
+                                                           FontSize="11" Margin="0,0,0,12" TextWrapping="Wrap"
+                                                           Foreground="{StaticResource FaintBrush}"/>
+
+                                                <TextBlock x:Name="ElyFlowGateHint" Visibility="Collapsed"
+                                                           Text="ELYFLOW nécessite le renderer ELYCORE. Sélectionnez « ELYCORE Renderer » dans Lecture → Backend vidéo pour pouvoir l'activer."
+                                                           FontSize="11" Margin="0,0,0,12" TextWrapping="Wrap"
+                                                           Foreground="{StaticResource MutedBrush}"/>
+
+                                                <CheckBox x:Name="ElyFlowEnabledSwitch" Style="{StaticResource Switch}"
+                                                          Content="Activer ELYFLOW" Click="ElyFlowSetting_Changed"/>
+
+                                                <Grid Margin="0,16,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="260"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Moteur" VerticalAlignment="Center"
+                                                               Foreground="{StaticResource TextBrush}"/>
+                                                    <ComboBox x:Name="ElyFlowEngineCombo" Grid.Column="1" Height="40"
+                                                              Style="{StaticResource FieldCombo}"
+                                                              SelectionChanged="ElyFlowCombo_Changed">
+                                                        <ComboBoxItem Tag="nvidia-fruc" Content="NVIDIA Optical Flow FRUC"/>
+                                                        <ComboBoxItem Tag="mpv-pacing" Content="mpv pacing / display-resample"/>
+                                                    </ComboBox>
+                                                </Grid>
+
+                                                <CheckBox x:Name="ElyFlowRtxVsrSwitch" Margin="0,12,0,2"
+                                                          Style="{StaticResource Switch}"
+                                                          Content="RTX Video Super Resolution avant FRUC"
+                                                          ToolTip="Upscale IA NVIDIA sur D3D11, puis interpolation FRUC à la résolution de sortie."
+                                                          Click="ElyFlowSetting_Changed"/>
+
+                                                <Grid Margin="0,10,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="260"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock x:Name="ElyFlowTargetLabel" Text="FPS cible (mpv pacing)" VerticalAlignment="Center"
+                                                               Foreground="{StaticResource TextBrush}"/>
+                                                    <ComboBox x:Name="ElyFlowTargetCombo" Grid.Column="1" Height="40"
+                                                              Style="{StaticResource FieldCombo}"
+                                                              SelectionChanged="ElyFlowCombo_Changed">
+                                                        <ComboBoxItem Tag="30" Content="30 fps"/>
+                                                        <ComboBoxItem Tag="60000/1001" Content="59.94 fps"/>
+                                                        <ComboBoxItem Tag="60" Content="60 fps"/>
+                                                        <ComboBoxItem Tag="120" Content="120 fps"/>
+                                                        <ComboBoxItem Tag="144" Content="144 fps"/>
+                                                        <ComboBoxItem Tag="165" Content="165 fps"/>
+                                                        <ComboBoxItem Tag="240" Content="240 fps"/>
+                                                        <ComboBoxItem Tag="360" Content="360 fps"/>
+                                                    </ComboBox>
+                                                </Grid>
+
+                                                <Grid Margin="0,12,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="180"/>
+                                                        <ColumnDefinition Width="58"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Buffer live post-processing" VerticalAlignment="Center"
+                                                               Foreground="{StaticResource TextBrush}"/>
+                                                    <Slider x:Name="ElyFlowLiveBufferSlider" Grid.Column="1"
+                                                            Minimum="0.5" Maximum="5" ValueChanged="ElyFlowSlider_Changed"
+                                                            Style="{StaticResource VolumeSlider}"/>
+                                                    <TextBlock x:Name="ElyFlowLiveBufferValue" Grid.Column="2" Text="5.0s"
+                                                               HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                               Foreground="{StaticResource MutedBrush}"/>
+                                                </Grid>
+
+                                                <Border Margin="0,18,0,0" Padding="14,12" CornerRadius="8"
+                                                        Background="#22000000" BorderBrush="{StaticResource CardStroke}" BorderThickness="1">
+                                                    <StackPanel>
+                                                        <TextBlock Text="Statut NVIDIA FRUC" FontSize="11" FontWeight="SemiBold"
+                                                                   Foreground="{StaticResource TextBrush}"/>
+                                                        <TextBlock x:Name="ElyFlowStatusText" Margin="0,6,0,0"
+                                                                   TextWrapping="Wrap" FontSize="12"
+                                                                   Foreground="{StaticResource FaintBrush}"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </StackPanel>
+
+                                            <StackPanel x:Name="SettingsSystemPanel" Visibility="Collapsed">
+
+                                             <TextBlock Text="DÉMARRAGE" Margin="0,26,0,6" FontSize="11"
+                                                       FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                                            <CheckBox x:Name="ZapSwitch" Style="{StaticResource Switch}"
+                                                      Content="Zapping avec les flèches ↑ ↓" Click="Setting_Changed"/>
+                                            <CheckBox x:Name="ConfirmExitSwitch" Style="{StaticResource Switch}"
+                                                      Content="Confirmer avant de quitter" Click="Setting_Changed"/>
+                                            <Grid Margin="0,10,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="180"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Durée de la console au boot (s)" VerticalAlignment="Center"
+                                                           Foreground="{StaticResource TextBrush}"/>
+                                                <Slider x:Name="BootSlider" Grid.Column="1" Minimum="2" Maximum="12"
+                                                        Style="{StaticResource VolumeSlider}" ValueChanged="SliderSetting_Changed"/>
+                                            </Grid>
+
+                                            <StackPanel Orientation="Horizontal" Margin="0,24,0,0">
+                                                <Button Content="Ouvrir le dossier de données" Style="{StaticResource GhostButton}"
+                                                        Height="42" Width="240" Click="OpenDataFolder_Click"/>
+                                                <Button Content="Réinitialiser" Style="{StaticResource GhostButton}"
+                                                        Height="42" Width="130" Margin="10,0,0,0" Click="ResetSettings_Click"/>
+                                            </StackPanel>
+
+                                            <TextBlock Text="À VENIR" Margin="0,28,0,8" FontSize="11"
+                                                       FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                                            <TextBlock Foreground="{StaticResource FaintBrush}" FontSize="12" TextWrapping="Wrap"
+                                                       Text="• Enregistrement du flux &amp; capture d'écran   • Picture-in-Picture / réduction dans la barre des tâches   • Mosaïque multi-flux   • Verrouillage parental par code PIN   • Cache local des logos   • Overlay d'aide raccourcis (?)"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </ScrollViewer>
+                                </Border>
+                                </Grid>
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Grid>
+
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

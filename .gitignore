@@ -1,0 +1,93 @@
+# IDE and local tooling
+.vs/
+.vscode/
+.idea/
+.claude/
+*.user
+*.suo
+*.rsuser
+*.userprefs
+
+# .NET / NuGet output
+[Bb]in/
+[Oo]bj/
+packages/
+artifacts/
+TestResults/
+*.nupkg
+*.snupkg
+
+# CMake / native build output
+**/build/
+**/CMakeFiles/
+**/CMakeCache.txt
+**/cmake_install.cmake
+**/*.vcxproj
+**/*.vcxproj.filters
+*.dll
+*.exe
+*.exp
+*.ilk
+*.lib
+*.obj
+*.pdb
+
+# NVIDIA Optical Flow SDK and redistributable runtimes are proprietary.
+# Download them from NVIDIA when FRUC support is required.
+native/NVIDIA-Optical-Flow-SDK-*/
+Optical_Flow_SDK_*.zip
+NvOFFRUC*.dll
+cudart64_*.dll
+nvofapi64.dll
+
+# User data, credentials and runtime logs
+.env
+.env.*
+!.env.example
+appsettings.*.json
+secrets*.json
+state.json
+profiles.json
+log.txt
+mpv.log
+elycast_error.txt
+*.log
+*.tmp
+*.dmp
+*.db
+*.sqlite
+*.sqlite3
+*.m3u
+*.m3u8
+
+# Certificates and private keys
+*.pfx
+*.p12
+*.pem
+*.key
+*.snk
+
+# Local media / large archives
+*.7z
+*.rar
+*.zip
+*.avi
+*.flac
+*.m4a
+*.mkv
+*.mov
+*.mp3
+*.mp4
+*.mpeg
+*.mpg
+*.ogg
+*.opus
+*.ts
+*.wav
+*.webm
+*.wma
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
