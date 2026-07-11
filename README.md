@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/elycast-banner.png" alt="ElyCast — lecteur IPTV et multimédia pour Windows" width="100%">
+  <img src="docs/images/elycast-logo2.png" alt="ElyCast — lecteur IPTV et multimédia pour Windows" width="100%">
 </p>
 
 <p align="center">
