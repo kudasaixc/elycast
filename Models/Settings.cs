@@ -149,4 +149,7 @@ public class AppState
     public Settings Settings { get; set; } = new();
     public Dictionary<string, ProfileState> Profiles { get; set; } = new();
     public List<PlayItem> LocalLibrary { get; set; } = new();
+    public List<PlayItem> LocalAudioLibrary { get; set; } = new();
+    public List<PlayItem> LocalVideoLibrary { get; set; } = new();
+    public List<LocalPlaylist> LocalPlaylists { get; set; } = new();
 }

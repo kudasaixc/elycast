@@ -377,6 +377,7 @@ public partial class MainWindow
         var wasSettings = SettingsPanel.Visibility == Visibility.Visible;
         CloseSettingsPanel();
         CloseSeriesPanel();
+        CloseMusicPanel();
         VideoStage.Cursor = Cursors.Arrow;
         // Restore the nav highlight to the section the user was on before opening
         // settings, without rebuilding the list (no reset).
@@ -392,7 +393,8 @@ public partial class MainWindow
         {
             case Section.Movies: NavMovies.IsChecked = true; break;
             case Section.Series: NavSeries.IsChecked = true; break;
-            case Section.Local: NavLocal.IsChecked = true; break;
+            case Section.LocalAudio: NavLocalAudio.IsChecked = true; break;
+            case Section.LocalVideo: NavLocalVideo.IsChecked = true; break;
             case Section.Fav: NavFav.IsChecked = true; break;
             default: NavLive.IsChecked = true; break;
         }

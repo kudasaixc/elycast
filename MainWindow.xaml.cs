@@ -26,7 +26,7 @@ namespace Elysium_Cast_IPTV;
 
 public partial class MainWindow : Window
 {
-    private enum Section { Live, Movies, Series, Local, Fav }
+    private enum Section { Live, Movies, Series, LocalAudio, LocalVideo, Fav }
 
     private readonly IptvService _iptv = new();
     private readonly MagpieUpscalerService _magpie = new();
@@ -41,7 +41,13 @@ public partial class MainWindow : Window
     private List<PlayItem> _liveItems = new();
     private List<PlayItem>? _movieItems;
     private List<PlayItem>? _seriesItems;
-    private List<PlayItem> _localItems = new();
+    private List<PlayItem> _localAudioItems = new();
+    private List<PlayItem> _localVideoItems = new();
+    private readonly LocalLibraryService _localLibrary = new();
+    private readonly ObservableCollection<PlayItem> _audioQueue = new();
+    private readonly Random _queueRandom = new();
+    private bool _audioShuffle;
+    private bool _audioRepeat;
 
     private PlayItem? _current;
     private Section _section = Section.Live;
@@ -221,11 +227,12 @@ public partial class MainWindow : Window
         DebugConsole.Info("Mode local uniquement : ouverture directe de la bibliothèque.");
         _connected = true;
         _state = StateStore.ForProfile("local-only");
-        MarkFavorites(_localItems);
+        MarkFavorites(_localAudioItems);
+        MarkFavorites(_localVideoItems);
         _suppressNav = true;
-        NavLocal.IsChecked = true;
+        NavLocalAudio.IsChecked = true;
         _suppressNav = false;
-        ShowSection(Section.Local);
+        ShowSection(Section.LocalAudio);
         ShowOverlay("Ajoute des fichiers locaux puis lance la lecture", spinning: false);
         GoToPlayer();
     }
@@ -657,7 +664,8 @@ public partial class MainWindow : Window
     }
 
     private bool IsPanelOpen() =>
-        SettingsPanel.Visibility == Visibility.Visible || SeriesPanel.Visibility == Visibility.Visible;
+        SettingsPanel.Visibility == Visibility.Visible || SeriesPanel.Visibility == Visibility.Visible
+        || MusicPanel.Visibility == Visibility.Visible;
 
     private void ShowOsd()
     {

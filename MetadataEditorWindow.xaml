@@ -1,0 +1,124 @@
+<Window x:Class="Elysium_Cast_IPTV.MetadataEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Métadonnées" Width="640" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" WindowStyle="None" AllowsTransparency="True"
+        Background="Transparent" ShowInTaskbar="False" ResizeMode="NoResize"
+        FontFamily="{StaticResource UiFont}" KeyDown="Window_KeyDown">
+    <Border CornerRadius="18" Background="#FF0C0714" BorderBrush="{DynamicResource CardStroke}"
+            BorderThickness="1" MouseLeftButtonDown="Header_MouseDown">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="34" ShadowDepth="0" Opacity="0.65" Color="Black"/>
+        </Border.Effect>
+        <Grid Margin="26,22,26,24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- header -->
+            <Grid Grid.Row="0" Margin="0,0,0,18">
+                <StackPanel>
+                    <TextBlock Text="Modifier les métadonnées" FontSize="19" FontWeight="Bold"
+                               Foreground="{DynamicResource TextBrush}"/>
+                    <TextBlock x:Name="FileNameText" Text="" FontSize="11" Margin="0,3,30,0"
+                               TextTrimming="CharacterEllipsis" Foreground="{DynamicResource FaintBrush}"/>
+                </StackPanel>
+                <Button HorizontalAlignment="Right" VerticalAlignment="Top" Width="32" Height="32"
+                        Style="{StaticResource IconButton}" Click="Cancel_Click" ToolTip="Fermer">
+                    <Path Data="M 3,3 L 13,13 M 13,3 L 3,13" Stroke="White" StrokeThickness="1.6"
+                          Stretch="Uniform" Width="11" Height="11"/>
+                </Button>
+            </Grid>
+
+            <!-- cover + fields -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Margin="0,4,22,0">
+                    <Grid Width="184" Height="184">
+                        <Border CornerRadius="14" Background="#33000000">
+                            <TextBlock Text="♪" FontSize="52" FontWeight="Bold"
+                                       Foreground="{DynamicResource AccentSoftBrush}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <Image x:Name="CoverImage" Stretch="UniformToFill"
+                               RenderOptions.BitmapScalingMode="HighQuality">
+                            <Image.Clip>
+                                <RectangleGeometry Rect="0,0,184,184" RadiusX="14" RadiusY="14"/>
+                            </Image.Clip>
+                        </Image>
+                    </Grid>
+                    <Button Content="Changer l’image…" Style="{StaticResource GhostButton}" Height="34"
+                            FontSize="12" Margin="0,10,0,0" Click="ChangeCover_Click"/>
+                    <Button x:Name="RemoveCoverBtn" Content="Retirer la pochette" Style="{StaticResource GhostButton}"
+                            Height="34" FontSize="12" Margin="0,6,0,0" Click="RemoveCover_Click"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="TITRE" FontSize="10" FontWeight="SemiBold" Margin="2,0,0,4"
+                               Foreground="{DynamicResource MutedBrush}"/>
+                    <TextBox x:Name="TitleBox" Style="{StaticResource SearchBox}"/>
+
+                    <TextBlock Text="ARTISTE" FontSize="10" FontWeight="SemiBold" Margin="2,10,0,4"
+                               Foreground="{DynamicResource MutedBrush}"/>
+                    <TextBox x:Name="ArtistBox" Style="{StaticResource SearchBox}" Tag="Séparer par ; pour plusieurs artistes"/>
+
+                    <TextBlock Text="ALBUM" FontSize="10" FontWeight="SemiBold" Margin="2,10,0,4"
+                               Foreground="{DynamicResource MutedBrush}"/>
+                    <TextBox x:Name="AlbumBox" Style="{StaticResource SearchBox}"/>
+
+                    <Grid Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="ARTISTE DE L’ALBUM" FontSize="10" FontWeight="SemiBold" Margin="2,0,0,4"
+                                       Foreground="{DynamicResource MutedBrush}"/>
+                            <TextBox x:Name="AlbumArtistBox" Style="{StaticResource SearchBox}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="GENRE" FontSize="10" FontWeight="SemiBold" Margin="2,0,0,4"
+                                       Foreground="{DynamicResource MutedBrush}"/>
+                            <TextBox x:Name="GenreBox" Style="{StaticResource SearchBox}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="N° DE PISTE" FontSize="10" FontWeight="SemiBold" Margin="2,0,0,4"
+                                       Foreground="{DynamicResource MutedBrush}"/>
+                            <TextBox x:Name="TrackBox" Style="{StaticResource SearchBox}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="N° DE DISQUE" FontSize="10" FontWeight="SemiBold" Margin="2,0,0,4"
+                                       Foreground="{DynamicResource MutedBrush}"/>
+                            <TextBox x:Name="DiscBox" Style="{StaticResource SearchBox}"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Grid>
+
+            <!-- footer -->
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
+                <Button Content="Annuler" Style="{StaticResource GhostButton}" Height="40" Width="120"
+                        Click="Cancel_Click"/>
+                <Button Style="{StaticResource PrimaryButton}" Height="40" Width="160" Margin="12,0,0,0"
+                        Click="Save_Click">
+                    <TextBlock Text="Enregistrer"/>
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

@@ -79,7 +79,7 @@ public partial class MainWindow
 
     private void UpdateResumeButton()
     {
-        if (_section == Section.Local)
+        if (_section is Section.LocalAudio or Section.LocalVideo)
         {
             ResumeButton.Visibility = Visibility.Collapsed;
             return;
@@ -161,6 +161,11 @@ public partial class MainWindow
     // ============ ZAPPING ============
     private void Zap(int dir)
     {
+        if (_current != null && IsAudioOnlyItem(_current))
+        {
+            PlayAdjacentAudio(dir);
+            return;
+        }
         if (_view == null || _view.Count == 0) return;
         var idx = ItemList.SelectedIndex;
         idx = idx < 0 ? 0 : idx + dir;

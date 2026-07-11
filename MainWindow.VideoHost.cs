@@ -298,6 +298,7 @@ public partial class MainWindow
 
     private void OnBackendEnded(PlaybackEndReason reason) => Dispatcher.Invoke(() =>
     {
+        var endedAudio = reason == PlaybackEndReason.NaturalEnd && _current != null && IsAudioOnlyItem(_current);
         var termination = PlaybackTerminationPolicy.ForEnd(reason, _current?.Kind == PlayItemKind.Live);
         if (termination == PlaybackTerminationAction.Ignore) return;
         _mediaTransport.SetState(hasMedia: false, playing: false);
@@ -318,6 +319,8 @@ public partial class MainWindow
         if (_current != null && IsAudioOnlyItem(_current))
             HideAudioVisualizer();
         _videoBackend?.Clear();
+
+        if (endedAudio && TryPlayNextAudio()) return;
 
         if (termination == PlaybackTerminationAction.ManualStop)
         {

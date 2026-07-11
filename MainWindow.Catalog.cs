@@ -32,6 +32,7 @@ public partial class MainWindow
         if (target == "Settings") { _sectionBeforeSettings = _section; OpenSettingsPanel(); return; }
         CloseSettingsPanel();
         CloseSeriesPanel();
+        CloseMusicPanel();
 
         _sectionCts?.Cancel();
         var cts = new CancellationTokenSource();
@@ -42,7 +43,8 @@ public partial class MainWindow
             {
                 case "Movies": await ShowSectionAsync(Section.Movies, cts.Token); break;
                 case "Series": await ShowSectionAsync(Section.Series, cts.Token); break;
-                case "Local": ShowSection(Section.Local); break;
+                case "LocalAudio": ShowSection(Section.LocalAudio); break;
+                case "LocalVideo": ShowSection(Section.LocalVideo); break;
                 case "Fav": ShowSection(Section.Fav); break;
                 default: ShowSection(Section.Live); break;
             }
@@ -93,19 +95,41 @@ public partial class MainWindow
             Section.Live => _liveItems,
             Section.Movies => _movieItems ?? new(),
             Section.Series => _seriesItems ?? new(),
-            Section.Local => _localItems,
+            Section.LocalAudio => GetAudioSectionItems(),
+            Section.LocalVideo => _localVideoItems,
             Section.Fav => GetFavorites(),
             _ => _liveItems
         };
         SectionTitle.Text = s switch
         {
-            Section.Local => "Local",
+            Section.LocalAudio => "Musique locale",
+            Section.LocalVideo => "Vidéos locales",
             Section.Live => "Chaînes", Section.Movies => "Films",
             Section.Series => "Séries", Section.Fav => "Favoris", _ => ""
         };
 
-        LocalActionsPanel.Visibility = s == Section.Local ? Visibility.Visible : Visibility.Collapsed;
+        LocalActionsPanel.Visibility = s is Section.LocalAudio or Section.LocalVideo ? Visibility.Visible : Visibility.Collapsed;
+        AudioLibraryActions.Visibility = s == Section.LocalAudio ? Visibility.Visible : Visibility.Collapsed;
+        VideoLibraryActions.Visibility = s == Section.LocalVideo ? Visibility.Visible : Visibility.Collapsed;
+
+        // Local audio browses through grouped covers (albums / artists / genres /
+        // playlists); the flat PlayItem list only serves "tous les titres" and the
+        // other sections.
+        var groupMode = s == Section.LocalAudio && IsAudioGroupMode;
+        MusicGroupList.Visibility = groupMode ? Visibility.Visible : Visibility.Collapsed;
+        ItemList.Visibility = groupMode ? Visibility.Collapsed : Visibility.Visible;
+        CategoryCombo.Visibility = groupMode ? Visibility.Collapsed : Visibility.Visible;
+        PlaylistCreateRow.Visibility = s == Section.LocalAudio && AudioBrowseMode == "playlists"
+            ? Visibility.Visible : Visibility.Collapsed;
+        RemoveLocalButton.Visibility = s == Section.LocalVideo || (s == Section.LocalAudio && !groupMode)
+            ? Visibility.Visible : Visibility.Collapsed;
+
         UpdateResumeButton();
+        if (groupMode)
+        {
+            RebuildMusicGroups();
+            return;
+        }
         _items.Reset(source);
         _view = new ListCollectionView(_items) { Filter = FilterItem };
         ItemList.ItemsSource = _view;
@@ -118,49 +142,44 @@ public partial class MainWindow
     // ============ LOCAL LIBRARY ============
     private void LoadLocalLibrary()
     {
-        _localItems = (StateStore.Current.LocalLibrary ?? new())
-            .Where(item => item.Kind == PlayItemKind.Local && !string.IsNullOrWhiteSpace(item.DirectUrl))
-            .GroupBy(item => item.DirectUrl!, StringComparer.OrdinalIgnoreCase)
-            .Select(g => g.First())
-            .ToList();
-        MarkFavorites(_localItems);
+        _localAudioItems = DeduplicateLocal(StateStore.Current.LocalAudioLibrary)
+            .Select(LocalLibraryService.EnrichAudioItem).ToList();
+        _localVideoItems = DeduplicateLocal(StateStore.Current.LocalVideoLibrary);
+        MarkFavorites(_localAudioItems);
+        MarkFavorites(_localVideoItems);
     }
 
     private void SaveLocalLibrary()
     {
-        StateStore.Current.LocalLibrary = _localItems
-            .Where(item => item.Kind == PlayItemKind.Local && !string.IsNullOrWhiteSpace(item.DirectUrl))
-            .ToList();
+        StateStore.Current.LocalAudioLibrary = _localAudioItems.ToList();
+        StateStore.Current.LocalVideoLibrary = _localVideoItems.ToList();
         StateStore.Save();
     }
 
     private void AddLocalFiles_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new OpenFileDialog
-        {
-            Title = "Ajouter des fichiers locaux",
-            Multiselect = true,
-            Filter = "Médias vidéo/audio|*.mp4;*.mkv;*.avi;*.mov;*.wmv;*.webm;*.m4v;*.ts;*.m2ts;*.mpg;*.mpeg;*.flv;*.mp3;*.flac;*.wav;*.aac;*.m4a;*.ogg;*.opus;*.wma;*.aiff;*.ape|Tous les fichiers|*.*"
-        };
-        if (dlg.ShowDialog(this) != true) return;
-
-        var existing = _localItems.Select(i => i.DirectUrl ?? i.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var file in dlg.FileNames.Where(File.Exists))
-        {
-            if (!existing.Add(file)) continue;
-            _localItems.Add(PlayItem.FromLocalFile(file));
-        }
-
-        SaveLocalLibrary();
-        MarkFavorites(_localItems);
-        ShowSection(Section.Local);
+        ImportLocalFolder_Click(sender, e);
     }
 
     private void RemoveLocalFile_Click(object sender, RoutedEventArgs e)
     {
         if (ItemList.SelectedItem is not PlayItem item || item.Kind != PlayItemKind.Local) return;
+        RemoveLocalItem(item);
+    }
 
-        _localItems.RemoveAll(i => i.SameAs(item));
+    private void RemoveLocalItem(PlayItem item)
+    {
+        var library = IsAudioOnlyItem(item) ? _localAudioItems : _localVideoItems;
+        library.RemoveAll(i => i.SameAs(item));
+        if (IsAudioOnlyItem(item))
+        {
+            var path = LocalLibraryService.PathOf(item);
+            foreach (var playlist in StateStore.Current.LocalPlaylists)
+                playlist.TrackPaths.RemoveAll(entry => string.Equals(entry, path, StringComparison.OrdinalIgnoreCase));
+            var queued = _audioQueue.FirstOrDefault(entry => entry.SameAs(item));
+            if (queued != null) _audioQueue.Remove(queued);
+            UpdateQueueLabel();
+        }
         var fav = _state.Favorites.FirstOrDefault(f => f.SameAs(item));
         if (fav != null) _state.Favorites.Remove(fav);
         if (_current?.SameAs(item) == true)
@@ -173,7 +192,7 @@ public partial class MainWindow
 
         SaveLocalLibrary();
         StateStore.Save();
-        ShowSection(Section.Local);
+        ShowSection(_section);
     }
 
     private void BuildCategoryFilter(List<PlayItem> source)
@@ -193,7 +212,9 @@ public partial class MainWindow
         if (_selectedCategory != AllCategories && !string.IsNullOrEmpty(_selectedCategory)
             && !string.Equals(c.CategoryName, _selectedCategory, StringComparison.Ordinal)) return false;
         var q = SearchBox.Text;
-        return string.IsNullOrWhiteSpace(q) || c.Name.Contains(q, StringComparison.OrdinalIgnoreCase);
+        return string.IsNullOrWhiteSpace(q) || c.Name.Contains(q, StringComparison.OrdinalIgnoreCase)
+            || (c.Artist?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (c.Album?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
     }
 
     private void Category_Changed(object sender, SelectionChangedEventArgs e)
@@ -202,14 +223,23 @@ public partial class MainWindow
         _view?.Refresh(); UpdateCount();
     }
 
-    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e) { _view?.Refresh(); UpdateCount(); }
+    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_section == Section.LocalAudio && IsAudioGroupMode) { ApplyMusicGroupFilter(); return; }
+        _view?.Refresh(); UpdateCount();
+    }
     private void UpdateCount() => CountText.Text = (_view?.Count ?? 0).ToString();
 
     private void ItemList_DoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (ItemList.SelectedItem is not PlayItem item) return;
         if (item.Kind == PlayItemKind.Series) OpenSeries(item);
-        else Play(item);
+        else
+        {
+            // Launched from the flat list: playback advances through the library.
+            if (IsAudioOnlyItem(item)) _audioPlayContext = null;
+            Play(item);
+        }
     }
 
     // ============ FAVOURITES ============

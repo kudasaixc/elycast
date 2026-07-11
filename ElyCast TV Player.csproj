@@ -9,9 +9,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Elysium_Cast_IPTV</RootNamespace>
     <AssemblyName>ElyCast</AssemblyName>
-    <Version>1.1.0</Version>
-    <FileVersion>1.1.0.0</FileVersion>
-    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <Version>1.2.0</Version>
+    <FileVersion>1.2.0.0</FileVersion>
+    <AssemblyVersion>1.2.0.0</AssemblyVersion>
     <AssemblyTitle>ElyCast</AssemblyTitle>
     <Product>ElyCast</Product>
     <Description>ElyCast media player</Description>

@@ -85,11 +85,11 @@ Partial-class placement rule: XAML event handlers belong in the partial matching
 ### Domain and persistence models
 
 - `Models/Channel.cs`: Xtream/M3U live category and channel DTOs.
-- `Models/MediaModels.cs`: VOD, series, episode, EPG and unified `PlayItem`; local file classification lives here.
+- `Models/MediaModels.cs`: VOD, series, episode, EPG and unified `PlayItem`; local audio tag fields and the persisted `LocalPlaylist` path schema live here.
 - `Models/Profile.cs`: Xtream/M3U connection profile. `ProtectedPassword` is DPAPI material, never clear text.
 - `Models/Settings.cs`: all global feature flags and ELYCOLOR/ELYSOUND+ profiles. Adding a setting requires normalization/default handling and UI load/save wiring. ELYSOUND+ profile schema v2 stores a real `LimiterCeilingDb`; `StateStore.Normalize` migrates the legacy linear `Limiter` percentage and clamps every DSP control. Onboarding fields: `OnboardingCompleted`, `UserDisplayName`, `PreferredConnection`, `ContentInterests`. `StateStore.Normalize` strips `fsr` from persisted `OsdUpscaleModes` (removed from OSD defaults).
 - `Models/BulkObservableCollection.cs`: one-reset list replacement to avoid per-item WPF churn.
-- `StateStore`: global `AppState`, per-profile favourites/resume and local library in `%APPDATA%\ElyCast\state.json`; the entire serialized payload is DPAPI-protected and written atomically.
+- `StateStore`: global `AppState`, per-profile favourites/resume, separate `LocalAudioLibrary` / `LocalVideoLibrary` collections and audio playlists in `%APPDATA%\ElyCast\state.json`; it migrates and clears the legacy mixed `LocalLibrary` once. The entire serialized payload is DPAPI-protected and written atomically.
 - `ProfileStore`: `%APPDATA%\ElyCast\profiles.json`; DPAPI-protected and atomic. Legacy clear JSON can be read and is rewritten protected on save.
 
 Never place real profiles, playlists, stream URLs, user data or `%APPDATA%\ElyCast` content in the repository.
@@ -222,6 +222,7 @@ Audio-only local playback:
 
 - mpv/VLC still performs playback and decoding.
 - `AudioVisualEngine` opens the same local path with NAudio on an above-normal background thread, follows player position, computes a Hann-windowed 2048-point FFT into 56 bands at a phase-scheduled 120 analyses/s and queues beats. Hann coefficients and log-band/bin maps are precomputed. UI snapshot reads use `Monitor.TryEnter` and retain the previous snapshot instead of ever blocking a rendered frame; backend position synchronization is capped at 120/s.
+- `LocalLibraryService` exclusively owns recursive extension-filtered folder discovery, TagLib enrichment, deduplication, deterministic artist/album/disc/track ordering and playlist path resolution. `MainWindow.LocalMedia.cs` owns the WPF commands and session queue/shuffle/repeat state. Audio and video use distinct navigation sections and persisted collections; playlist/queue commands must never be exposed for local video.
 - `CompositionTarget.Rendering` reads snapshots and advances `AudioVisualizerSurface` plus WPF metadata/disc animations on the UI thread.
 - Unsupported analysis formats fall back to idle waves; this must never stop playback.
 

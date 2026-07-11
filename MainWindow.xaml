@@ -303,12 +303,20 @@
                                                    Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
                                     </StackPanel>
                                 </RadioButton>
-                                <RadioButton x:Name="NavLocal" Style="{StaticResource NavRadio}" GroupName="nav" Checked="Nav_Changed" Tag="Local">
+                                <RadioButton x:Name="NavLocalAudio" Style="{StaticResource NavRadio}" GroupName="nav" Checked="Nav_Changed" Tag="LocalAudio">
                                     <StackPanel>
-                                        <Path Data="M3,3 H17 V16 H3 Z M6,6 H14 M6,9 H14 M6,12 H11" Stretch="Uniform" Width="22" Height="20"
+                                        <Path Data="M14,2 V13 A3,3 0 1 1 12,10 V5 L6,7 V15 A3,3 0 1 1 4,12 V5 Z" Stretch="Uniform" Width="22" Height="20"
                                               Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
                                               StrokeThickness="1.4"/>
-                                        <TextBlock Text="Local" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,0"
+                                        <TextBlock Text="Audio" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,0"
+                                                   Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                                    </StackPanel>
+                                </RadioButton>
+                                <RadioButton x:Name="NavLocalVideo" Style="{StaticResource NavRadio}" GroupName="nav" Checked="Nav_Changed" Tag="LocalVideo">
+                                    <StackPanel>
+                                        <Path Data="M2,4 H18 V16 H2 Z M8,7 L14,10 L8,13 Z" Stretch="Uniform" Width="22" Height="20"
+                                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" StrokeThickness="1.4"/>
+                                        <TextBlock Text="Vidéo" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,0"
                                                    Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
                                     </StackPanel>
                                 </RadioButton>
@@ -383,9 +391,39 @@
 
                             <StackPanel x:Name="LocalActionsPanel" Grid.Row="1" Margin="0,12,0,0"
                                         Visibility="Collapsed">
-                                <Button Content="Ajouter des fichiers" Style="{StaticResource GhostButton}"
-                                        Height="40" Click="AddLocalFiles_Click"/>
-                                <Button Content="Retirer de la liste" Style="{StaticResource GhostButton}"
+                                <Button x:Name="LocalImportButton" Content="Importer un dossier" Style="{StaticResource GhostButton}"
+                                        Height="40" Click="ImportLocalFolder_Click"/>
+                                <StackPanel x:Name="AudioLibraryActions">
+                                    <ComboBox x:Name="AudioBrowseCombo" Margin="0,8,0,0" Style="{StaticResource FieldCombo}"
+                                              SelectionChanged="AudioBrowse_Changed" SelectedIndex="0">
+                                        <ComboBoxItem Content="Albums" Tag="albums"/>
+                                        <ComboBoxItem Content="Artistes" Tag="artists"/>
+                                        <ComboBoxItem Content="Genres" Tag="genres"/>
+                                        <ComboBoxItem Content="Playlists" Tag="playlists"/>
+                                        <ComboBoxItem Content="Tous les titres" Tag="tracks"/>
+                                    </ComboBox>
+                                    <Grid x:Name="PlaylistCreateRow" Margin="0,8,0,0" Visibility="Collapsed">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBox x:Name="PlaylistNameBox" Style="{StaticResource SearchBox}" Tag="Nouvelle playlist"
+                                                 KeyDown="PlaylistNameBox_KeyDown"/>
+                                        <Button Grid.Column="1" Content="+" Width="38" Margin="6,0,0,0" Style="{StaticResource GhostButton}"
+                                                ToolTip="Créer la playlist" Click="CreatePlaylist_Click"/>
+                                    </Grid>
+                                    <Grid Margin="0,8,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ToggleButton x:Name="ShuffleToggle" Content="Aléatoire" Margin="0,0,6,0" Checked="Shuffle_Checked" Unchecked="Shuffle_Checked"/>
+                                        <ToggleButton x:Name="RepeatToggle" Grid.Column="1" Content="Répéter" Checked="Repeat_Checked" Unchecked="Repeat_Checked"/>
+                                        <TextBlock x:Name="QueueCountText" Grid.Column="2" Text="File : 0" FontSize="11" Margin="10,0,6,0"
+                                                   Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                        <Button Grid.Column="3" Content="Vider" Height="28" FontSize="11" Padding="8,0"
+                                                Style="{StaticResource GhostButton}" ToolTip="Vider la file d’attente" Click="ClearQueue_Click"/>
+                                    </Grid>
+                                </StackPanel>
+                                <StackPanel x:Name="VideoLibraryActions" Visibility="Collapsed"/>
+                                <Button x:Name="RemoveLocalButton" Content="Retirer de la liste" Style="{StaticResource GhostButton}"
                                         Height="36" Margin="0,8,0,0" Click="RemoveLocalFile_Click"/>
                             </StackPanel>
 
@@ -399,7 +437,18 @@
                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
                                      VirtualizingStackPanel.IsVirtualizing="True"
                                      VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                     PreviewMouseRightButtonDown="ItemList_RightClick"
                                      MouseDoubleClick="ItemList_DoubleClick">
+                                <ListBox.ContextMenu>
+                                    <ContextMenu Opened="LocalItemMenu_Opened">
+                                        <MenuItem Header="Lire maintenant" Click="PlayNow_Click"/>
+                                        <Separator/>
+                                        <MenuItem x:Name="ContextPlayNext" Header="Lire juste après" Click="PlayNext_Click"/>
+                                        <MenuItem x:Name="ContextAddQueue" Header="Ajouter à la file d’attente" Click="AddToQueue_Click"/>
+                                        <MenuItem x:Name="ContextAddPlaylist" Header="Ajouter à une playlist"/>
+                                        <MenuItem x:Name="ContextEditMeta" Header="Modifier les métadonnées…" Click="EditMetadata_Click"/>
+                                    </ContextMenu>
+                                </ListBox.ContextMenu>
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
                                         <Grid>
@@ -420,6 +469,12 @@
                                                         <RectangleGeometry Rect="0,0,34,34" RadiusX="9" RadiusY="9"/>
                                                     </Image.Clip>
                                                 </Image>
+                                                <Image Source="{Binding Cover}" Stretch="UniformToFill"
+                                                       RenderOptions.BitmapScalingMode="HighQuality">
+                                                    <Image.Clip>
+                                                        <RectangleGeometry Rect="0,0,34,34" RadiusX="9" RadiusY="9"/>
+                                                    </Image.Clip>
+                                                </Image>
                                             </Grid>
                                             <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"
@@ -432,6 +487,62 @@
                                                           IsChecked="{Binding IsFavorite, Mode=TwoWay}"
                                                           Checked="Fav_Toggle" Unchecked="Fav_Toggle"
                                                           ToolTip="Favori"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+
+                            <!-- Grouped music browsing (albums / artists / genres / playlists).
+                                 Shown instead of ItemList in the local-audio section; a click
+                                 opens the detail panel over the player. -->
+                            <ListBox x:Name="MusicGroupList" Grid.Row="4" Style="{StaticResource ChannelListBox}"
+                                     Visibility="Collapsed"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                     VirtualizingStackPanel.IsVirtualizing="True"
+                                     VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                     PreviewMouseRightButtonDown="ItemList_RightClick"
+                                     PreviewMouseLeftButtonUp="MusicGroupList_Click">
+                                <ListBox.ContextMenu>
+                                    <ContextMenu Opened="MusicGroupMenu_Opened">
+                                        <MenuItem Header="Tout lire" Click="GroupPlay_Click"/>
+                                        <MenuItem Header="Lecture aléatoire" Click="GroupShuffle_Click"/>
+                                        <MenuItem Header="Ajouter à la file d’attente" Click="GroupQueue_Click"/>
+                                        <Separator x:Name="ContextPlaylistSeparator"/>
+                                        <MenuItem x:Name="ContextDeletePlaylist" Header="Supprimer la playlist" Click="DeletePlaylist_Click"/>
+                                    </ContextMenu>
+                                </ListBox.ContextMenu>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid Width="46" Height="46">
+                                                <Border CornerRadius="10" Background="#33000000">
+                                                    <TextBlock Text="{Binding Initial}" FontWeight="Bold" FontSize="17"
+                                                               Foreground="{DynamicResource AccentSoftBrush}" HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Image Source="{Binding Cover}" Stretch="UniformToFill"
+                                                       RenderOptions.BitmapScalingMode="HighQuality">
+                                                    <Image.Clip>
+                                                        <RectangleGeometry Rect="0,0,46,46" RadiusX="10" RadiusY="10"/>
+                                                    </Image.Clip>
+                                                </Image>
+                                            </Grid>
+                                            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                                                           FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
+                                                <TextBlock Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis"
+                                                           FontSize="10" Foreground="{DynamicResource FaintBrush}"/>
+                                            </StackPanel>
+                                            <Border Grid.Column="2" Padding="7,2" CornerRadius="8" VerticalAlignment="Center"
+                                                    Background="#26FFFFFF">
+                                                <TextBlock Text="{Binding CountLabel}" FontSize="10" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource MutedBrush}"/>
+                                            </Border>
                                         </Grid>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
@@ -831,6 +942,136 @@
                                                         <TextBlock Grid.Column="1" Text="{Binding Title}" Margin="12,0,0,0"
                                                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                                                    FontSize="13" Foreground="{DynamicResource TextBrush}"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </Grid>
+                                </Border>
+
+                                <!-- MUSIC DETAIL PANEL (album / artist / genre / playlist drill-down) -->
+                                <Border x:Name="MusicPanel" Visibility="Collapsed" Background="#F2070309"
+                                        Cursor="Arrow" CornerRadius="18">
+                                    <Grid Margin="28,24">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+
+                                        <!-- header: cover + credits + actions -->
+                                        <Grid Grid.Row="0" Margin="0,0,0,18">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Button Style="{StaticResource IconButton}" VerticalAlignment="Top"
+                                                    Click="CloseMusic_Click" ToolTip="Retour">
+                                                <Path Data="M7,1 L2,6 L7,11 M2,6 H12" Stroke="White" StrokeThickness="1.5"
+                                                      Stretch="Uniform" Width="16" Height="16"/>
+                                            </Button>
+                                            <Grid Grid.Column="1" Width="164" Height="164" Margin="18,0,0,0">
+                                                <Border CornerRadius="14" Background="#33000000">
+                                                    <TextBlock x:Name="MusicPanelInitial" Text="♪" FontWeight="Bold" FontSize="56"
+                                                               Foreground="{DynamicResource AccentSoftBrush}"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Image x:Name="MusicPanelCover" Stretch="UniformToFill"
+                                                       RenderOptions.BitmapScalingMode="HighQuality">
+                                                    <Image.Clip>
+                                                        <RectangleGeometry Rect="0,0,164,164" RadiusX="14" RadiusY="14"/>
+                                                    </Image.Clip>
+                                                </Image>
+                                            </Grid>
+                                            <StackPanel Grid.Column="2" Margin="22,4,0,0" VerticalAlignment="Center">
+                                                <TextBlock x:Name="MusicPanelKind" Text="ALBUM" FontSize="11" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource MutedBrush}"/>
+                                                <TextBlock x:Name="MusicPanelTitle" Text="" FontSize="26" FontWeight="Bold"
+                                                           TextTrimming="CharacterEllipsis" Margin="0,2,40,0"
+                                                           Foreground="{DynamicResource TextBrush}"/>
+                                                <TextBlock x:Name="MusicPanelSubtitle" Text="" FontSize="14"
+                                                           TextTrimming="CharacterEllipsis" Margin="0,4,40,0"
+                                                           Foreground="{DynamicResource MutedBrush}"/>
+                                                <TextBlock x:Name="MusicPanelDetail" Text="" FontSize="12" Margin="0,2,0,0"
+                                                           Foreground="{DynamicResource FaintBrush}"/>
+                                                <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                                    <Button Style="{StaticResource PrimaryButton}" Height="40" Padding="18,0"
+                                                            Click="GroupPlay_Click">
+                                                        <StackPanel Orientation="Horizontal" Margin="14,0">
+                                                            <Path Data="M 5,3 L 12,8 L 5,13 Z" Fill="White" Stretch="Uniform"
+                                                                  Width="12" Height="12" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="Tout lire" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <Button Style="{StaticResource GhostButton}" Height="40" Margin="10,0,0,0"
+                                                            Click="GroupShuffle_Click">
+                                                        <TextBlock Text="Aléatoire" Margin="14,0"/>
+                                                    </Button>
+                                                    <Button Style="{StaticResource GhostButton}" Height="40" Margin="10,0,0,0"
+                                                            ToolTip="Ajouter à la file d’attente" Click="GroupQueue_Click">
+                                                        <TextBlock Text="+ File d’attente" Margin="14,0"/>
+                                                    </Button>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <!-- tracks -->
+                                        <ListBox x:Name="MusicTrackList" Grid.Row="1" Style="{StaticResource ChannelListBox}"
+                                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                                 VirtualizingStackPanel.IsVirtualizing="True"
+                                                 VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                                 PreviewMouseRightButtonDown="ItemList_RightClick"
+                                                 MouseDoubleClick="MusicTrack_DoubleClick">
+                                            <ListBox.ContextMenu>
+                                                <ContextMenu Opened="MusicTrackMenu_Opened">
+                                                    <MenuItem Header="Lire maintenant" Click="MusicTrackPlay_Click"/>
+                                                    <Separator/>
+                                                    <MenuItem Header="Lire juste après" Click="PlayNext_Click"/>
+                                                    <MenuItem Header="Ajouter à la file d’attente" Click="AddToQueue_Click"/>
+                                                    <MenuItem x:Name="TrackAddPlaylist" Header="Ajouter à une playlist"/>
+                                                    <Separator/>
+                                                    <MenuItem Header="Modifier les métadonnées…" Click="EditMetadata_Click"/>
+                                                    <MenuItem x:Name="TrackRemoveFromPlaylist" Header="Retirer de la playlist"
+                                                              Click="RemoveFromPlaylist_Click"/>
+                                                    <MenuItem Header="Retirer de la bibliothèque" Click="RemoveTrack_Click"/>
+                                                </ContextMenu>
+                                            </ListBox.ContextMenu>
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Grid Width="36" Height="36">
+                                                            <Border CornerRadius="9" Background="#33000000">
+                                                                <TextBlock Text="{Binding TrackNumberLabel}" FontWeight="Bold" FontSize="13"
+                                                                           Foreground="{DynamicResource AccentSoftBrush}"
+                                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            </Border>
+                                                            <Image Source="{Binding Cover}" Stretch="UniformToFill"
+                                                                   RenderOptions.BitmapScalingMode="HighQuality">
+                                                                <Image.Clip>
+                                                                    <RectangleGeometry Rect="0,0,36,36" RadiusX="9" RadiusY="9"/>
+                                                                </Image.Clip>
+                                                            </Image>
+                                                        </Grid>
+                                                        <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                                                                       FontSize="13.5" Foreground="{DynamicResource TextBrush}"/>
+                                                            <TextBlock Text="{Binding ArtistLine}" TextTrimming="CharacterEllipsis"
+                                                                       FontSize="11" Foreground="{DynamicResource FaintBrush}"/>
+                                                        </StackPanel>
+                                                        <TextBlock Grid.Column="2" Text="{Binding DurationLabel}" FontSize="12"
+                                                                   Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center"
+                                                                   Margin="12,0"/>
+                                                        <ToggleButton Grid.Column="3" Style="{StaticResource StarToggle}"
+                                                                      VerticalAlignment="Center"
+                                                                      IsChecked="{Binding IsFavorite, Mode=TwoWay}"
+                                                                      Checked="Fav_Toggle" Unchecked="Fav_Toggle"
+                                                                      ToolTip="Favori"/>
                                                     </Grid>
                                                 </DataTemplate>
                                             </ListBox.ItemTemplate>

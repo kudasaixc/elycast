@@ -78,6 +78,33 @@ public static class StateStore
         state.Settings ??= new Settings();
         state.Profiles ??= new Dictionary<string, ProfileState>(StringComparer.Ordinal);
         state.LocalLibrary ??= new List<PlayItem>();
+        state.LocalAudioLibrary ??= new List<PlayItem>();
+        state.LocalVideoLibrary ??= new List<PlayItem>();
+        state.LocalPlaylists ??= new List<LocalPlaylist>();
+
+        // v1.1 migration: the former mixed local library is split once without
+        // losing paths, favourites or resume entries.
+        if (state.LocalLibrary.Count > 0)
+        {
+            foreach (var item in state.LocalLibrary.Where(item => item.Kind == PlayItemKind.Local))
+            {
+                var target = LocalLibraryService.IsAudio(item.DirectUrl ?? item.Id)
+                    ? state.LocalAudioLibrary
+                    : state.LocalVideoLibrary;
+                if (!target.Any(existing => string.Equals(existing.DirectUrl ?? existing.Id,
+                        item.DirectUrl ?? item.Id, StringComparison.OrdinalIgnoreCase)))
+                    target.Add(item);
+            }
+            state.LocalLibrary.Clear();
+        }
+        state.LocalPlaylists.RemoveAll(playlist => playlist == null);
+        foreach (var playlist in state.LocalPlaylists)
+        {
+            playlist.Id = string.IsNullOrWhiteSpace(playlist.Id) ? Guid.NewGuid().ToString("N") : playlist.Id;
+            playlist.Name = string.IsNullOrWhiteSpace(playlist.Name) ? "Playlist" : playlist.Name.Trim();
+            playlist.TrackPaths ??= new List<string>();
+            playlist.TrackPaths = playlist.TrackPaths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
 
         var s = state.Settings;
         s.DefaultVolume = Math.Clamp(s.DefaultVolume, 0, 100);

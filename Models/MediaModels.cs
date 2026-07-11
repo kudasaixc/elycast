@@ -77,6 +77,48 @@ public class PlayItem : System.ComponentModel.INotifyPropertyChanged
     public string? Ext { get; set; }
     public string CategoryName { get; set; } = "";
     public string? DirectUrl { get; set; }
+    public string? Artist { get; set; }
+    public string? Album { get; set; }
+    public string? AlbumArtist { get; set; }
+    public string? Genre { get; set; }
+    public uint TrackNumber { get; set; }
+    public uint DiscNumber { get; set; }
+    public double DurationSeconds { get; set; }
+
+    // Embedded cover art, resolved lazily off-thread the first time a list row
+    // binds to it (virtualised lists only ever pay for visible rows).
+    private System.Windows.Media.ImageSource? _cover;
+    private bool _coverRequested;
+    [JsonIgnore]
+    public System.Windows.Media.ImageSource? Cover
+    {
+        get
+        {
+            if (!_coverRequested && Kind == PlayItemKind.Local)
+            {
+                _coverRequested = true;
+                var path = DirectUrl ?? Id;
+                if (Services.Audio.CoverArtCache.TryGet(path, out var cached)) _cover = cached;
+                else Services.Audio.CoverArtCache.LoadInto(this);
+            }
+            return _cover;
+        }
+    }
+
+    public void SetCover(System.Windows.Media.ImageSource? cover)
+    {
+        _cover = cover;
+        _coverRequested = true;
+        PropertyChanged?.Invoke(this, new(nameof(Cover)));
+    }
+
+    /// <summary>Forces a re-read of the embedded cover (after a tag edit).</summary>
+    public void ResetCover()
+    {
+        _cover = null;
+        _coverRequested = false;
+        PropertyChanged?.Invoke(this, new(nameof(Cover)));
+    }
 
     private bool _isFavorite;
     [JsonIgnore]
@@ -90,6 +132,23 @@ public class PlayItem : System.ComponentModel.INotifyPropertyChanged
 
     [JsonIgnore]
     public string Initial => string.IsNullOrWhiteSpace(Name) ? "?" : Name.Trim()[0].ToString().ToUpperInvariant();
+
+    [JsonIgnore]
+    public string ArtistLine => Artist ?? AlbumArtist ?? "Artiste inconnu";
+
+    [JsonIgnore]
+    public string TrackNumberLabel => TrackNumber > 0 ? TrackNumber.ToString() : Initial;
+
+    [JsonIgnore]
+    public string DurationLabel
+    {
+        get
+        {
+            if (DurationSeconds < 1) return "";
+            var t = TimeSpan.FromSeconds(DurationSeconds);
+            return t.TotalHours >= 1 ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}" : $"{t.Minutes}:{t.Seconds:00}";
+        }
+    }
 
     [JsonIgnore]
     public string KindLabel => Kind switch
@@ -151,6 +210,14 @@ public class PlayItem : System.ComponentModel.INotifyPropertyChanged
     }
 
     public bool SameAs(PlayItem? other) => other != null && other.Kind == Kind && other.Id == Id;
+}
+
+/// <summary>An audio-only user playlist. Track paths remain stable across metadata refreshes.</summary>
+public sealed class LocalPlaylist
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Name { get; set; } = "Nouvelle playlist";
+    public List<string> TrackPaths { get; set; } = new();
 }
 
 /// <summary>Tolerant int converter (Xtream sometimes returns numbers as strings).</summary>
