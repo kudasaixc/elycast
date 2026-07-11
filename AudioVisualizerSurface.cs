@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using System.Diagnostics;
 using Elysium_Cast_IPTV.Services;
 
 namespace Elysium_Cast_IPTV;
@@ -17,11 +18,16 @@ public sealed class AudioVisualizerSurface : FrameworkElement
 {
     private const int BarCount = 112;
     private const double InnerRadius = 198;
-    private const int ParticleCount = 96;
+    private const int MaxParticleCount = 192;
+    private const int HueSteps = 32;
+    private const int AlphaSteps = 8;
+    private const int ThicknessSteps = 10;
 
-    // Quantized style caches (frozen = shareable across frames, GPU-friendly).
-    private static readonly Dictionary<int, Pen> PenCache = new();
-    private static readonly Dictionary<int, SolidColorBrush> BrushCache = new();
+    // Fixed-size direct caches: no dictionary hashing and no unbounded growth.
+    private readonly SolidColorBrush?[,] _brushCache = new SolidColorBrush?[HueSteps, AlphaSteps + 1];
+    private readonly Pen?[,,,] _penCache = new Pen?[HueSteps, AlphaSteps + 1, ThicknessSteps, 2];
+    private static readonly double[] BarCos = Enumerable.Range(0, BarCount).Select(i => Math.Cos(i / (double)BarCount * Math.Tau - Math.PI / 2)).ToArray();
+    private static readonly double[] BarSin = Enumerable.Range(0, BarCount).Select(i => Math.Sin(i / (double)BarCount * Math.Tau - Math.PI / 2)).ToArray();
 
     private struct Particle
     {
@@ -39,13 +45,27 @@ public sealed class AudioVisualizerSurface : FrameworkElement
     }
 
     private readonly double[] _display = new double[AudioVisualEngine.Bands];
-    private readonly Particle[] _particles = new Particle[ParticleCount];
+    private readonly Particle[] _particles = new Particle[MaxParticleCount];
     private readonly List<Shockwave> _waves = new(8);
     private readonly Random _random = new();
 
     private double _clock;
     private double _bass, _energy, _beatPulse;
     private bool _particlesInitialized;
+    private Color[]? _palette;
+    private double _averageRenderTimeMs;
+
+    public int ActiveParticleCount { get; set; } = 96;
+    public double ParticleDistance { get; set; } = 1.0;
+    public double AverageRenderTimeMs => Volatile.Read(ref _averageRenderTimeMs);
+
+    public void SetPalette(Color[]? colors)
+    {
+        _palette = colors is { Length: >= 2 } ? colors.ToArray() : null;
+        Array.Clear(_brushCache);
+        Array.Clear(_penCache);
+        InvalidateVisual();
+    }
 
     // Matches the Viewbox scaling of the rings (24 px margin, native 560),
     // so bars, particles and waves shrink with the window instead of
@@ -61,6 +81,8 @@ public sealed class AudioVisualizerSurface : FrameworkElement
     public AudioVisualizerSurface()
     {
         IsHitTestVisible = false;
+        SnapsToDevicePixels = false;
+        SizeChanged += (_, _) => UpdateScale();
     }
 
     private void EnsureParticles()
@@ -97,7 +119,6 @@ public sealed class AudioVisualizerSurface : FrameworkElement
     public void Advance(double dt, double[] targetSpectrum, double bass, double energy, double beatPulse)
     {
         EnsureParticles();
-        UpdateScale();
         _clock += dt;
         _bass = bass;
         _energy = energy;
@@ -130,7 +151,7 @@ public sealed class AudioVisualizerSurface : FrameworkElement
         var centerY = ActualHeight / 2;
         var count = 14 + (int)(strength * 26);
 
-        for (var i = 0; i < _particles.Length && count > 0; i++)
+        for (var i = 0; i < Math.Min(ActiveParticleCount, _particles.Length) && count > 0; i++)
         {
             if (_particles[i].Burst) continue;
             count--;
@@ -158,7 +179,7 @@ public sealed class AudioVisualizerSurface : FrameworkElement
         var centerX = width / 2;
         var centerY = height / 2;
 
-        for (var i = 0; i < _particles.Length; i++)
+        for (var i = 0; i < Math.Min(ActiveParticleCount, _particles.Length); i++)
         {
             ref var p = ref _particles[i];
             if (p.Burst)
@@ -182,22 +203,23 @@ public sealed class AudioVisualizerSurface : FrameworkElement
                 // ~half a second (the pulse decays), then everything settles.
                 p.OrbitAngle += p.OrbitSpeed * dt * (1.0 + _beatPulse * 18 + _bass * 1.5);
                 var wobble = Math.Sin(_clock * 1.3 + p.OrbitRadius) * 5;
-                p.X = centerX + Math.Cos(p.OrbitAngle) * (p.OrbitRadius + wobble) * _scale;
-                p.Y = centerY + Math.Sin(p.OrbitAngle) * (p.OrbitRadius + wobble) * _scale;
+                p.X = centerX + Math.Cos(p.OrbitAngle) * (p.OrbitRadius + wobble) * _scale * ParticleDistance;
+                p.Y = centerY + Math.Sin(p.OrbitAngle) * (p.OrbitRadius + wobble) * _scale * ParticleDistance;
             }
         }
     }
 
     protected override void OnRender(DrawingContext dc)
     {
+        var renderStarted = Stopwatch.GetTimestamp();
         if (ActualWidth < 1 || ActualHeight < 1) return;
         var center = new Point(ActualWidth / 2, ActualHeight / 2);
 
         // Particles (under the bars).
-        for (var i = 0; i < _particles.Length; i++)
+        for (var i = 0; i < Math.Min(ActiveParticleCount, _particles.Length); i++)
         {
             ref var p = ref _particles[i];
-            var opacity = p.Burst ? Math.Clamp(p.Life, 0, 0.95) : p.BaseOpacity * 0.55;
+            var opacity = p.Burst ? Math.Clamp(p.Life, 0, 1.0) : Math.Min(0.82, p.BaseOpacity * 0.82);
             var brush = CachedBrush(p.Hue, opacity);
             var r = p.Size / 2;
             dc.DrawEllipse(brush, null, new Point(p.X, p.Y), r, r);
@@ -226,11 +248,10 @@ public sealed class AudioVisualizerSurface : FrameworkElement
             var radius = InnerRadius * _scale;
             var length = (12 + band * 118 + _energy * 18 + kick * 46) * _scale;
 
-            var angle = i / (double)BarCount * Math.Tau - Math.PI / 2;
-            var cos = Math.Cos(angle);
-            var sin = Math.Sin(angle);
+            var cos = BarCos[i];
+            var sin = BarSin[i];
             var hue = (i * 360.0 / BarCount + _clock * 26) % 360;
-            var opacity = 0.5 + Math.Min(0.5, band * 0.55 + kick * 0.3);
+            var opacity = 0.70 + Math.Min(0.30, band * 0.48 + kick * 0.28);
             var thickness = (3.0 + band * 1.6 + kick * 1.6) * Math.Max(0.55, _scale);
 
             var pen = CachedPen(hue, opacity, thickness, rounded: true);
@@ -238,40 +259,76 @@ public sealed class AudioVisualizerSurface : FrameworkElement
                 new Point(center.X + cos * radius, center.Y + sin * radius),
                 new Point(center.X + cos * (radius + length), center.Y + sin * (radius + length)));
         }
+        var elapsed = Stopwatch.GetElapsedTime(renderStarted).TotalMilliseconds;
+        _averageRenderTimeMs = _averageRenderTimeMs <= 0 ? elapsed : _averageRenderTimeMs * 0.94 + elapsed * 0.06;
     }
 
     // ---- quantized frozen style caches --------------------------------------
 
-    private static SolidColorBrush CachedBrush(double hue, double opacity)
+    private SolidColorBrush CachedBrush(double hue, double opacity)
     {
-        var hueIdx = ((int)(hue / 4) % 90 + 90) % 90;
-        var alphaIdx = Math.Clamp((int)(opacity * 12), 0, 12);
-        var key = hueIdx * 100 + alphaIdx;
-        if (BrushCache.TryGetValue(key, out var brush)) return brush;
+        var hueIdx = ((int)(hue / (360.0 / HueSteps)) % HueSteps + HueSteps) % HueSteps;
+        var alphaIdx = Math.Clamp((int)Math.Round(opacity * AlphaSteps), 0, AlphaSteps);
+        var brush = _brushCache[hueIdx, alphaIdx];
+        if (brush != null) return brush;
 
-        brush = new SolidColorBrush(HsvColor(hueIdx * 4, 0.9, 1.0, alphaIdx / 12.0));
+        brush = new SolidColorBrush(PaletteColor(hueIdx * (360.0 / HueSteps), alphaIdx / (double)AlphaSteps));
         brush.Freeze();
-        BrushCache[key] = brush;
+        _brushCache[hueIdx, alphaIdx] = brush;
         return brush;
     }
 
-    private static Pen CachedPen(double hue, double opacity, double thickness, bool rounded)
+    private Pen CachedPen(double hue, double opacity, double thickness, bool rounded)
     {
-        var hueIdx = ((int)(hue / 4) % 90 + 90) % 90;
-        var alphaIdx = Math.Clamp((int)(opacity * 12), 0, 12);
-        var thickIdx = Math.Clamp((int)(thickness * 2), 2, 24);
-        var key = ((hueIdx * 100 + alphaIdx) * 100 + thickIdx) * 2 + (rounded ? 1 : 0);
-        if (PenCache.TryGetValue(key, out var pen)) return pen;
+        var hueIdx = ((int)(hue / (360.0 / HueSteps)) % HueSteps + HueSteps) % HueSteps;
+        var alphaIdx = Math.Clamp((int)Math.Round(opacity * AlphaSteps), 0, AlphaSteps);
+        var thickIdx = Math.Clamp((int)Math.Round((thickness - 1) / 0.75), 0, ThicknessSteps - 1);
+        var roundIdx = rounded ? 1 : 0;
+        var pen = _penCache[hueIdx, alphaIdx, thickIdx, roundIdx];
+        if (pen != null) return pen;
 
-        pen = new Pen(CachedBrush(hueIdx * 4, alphaIdx / 12.0), thickIdx / 2.0);
+        pen = new Pen(CachedBrush(hueIdx * (360.0 / HueSteps), alphaIdx / (double)AlphaSteps), 1 + thickIdx * 0.75);
         if (rounded)
         {
             pen.StartLineCap = PenLineCap.Round;
             pen.EndLineCap = PenLineCap.Round;
         }
         pen.Freeze();
-        PenCache[key] = pen;
+        _penCache[hueIdx, alphaIdx, thickIdx, roundIdx] = pen;
         return pen;
+    }
+
+    private Color PaletteColor(double hue, double opacity)
+    {
+        if (_palette is not { Length: >= 2 }) return HsvColor(hue, 0.9, 1.0, opacity);
+        var position = ((hue % 360 + 360) % 360) / 360.0 * _palette.Length;
+        var index = (int)position % _palette.Length;
+        var next = (index + 1) % _palette.Length;
+        var t = position - Math.Floor(position);
+        var a = _palette[index]; var b = _palette[next];
+        var mixed = Color.FromRgb((byte)(a.R + (b.R - a.R) * t),
+            (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t));
+        var (paletteHue, saturation, value) = RgbToHsv(mixed);
+        // Preserve the source hue, but create a luminous accent variant. Raw
+        // dominant colours are often as dark as the blurred pixels behind them.
+        // Achromatic artwork stays achromatic: forcing its near-zero saturation
+        // to the coloured minimum used to turn black/white covers bright blue.
+        if (saturation < 0.14)
+            return HsvColor(0, 0, Math.Clamp(value * 1.35, 0.68, 1.0), opacity);
+        saturation = Math.Clamp(saturation * 1.18, 0.68, 0.94);
+        value = Math.Clamp(value * 1.42, 0.84, 1.0);
+        return HsvColor(paletteHue, saturation, value, opacity);
+    }
+
+    private static (double Hue, double Saturation, double Value) RgbToHsv(Color color)
+    {
+        var r = color.R / 255.0; var g = color.G / 255.0; var b = color.B / 255.0;
+        var max = Math.Max(r, Math.Max(g, b)); var min = Math.Min(r, Math.Min(g, b));
+        var delta = max - min;
+        var hue = delta == 0 ? 0 : max == r ? 60 * (((g - b) / delta) % 6)
+            : max == g ? 60 * ((b - r) / delta + 2) : 60 * ((r - g) / delta + 4);
+        if (hue < 0) hue += 360;
+        return (hue, max == 0 ? 0 : delta / max, max);
     }
 
     private static Color HsvColor(double hue, double saturation, double value, double opacity)

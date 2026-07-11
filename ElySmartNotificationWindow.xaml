@@ -1,0 +1,45 @@
+<Window x:Class="Elysium_Cast_IPTV.ElySmartNotificationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="430" SizeToContent="Height" MaxHeight="420"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ShowInTaskbar="False" ShowActivated="False" Topmost="True"
+        ResizeMode="NoResize">
+    <Border x:Name="Card" Margin="12" Padding="18" CornerRadius="18"
+            Background="{DynamicResource PopupBrush}" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="28" ShadowDepth="7" Opacity="0.65" Color="#D0000000"/>
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <Grid Grid.Row="0">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Border Width="38" Height="38" CornerRadius="12" Background="{DynamicResource AccentSoftBrush}">
+                    <TextBlock Text="⚡" FontSize="19" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <StackPanel Grid.Column="1" Margin="12,0,10,0" VerticalAlignment="Center">
+                    <TextBlock Text="ELYSMART" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentBBrush}"/>
+                    <TextBlock x:Name="TitleText" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap"/>
+                </StackPanel>
+                <Button Grid.Column="2" Content="×" Width="30" Height="30" FontSize="18" Style="{StaticResource GhostButton}" Click="Ignore_Click" ToolTip="Fermer"/>
+            </Grid>
+            <TextBlock x:Name="DetailText" Grid.Row="1" Margin="0,15,0,0" FontSize="12" LineHeight="18"
+                       Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap"/>
+            <Border Grid.Row="2" Margin="0,12,0,0" Padding="12,9" CornerRadius="10" Background="{DynamicResource HoverFaintBrush}">
+                <StackPanel>
+                    <TextBlock Text="RECOMMANDATION" FontSize="9" FontWeight="Bold" Foreground="{DynamicResource AccentBBrush}"/>
+                    <TextBlock x:Name="ActionText" Margin="0,4,0,0" FontSize="12" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+            <Grid Grid.Row="3" Margin="0,15,0,0">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Button Grid.Column="0" Content="Toujours ignorer" HorizontalAlignment="Left" Padding="10,0" Height="38"
+                        Style="{StaticResource GhostButton}" Click="AlwaysIgnore_Click"/>
+                <Button Grid.Column="1" Content="Ignorer" Width="82" Height="38" Margin="8,0,0,0"
+                        Style="{StaticResource GhostButton}" Click="Ignore_Click"/>
+                <Button Grid.Column="2" Content="Optimiser" Width="104" Height="38" Margin="8,0,0,0"
+                        Style="{StaticResource PrimaryButton}" Click="Optimize_Click"/>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

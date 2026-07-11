@@ -20,7 +20,15 @@ public sealed record ElyFlowStatus(
     string BackendStatus,
     string UnavailableReason)
 {
-    public bool FrucReady => NvidiaGpu && OpticalFlowDriver && FrucRuntime && NativeDllLoaded && NativeStatusCode == 0;
+    /// <summary>An active FRUC session exists right now (playback running).</summary>
+    public bool FrucReady => FrucCapable && NativeStatusCode == 0;
+
+    /// <summary>
+    /// Everything FRUC needs is installed (GPU, driver, runtime, native DLL).
+    /// Unlike <see cref="FrucReady"/> this is true outside of playback — use it
+    /// to decide whether the feature can be offered, not whether it is running.
+    /// </summary>
+    public bool FrucCapable => NvidiaGpu && OpticalFlowDriver && FrucRuntime && NativeDllLoaded;
 }
 
 public static class ElyFlowService

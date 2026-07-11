@@ -82,9 +82,27 @@ public static class StateStore
         var s = state.Settings;
         s.DefaultVolume = Math.Clamp(s.DefaultVolume, 0, 100);
         s.BootSeconds = double.IsFinite(s.BootSeconds) ? Math.Clamp(s.BootSeconds, 0, 30) : 5.5;
+        s.AudioBackgroundMode = s.AudioBackgroundMode is "solid" or "cover" or "image" ? s.AudioBackgroundMode : "solid";
+        s.AudioBackgroundImage = s.AudioBackgroundImage is "mountains" or "sunset" or "night-sky" or "paris" or "new-york" ? s.AudioBackgroundImage : "sunset";
+        s.AudioBackgroundBlur = double.IsFinite(s.AudioBackgroundBlur) ? Math.Clamp(s.AudioBackgroundBlur, 0, 48) : 45.6;
+        s.AudioBackgroundDim = double.IsFinite(s.AudioBackgroundDim) ? Math.Clamp(s.AudioBackgroundDim, 0.15, 0.85) : 0.85;
+        s.AudioVisualizerTargetFps = Math.Clamp(s.AudioVisualizerTargetFps, 30, 360);
+        s.AudioParticleCount = Math.Clamp(s.AudioParticleCount, 24, 192);
+        s.AudioParticleDistance = double.IsFinite(s.AudioParticleDistance) ? Math.Clamp(s.AudioParticleDistance, 0.55, 1.65) : 1.0;
+        s.ElySmartWorkload = s.ElySmartWorkload is "Iptv" or "Films" or "Series" or "Anime" or "Audio" or "Mixed" ? s.ElySmartWorkload : "Mixed";
+        s.ElySmartIgnoredHealthIssues ??= new List<string>();
+        s.ElySmartIgnoredHealthIssues.RemoveAll(value => !Enum.TryParse<ElySmart.HealthIssueKind>(value, out _));
         s.ElyColorCustomFilters ??= new List<ElyColorFilter>();
         s.ElySoundCustomProfile ??= ElySoundProfile.DefaultCustom();
+        NormalizeElySoundProfile(s.ElySoundCustomProfile);
         s.OsdUpscaleModes ??= new List<string>();
+        s.ContentInterests ??= new List<string>();
+        if (string.IsNullOrWhiteSpace(s.PreferredConnection)) s.PreferredConnection = "xtream";
+
+        // "fsr" was removed from the OSD quick-selector defaults (redundant with
+        // FSRCNNX/Anime4K); drop it from lists persisted before the change. The
+        // full method stays available in the settings panel.
+        s.OsdUpscaleModes.RemoveAll(m => string.Equals(m, "fsr", StringComparison.OrdinalIgnoreCase));
 
         // The native renderer backend was renamed "elyflow" -> "elycore";
         // migrate values persisted before the rename.
@@ -96,6 +114,30 @@ public static class StateStore
                 filter!.VideoBackend = "elycore";
         }
         return state;
+    }
+
+    private static void NormalizeElySoundProfile(ElySoundProfile profile)
+    {
+        profile.Preamp = Math.Clamp(profile.Preamp, -12, 6);
+        profile.Bass = Math.Clamp(profile.Bass, -12, 12);
+        profile.LowMid = Math.Clamp(profile.LowMid, -12, 12);
+        profile.Mid = Math.Clamp(profile.Mid, -12, 12);
+        profile.Presence = Math.Clamp(profile.Presence, -12, 12);
+        profile.Treble = Math.Clamp(profile.Treble, -12, 12);
+        profile.Clarity = Math.Clamp(profile.Clarity, -12, 12);
+        profile.Width = Math.Clamp(profile.Width, 0, 60);
+        profile.Compressor = Math.Clamp(profile.Compressor, 0, 60);
+        if (profile.Version < 2)
+        {
+            profile.LimiterCeilingDb = profile.Limiter is >= 70 and <= 100
+                ? 20.0 * Math.Log10(profile.Limiter / 100.0)
+                : -2.3;
+            profile.Version = 2;
+        }
+        profile.LimiterCeilingDb = double.IsFinite(profile.LimiterCeilingDb)
+            ? Math.Clamp(profile.LimiterCeilingDb, -3.0, -0.3)
+            : -2.3;
+        profile.Limiter = 0;
     }
 
     private static void WriteAtomically(string path, string content)

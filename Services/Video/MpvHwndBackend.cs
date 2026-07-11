@@ -4,6 +4,8 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
 using LibMPVSharp;
+using Elysium_Cast_IPTV.Models;
+using Elysium_Cast_IPTV.Services.Audio;
 
 namespace Elysium_Cast_IPTV.Services.Video;
 
@@ -13,10 +15,11 @@ namespace Elysium_Cast_IPTV.Services.Video;
 /// fragile OpenGL/D3D9Ex render path (the cause of the live-stream crashes) and
 /// keeps the full GPU pipeline (gpu-next, hwdec, libplacebo, scalers).
 /// </summary>
-public sealed class MpvHwndBackend : IVideoBackend
+public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
 {
     private readonly MpvHwndHost _host = new();
     private readonly MPVMediaPlayer _player;
+    private readonly ElySoundController _elySound;
     // RTX Video Super Resolution: the NVIDIA driver's AI upscaler, exposed
     // through the D3D11 video processor (vf=d3d11vpp, scaling-mode=nvidia).
     private readonly bool _rtxVsr;
@@ -55,6 +58,10 @@ public sealed class MpvHwndBackend : IVideoBackend
     private ulong _elyCorePresentedBaseline;
     private ulong _elyCoreLateBaseline;
     private long _droppedFramesBaseline;
+    private readonly Dictionary<string, string> _elySoundRuntimeValues = new(StringComparer.Ordinal);
+    private readonly bool _auditElySound = string.Equals(
+        Environment.GetEnvironmentVariable("ELYCAST_AUDIT_ELYSOUND"), "1", StringComparison.Ordinal);
+    private long _elySoundCommandSequence;
 
     // All property/command access goes through MpvInterop (direct, correct libmpv
     // P/Invoke) rather than LibMPVSharp's buggy accessors.
@@ -82,6 +89,7 @@ public sealed class MpvHwndBackend : IVideoBackend
         {
             DebugConsole.Step("mpv(HWND): chargement de libmpv + mpv_create…");
             _player = new MPVMediaPlayer();
+            _elySound = new ElySoundController(GetString, ExecuteElySoundCommand);
             // SetDllDirectory changes the search path for the whole process.
             // libmpv is loaded now, so restore the secure default immediately.
             if (!string.IsNullOrWhiteSpace(nativeDllPath)) SetDllDirectory(null);
@@ -115,6 +123,47 @@ public sealed class MpvHwndBackend : IVideoBackend
     /// <summary>Sets any libmpv property live (used for upscaling A/B tuning).</summary>
     /// <summary>Sets a libmpv property and reports whether mpv accepted it.</summary>
     public bool SetOption(string name, string value) => SetProp(name, name, value);
+
+    public ElySoundApplyResult ApplyElySound(ElySoundProfile profile, bool enabled, bool virtualSurround) =>
+        _elySound.Apply(profile, enabled, virtualSurround);
+
+    private bool ExecuteElySoundCommand(string[] args)
+    {
+        if (!_auditElySound)
+            return Cmd("ELYSOUND+", args);
+
+        var sequence = Interlocked.Increment(ref _elySoundCommandSequence);
+        var isRuntime = args.Length >= 5 && args[0] == "af-command";
+        var parameter = isRuntime ? args[4] + "." + args[2] : string.Join(' ', args.Take(2));
+        _elySoundRuntimeValues.TryGetValue(parameter, out var oldValue);
+        var newValue = isRuntime ? args[3] : args.LastOrDefault() ?? "";
+        var positionBefore = GetString("time-pos");
+        var afBefore = GetString("af");
+        var audioParamsBefore = GetString("audio-params");
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var accepted = Cmd("ELYSOUND+", args);
+        stopwatch.Stop();
+        var positionAfter = GetString("time-pos");
+        var afAfter = GetString("af");
+        var audioParamsAfter = GetString("audio-params");
+        if (accepted && isRuntime) _elySoundRuntimeValues[parameter] = newValue;
+        if (args.Length >= 2 && args[0] == "af" && args[1] == "remove")
+            _elySoundRuntimeValues.Clear();
+
+        DebugConsole.Trace(
+            $"ELYSOUND+ runtime update #{sequence}\n" +
+            $"  Parameter: {parameter}\n" +
+            $"  Old value: {oldValue ?? "<unknown>"}\n" +
+            $"  New value: {newValue}\n" +
+            $"  Command: {string.Join(" | ", args)}\n" +
+            $"  Command result: {(accepted ? "accepted" : "rejected")}\n" +
+            $"  time-pos before: {positionBefore}\n" +
+            $"  time-pos after: {positionAfter}\n" +
+            $"  AO reconfigured (audio-params changed): {!string.Equals(audioParamsBefore, audioParamsAfter, StringComparison.Ordinal)}\n" +
+            $"  Audio graph rebuilt (af changed): {!string.Equals(afBefore, afAfter, StringComparison.Ordinal)}\n" +
+            $"  Execution time: {stopwatch.Elapsed.TotalMilliseconds:0.###} ms");
+        return accepted;
+    }
 
     /// <summary>Reads any libmpv property as a string (for diagnostics / stats).</summary>
     public string GetOption(string name) => GetString(name);
@@ -152,9 +201,36 @@ public sealed class MpvHwndBackend : IVideoBackend
     public void ConfigureElyCoreVsr(bool enabled)
     {
         _elyCoreVsrEnabled = _elyCore && enabled;
+        DebugConsole.Info($"ELYCORE VSR requested: {_elyCoreVsrEnabled}");
         if (!_elyCoreVsrEnabled)
             ElyFlowRendererInterop.ConfigureVsr(false, 0, 0);
         ApplyTargetScale();
+    }
+
+    public string GetElyCoreVsrAuditSnapshot()
+    {
+        var st = ElyFlowRendererInterop.GetState();
+        return string.Join(Environment.NewLine,
+            $"ELYCORE VSR requested: {st.VsrRequested != 0}",
+            $"ELYCORE VSR available: {st.VsrAvailable != 0}",
+            $"ELYCORE VSR extension enabled: {st.VsrExtensionEnabled != 0}",
+            $"ELYCORE VSR effectively used: {st.VsrEffective != 0}",
+            $"GPU vendor: 0x{st.AdapterVendorId:X4}",
+            $"Adapter: {st.AdapterName}",
+            $"Driver: {st.DriverVersion}",
+            $"Input dimensions: {st.VsrInputWidth}x{st.VsrInputHeight}",
+            $"Output dimensions: {st.VsrContentWidth}x{st.VsrContentHeight}",
+            $"Input DXGI format: {st.VsrInputFormat}",
+            $"Output DXGI format: {st.VsrOutputFormat}",
+            $"Color space: {st.VsrColorSpace}",
+            $"Video processor created: {st.VideoProcessorCreated != 0}",
+            $"Stream extension result: {(st.VsrExtensionEnabled != 0 ? "enabled" : $"not enabled (0x{unchecked((uint)st.LastVsrStatus):X8})")}",
+            $"Frames through D3D11 video processor: {st.VideoProcessorFrames}",
+            $"Frames processed with VSR: {st.VsrFramesProcessed}",
+            $"Frames bypassed: {st.VsrFramesBypassed}",
+            $"Fallback reason: {(st.VsrRequested != 0 && st.VsrEffective == 0 ? st.Message : "none")}",
+            $"ResizeBuffers count: {st.SwapchainResizes}",
+            $"Present errors: {st.PresentErrors}");
     }
 
     /// <summary>
@@ -356,9 +432,11 @@ public sealed class MpvHwndBackend : IVideoBackend
         get
         {
             if (!_elyCore) return _rtxVsr ? "mpv GPU + RTX VSR" : "mpv GPU (HWND)";
-            if (_elyCoreVsrEnabled && _elyCoreFrucEnabled) return "ELYCORE (RTX VSR + NVIDIA FRUC)";
+            var vsrEffective = _elyCoreVsrEnabled && ElyFlowRendererInterop.GetState().VsrEffective != 0;
+            if (vsrEffective && _elyCoreFrucEnabled) return "ELYCORE (RTX VSR effectif + NVIDIA FRUC)";
             if (_elyCoreFrucEnabled) return "ELYCORE (NVIDIA FRUC)";
-            if (_elyCoreVsrEnabled) return "ELYCORE (RTX VSR)";
+            if (vsrEffective) return "ELYCORE (RTX VSR effectif)";
+            if (_elyCoreVsrEnabled) return "ELYCORE (VSR demandÃ©, repli D3D11)";
             return "ELYCORE Renderer";
         }
     }
@@ -400,7 +478,7 @@ public sealed class MpvHwndBackend : IVideoBackend
 
     public event Action? Playing;
     public event Action? Paused;
-    public event Action? Ended;
+    public event Action<PlaybackEndReason>? Ended;
     public event Action<string>? Failed;
 
     private void OnHandleReady(IntPtr hwnd)
@@ -473,6 +551,7 @@ public sealed class MpvHwndBackend : IVideoBackend
             CapturePlaybackBaselines();
 
             DebugConsole.Step("mpv(HWND): ouverture du média (loadfile)…");
+            _elySound.MediaChanged();
             if (!Cmd("loadfile", "loadfile", url, "replace"))
                 throw new InvalidOperationException("mpv a refusé l'ouverture du média.");
 
@@ -492,11 +571,18 @@ public sealed class MpvHwndBackend : IVideoBackend
             if (_upTargetHeight > 0 || _elyCore)
                 StartTargetProbe();
 
-            // Report the full ELYCORE pipeline state once frames flow.
+            // Report the full ELYCORE pipeline state once frames flow, then a
+            // second time after the size probe settled (VSR engages there).
             if (_elyCore)
             {
+                var reportCount = 0;
                 var report = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-                report.Tick += (_, _) => { report.Stop(); LogElyFlowStatus(); };
+                report.Tick += (_, _) =>
+                {
+                    LogElyFlowStatus();
+                    if (++reportCount >= 2) { report.Stop(); return; }
+                    report.Interval = TimeSpan.FromSeconds(7);
+                };
                 report.Start();
             }
 
@@ -522,15 +608,16 @@ public sealed class MpvHwndBackend : IVideoBackend
         Paused?.Invoke();
     }
 
-    public void Stop()
+    public void Stop(PlaybackEndReason reason = PlaybackEndReason.UserStop)
     {
+        var notify = _hasMedia;
         Cmd("stop", "stop");
         _hasMedia = false;
         _playbackStateProbe.Stop();
-        Ended?.Invoke();
+        if (notify) Ended?.Invoke(reason);
     }
 
-    public void Clear() { /* mpv clears its window on stop */ }
+    public void Clear() => Cmd("clear terminal media", "stop");
 
     public void SeekRelative(long deltaMs)
     {
@@ -622,16 +709,25 @@ public sealed class MpvHwndBackend : IVideoBackend
             var vsr = "";
             if (_elyCoreVsrEnabled)
             {
-                if (st.VsrActive != 0 && st.VsrInputWidth > 0 && st.VsrInputHeight > 0)
+                if (st.VsrEffective != 0 && st.VsrInputWidth > 0 && st.VsrInputHeight > 0)
                 {
                     var ratio = Math.Min(st.VsrContentWidth / (double)st.VsrInputWidth,
                                          st.VsrContentHeight / (double)st.VsrInputHeight);
-                    vsr = string.Create(CultureInfo.InvariantCulture, $"RTX VSR ×{ratio:0.0#}");
+                    vsr = string.Create(CultureInfo.InvariantCulture,
+                        $"RTX VSR ×{ratio:0.0#} (driver: actif, niveau {st.VsrLevel})");
                 }
                 else if (st.LastVsrStatus < 0)
                     vsr = $"RTX VSR repli (0x{unchecked((uint)st.LastVsrStatus):X8})";
                 else
-                    vsr = "RTX VSR auto";
+                {
+                    // VSR is an upscaler: below 1:1 there is nothing for it to
+                    // do — say so instead of the ambiguous old "auto" label.
+                    var sourceH = GetLong("height");
+                    var renderH = st.Height;
+                    vsr = sourceH > 0 && renderH > 0 && renderH <= sourceH
+                        ? "RTX VSR en veille (affichage ≤ source — agrandis ou passe en plein écran)"
+                        : "RTX VSR en attente d'upscale";
+                }
             }
             vpp = string.IsNullOrEmpty(vsr) ? fruc
                 : string.IsNullOrEmpty(fruc) ? vsr
@@ -658,6 +754,7 @@ public sealed class MpvHwndBackend : IVideoBackend
 
     public void SetAudioTrack(int id)
     {
+        _elySound.MediaChanged();
         SetProp("aid", "aid", id < 0 ? "no" : id.ToString(CultureInfo.InvariantCulture));
     }
 
@@ -677,7 +774,7 @@ public sealed class MpvHwndBackend : IVideoBackend
             catch (Exception ex) { DebugConsole.Exception("ELYCORE: échec de destruction du renderer", ex); }
         }
 
-        try { Stop(); }
+        try { Stop(PlaybackEndReason.Teardown); }
         catch (Exception ex) { DebugConsole.Exception("mpv(HWND): échec de l'arrêt pendant Dispose", ex); }
 
         // Detach mpv from the HWND before destroying it, so mpv stops rendering
@@ -728,6 +825,10 @@ public sealed class MpvHwndBackend : IVideoBackend
         SetProp("video-sync=audio", "video-sync", "audio");
         SetProp("interpolation=no", "interpolation", "no");
         SetProp("panscan=0", "panscan", "0");
+        // Keep terminal properties alive long enough for the managed probe to
+        // classify very short files. The UI immediately covers the last frame
+        // with its opaque end screen, then Clear/next Play disposes it.
+        SetProp("keep-open=yes", "keep-open", "yes");
         // Reduce compression banding/blocking on low-bitrate SD sources.
         SetProp("deband=yes", "deband", "yes");
 
@@ -769,13 +870,24 @@ public sealed class MpvHwndBackend : IVideoBackend
         DebugConsole.Info("ELYCORE état — lecture: " + (_hasMedia ? "OK" : "KO")
             + " | renderer natif: " + (st.Active != 0 ? "OK" : "KO")
             + " | textures D3D11 partagées: " + (st.TexturesShared != 0 ? "OK" : "KO")
-            + " | RTX VSR: " + (st.VsrActive != 0
-                ? $"actif ({st.VsrInputWidth}x{st.VsrInputHeight} -> {st.VsrContentWidth}x{st.VsrContentHeight})"
-                : st.LastVsrStatus < 0 ? $"repli (0x{unchecked((uint)st.LastVsrStatus):X8})" : "repos")
+            + " | RTX VSR: " + (st.VsrEffective != 0
+                ? $"effectif niveau {st.VsrLevel} ({st.VsrInputWidth}x{st.VsrInputHeight} -> {st.VsrContentWidth}x{st.VsrContentHeight}, DXGI {st.VsrInputFormat}->{st.VsrOutputFormat}, color-space={st.VsrColorSpace})"
+                : st.VsrRequested != 0
+                    ? $"demandé, non effectif (disponible={st.VsrAvailable}, HRESULT=0x{unchecked((uint)st.LastVsrStatus):X8}, vendor=0x{st.AdapterVendorId:X4})"
+                    : "non demandé")
             + " | FRUC: " + (st.FrucInitialized != 0 ? "initialisé" : "KO") + $" (dernier code {st.LastFrucStatus})"
             + $" | frames de cette lecture: mpv={rendered}, interpolées={interpolated}, présentées={presented}, retards={late}"
             + string.Create(CultureInfo.InvariantCulture,
                 $" | cadence source={st.SourceFps:0.###} fps, travail FRUC={st.AverageWorkMs:0.0} ms (pic {st.MaxWorkMs:0.0} ms)"));
+        DebugConsole.Info("ELYCORE audit VSR — "
+            + $"requested={st.VsrRequested} available={st.VsrAvailable} extension={st.VsrExtensionEnabled} "
+            + $"converter={st.VsrConverterActive} (convHR=0x{unchecked((uint)st.LastConvStatus):X8}) "
+            + $"IsInUseForThisVP={(st.VsrEffective != 0 ? "true" : "false")} level={st.VsrLevel} queryRaw=0x{st.VsrQueryRaw:X8} "
+            + string.Create(CultureInfo.InvariantCulture, $"bltGpu={st.VsrBltAvgMs:0.00}ms ")
+            + $"| VP frames={st.VideoProcessorFrames} effectiveVSR={st.VsrFramesProcessed} bypassed={st.VsrFramesBypassed} "
+            + $"| formats DXGI in={st.VsrInputFormat} out={st.VsrOutputFormat} cs={st.VsrColorSpace} "
+            + $"| rebuilds={st.TargetRebuilds} resizes={st.SwapchainResizes} presentErrors={st.PresentErrors} "
+            + $"| GPU={st.AdapterName} (0x{st.AdapterVendorId:X4}) driver={st.DriverVersion}");
         if (!string.IsNullOrWhiteSpace(st.Message)) DebugConsole.Info("ELYCORE: " + st.Message);
     }
 
@@ -823,26 +935,39 @@ public sealed class MpvHwndBackend : IVideoBackend
             return;
         }
 
+        var eofReached = string.Equals(GetString("eof-reached"), "yes", StringComparison.OrdinalIgnoreCase);
         var idle = string.Equals(GetString("idle-active"), "yes", StringComparison.OrdinalIgnoreCase);
-        if (!idle)
+        if (string.Equals(Environment.GetEnvironmentVariable("ELYCAST_DIAGNOSTIC_END_STATE"), "1", StringComparison.Ordinal))
+            DebugConsole.Trace($"mpv end probe: idle={GetString("idle-active")}, core-idle={GetString("core-idle")}, eof={GetString("eof-reached")}, pos={GetString("time-pos")}, duration={GetString("duration")}");
+        if (!idle && !eofReached)
         {
             _observedActiveMedia = true;
             _lastObservedPositionMs = Math.Max(0, (long)(GetDouble("time-pos") * 1000.0));
             _lastObservedLengthMs = Math.Max(0, (long)(GetDouble("duration") * 1000.0));
+            if (_elySound.HasPendingApply)
+            {
+                var dsp = _elySound.TryApplyWhenAudioReady();
+                if (dsp.Applied)
+                    DebugConsole.Info("ELYSOUND+ -> " + dsp.Message + " | " + dsp.Graph);
+                else if (!dsp.Pending)
+                    DebugConsole.Warn("ELYSOUND+ -> " + dsp.Message);
+            }
             return;
         }
 
-        // Wait until the newly loaded file has actually left idle once: mpv can
-        // still expose the previous file's terminal state during a channel zap.
-        if (!_observedActiveMedia) return;
+        // A very short local sound can start and finish between two 500 ms
+        // probes. In that case eof-reached is authoritative even though no
+        // active tick was sampled. For every other idle transition, keep the
+        // old guard against the previous file's stale state during a zap.
+        if (!_observedActiveMedia && !eofReached) return;
 
         _hasMedia = false;
         _playbackStateProbe.Stop();
         var reachedKnownEnd = _lastObservedLengthMs > 0 &&
                               _lastObservedPositionMs >= _lastObservedLengthMs -
                               Math.Max(1000, _lastObservedLengthMs / 50);
-        if (string.Equals(GetString("eof-reached"), "yes", StringComparison.OrdinalIgnoreCase) || reachedKnownEnd)
-            Ended?.Invoke();
+        if (eofReached || reachedKnownEnd)
+            Ended?.Invoke(PlaybackEndReason.NaturalEnd);
         else
             Failed?.Invoke("La lecture mpv s'est arrêtée avant la fin du média.");
     }

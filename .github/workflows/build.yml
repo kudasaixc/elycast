@@ -32,3 +32,6 @@ jobs:
 
       - name: Build managed application
         run: dotnet build "ElyCast TV Player.csproj" -c Release -p:Platform=x64 --no-restore
+
+      - name: Run regression checks
+        run: dotnet run --project tests/ElyCast.Regression/ElyCast.Regression.csproj -c Release

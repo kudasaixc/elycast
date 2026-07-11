@@ -3,8 +3,37 @@ namespace Elysium_Cast_IPTV.Models;
 /// <summary>Global, user-tweakable application settings (persisted).</summary>
 public class Settings
 {
+    // Onboarding (first-run wizard). PreferredConnection: "xtream" | "m3u" | "local".
+    public bool OnboardingCompleted { get; set; }
+    public string UserDisplayName { get; set; } = "";
+    public string PreferredConnection { get; set; } = "xtream";
+    public List<string> ContentInterests { get; set; } = new(); // "sport" | "anime" | "cinema" | "tv" | "music" | "docs"
+    // Name of a saved Profile to connect automatically at startup (set by the
+    // onboarding wizard when the user enters his credentials there). Empty =
+    // land on the login screen. Deleting the profile disables it.
+    public string AutoConnectProfile { get; set; } = "";
+
     // Appearance
     public string AccentColor { get; set; } = "#FF8B5CF6";
+
+    // Local audio-player scene.
+    public string AudioBackgroundMode { get; set; } = "solid"; // "solid" | "cover" | "image"
+    public string AudioBackgroundImage { get; set; } = "sunset";
+    public double AudioBackgroundBlur { get; set; } = 45.6;
+    public double AudioBackgroundDim { get; set; } = 0.85;
+    public bool AudioBackgroundSlowZoom { get; set; } = true;
+    public bool AudioBackgroundSlowPan { get; set; } = true;
+    public bool AudioBackgroundMouseParallax { get; set; } = false;
+    public bool AudioPaletteAutomatic { get; set; } = true;
+    public bool AudioParticleAdaptiveColors { get; set; } = true;
+    public int AudioVisualizerTargetFps { get; set; } = 60;
+    public bool AudioVisualizerVSync { get; set; } = true;
+    public int AudioParticleCount { get; set; } = 96;
+    public double AudioParticleDistance { get; set; } = 1.0;
+    public bool AudioVisualizerShake { get; set; } = true;
+    public bool ElySmartAutoOptimizeDecorative { get; set; }
+    public string ElySmartWorkload { get; set; } = "Mixed";
+    public List<string> ElySmartIgnoredHealthIssues { get; set; } = new();
 
     // Playback
     public bool ShowStats { get; set; } = false;
@@ -36,9 +65,11 @@ public class Settings
     public double ElyFlowLiveBufferSeconds { get; set; } = 5.0;
 
     // Which upscaling modes appear in the OSD quick-selector (under the seek bar).
+    // "fsr" was dropped from the defaults: on real IPTV sources it brought
+    // nothing over FSRCNNX/Anime4K and duplicated the external Magpie path.
     public List<string> OsdUpscaleModes { get; set; } = new()
     {
-        "none", "anime4k-hq", "anime4k-fast", "anime4k-denoise", "fsrcnnx", "fsr", "ewa_lanczossharp"
+        "none", "anime4k-hq", "anime4k-fast", "anime4k-denoise", "fsrcnnx", "ewa_lanczossharp"
     };
 
     // Behaviour
@@ -68,6 +99,7 @@ public class ElyColorFilter
 /// <summary>Audio post-processing profile applied live through mpv audio filters.</summary>
 public class ElySoundProfile
 {
+    public int Version { get; set; }
     public string Id { get; set; } = "custom";
     public string Name { get; set; } = "ELYSOUND+ Custom";
     public int Preamp { get; set; }
@@ -79,12 +111,18 @@ public class ElySoundProfile
     public int Clarity { get; set; }
     public int Width { get; set; }
     public int Compressor { get; set; }
-    public int Limiter { get; set; } = 85;
+    /// <summary>Sample-domain limiter ceiling in dBFS; presets reserve additional inter-sample headroom.</summary>
+    public double LimiterCeilingDb { get; set; } = -2.3;
+
+    // Legacy v1 value (70..100 linear percent). Kept only so protected state
+    // written by older builds can be migrated without losing the custom EQ.
+    public int Limiter { get; set; }
 
     public static ElySoundProfile DefaultCustom() => new()
     {
         Id = "custom",
         Name = "ELYSOUND+ Custom",
+        Version = 2,
         Preamp = -3,
         Bass = 3,
         LowMid = 0,
@@ -94,7 +132,7 @@ public class ElySoundProfile
         Clarity = 1,
         Width = 6,
         Compressor = 6,
-        Limiter = 90
+        LimiterCeilingDb = -2.3
     };
 }
 

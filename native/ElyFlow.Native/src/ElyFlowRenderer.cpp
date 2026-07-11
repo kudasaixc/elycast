@@ -23,6 +23,7 @@
 #include <windows.h>
 #include <avrt.h>
 #include <d3d11_4.h>
+#include <d3dcompiler.h>
 #include <dxgi1_3.h>
 #include <GL/gl.h>
 
@@ -213,6 +214,19 @@ namespace
         ID3D11DeviceContext4* context4 = nullptr;
         ID3D11VideoDevice* videoDevice = nullptr;
         ID3D11VideoContext* videoContext = nullptr;
+        ID3D11VideoContext1* videoContext1 = nullptr;
+        // Dedicated D3D11 device for the RTX VSR VideoProcessor work. The main
+        // device is opened for OpenGL interop (wglDXOpenDeviceNV); dispatching
+        // NVIDIA's driver-internal VSR kernels on that device crashed the
+        // driver (DXGI_ERROR_DRIVER_INTERNAL_ERROR at the first engaged
+        // frame). No known VSR consumer (mpv, Chromium, MPC-VR) mixes the two;
+        // the video work therefore runs on its own device, bridged with
+        // keyed-mutex shared textures.
+        ID3D11Device* vsrDevice = nullptr;
+        ID3D11DeviceContext* vsrDeviceContext = nullptr;
+        ID3D11VideoDevice* vsrVideoDevice = nullptr;
+        ID3D11VideoContext* vsrVideoContext = nullptr;
+        ID3D11VideoContext1* vsrVideoContext1 = nullptr;
         IDXGISwapChain1* swapChain = nullptr;
         ID3D11Fence* fence = nullptr;
         uint64_t fenceValue = 0;
@@ -221,10 +235,55 @@ namespace
         HANDLE interopTexture = nullptr;
         ID3D11Texture2D* renderTarget = nullptr;   // mpv renders here via GL
         ID3D11Texture2D* vsrOutput = nullptr;      // RTX VSR output at window size
+        // The NVIDIA driver only engages RTX VSR on video-format (YUV) input
+        // streams: an RGBA input is classified as graphics and silently
+        // bypassed (Blt succeeds, IsInUse stays false). A first VideoProcessor
+        // pass therefore converts mpv's RGBA render target to NV12 on the GPU,
+        // and the VSR VideoProcessor consumes that NV12 — the exact input
+        // Chromium / mpv d3d11vpp / MPC-VR feed when VSR does engage.
+        // Cross-device bridge (keyed mutex): the RGBA source frame written by
+        // the main device, read by the video device; the RGBA VSR result
+        // written by the video device, read back by the main device.
+        ID3D11Texture2D* vsrCopy = nullptr;        // main device, shared, source size
+        ID3D11Texture2D* vsrCopyRemote = nullptr;  // same texture opened on vsrDevice
+        IDXGIKeyedMutex* copyMutexMain = nullptr;
+        IDXGIKeyedMutex* copyMutexRemote = nullptr;
+        ID3D11Texture2D* vsrOutputMain = nullptr;  // vsrOutput opened on main device
+        IDXGIKeyedMutex* outMutexMain = nullptr;
+        IDXGIKeyedMutex* outMutexRemote = nullptr;
+        ID3D11Texture2D* vsrResult = nullptr;      // main device, window-size composition
+        ID3D11Texture2D* vsrNv12 = nullptr;        // vsrDevice: RGB->NV12, VSR input
+        // Letterbox offsets applied AFTER the VSR pass. The VsrProbe matrix
+        // proved that a VSR Blt whose destination rect differs from the output
+        // rect crashes the NVIDIA driver (device removed); every other tested
+        // variation survives with VSR engaged. The VP therefore always runs
+        // full-frame to a content-sized target, and centering happens with a
+        // plain CopySubresourceRegion on the main device.
+        uint32_t vsrDestOffsetX = 0;
+        uint32_t vsrDestOffsetY = 0;
+        ID3D11VideoProcessorEnumerator* convEnumerator = nullptr;
+        ID3D11VideoProcessor* convProcessor = nullptr;
+        ID3D11VideoProcessorInputView* convInputView = nullptr;
+        ID3D11VideoProcessorOutputView* convOutputView = nullptr;
+        ID3D11VertexShader* convVs = nullptr;
+        ID3D11PixelShader* convPsLuma = nullptr;
+        ID3D11PixelShader* convPsChroma = nullptr;
+        ID3D11SamplerState* convSampler = nullptr;
+        ID3D11ShaderResourceView* convSrcSrv = nullptr;
+        ID3D11RenderTargetView* nv12LumaRtv = nullptr;
+        ID3D11RenderTargetView* nv12ChromaRtv = nullptr;
+        bool convUseShader = false;
         ID3D11VideoProcessorEnumerator* vsrEnumerator = nullptr;
         ID3D11VideoProcessor* vsrProcessor = nullptr;
         ID3D11VideoProcessorInputView* vsrInputView = nullptr;
         ID3D11VideoProcessorOutputView* vsrOutputView = nullptr;
+        // GPU timing of the VSR Blt (proof of kernel execution: an engaged
+        // VSR pass costs milliseconds, a plain driver scaler ~0.1 ms).
+        ID3D11Query* vsrTsDisjoint = nullptr;
+        ID3D11Query* vsrTsBegin = nullptr;
+        ID3D11Query* vsrTsEnd = nullptr;
+        bool vsrTsPending = false;
+        double vsrBltAvgMs = 0;
         ID3D11Texture2D* frameA = nullptr;         // shared ring: previous / current
         ID3D11Texture2D* frameB = nullptr;
         ID3D11Texture2D* interpolated = nullptr;   // FRUC output (shared)
@@ -242,6 +301,10 @@ namespace
         double lastTargetChangeQpc = 0;
         double lastFrucInitAttemptQpc = 0;
         bool vsrActive = false;
+        bool vsrAvailable = false;
+        bool vsrEffective = false;
+        uint32_t vsrLevel = 0;
+        uint32_t adapterVendorId = 0;
         uint32_t vsrFrameIndex = 0;
         uint32_t vsrContentWidth = 0;
         uint32_t vsrContentHeight = 0;
@@ -354,124 +417,608 @@ namespace
     constexpr GUID NvidiaPpeInterfaceGuid =
         { 0xd43ce1b3, 0x1f4b, 0x48ac, { 0xba, 0xee, 0xc3, 0xc2, 0x53, 0x75, 0xe6, 0xf7 } };
 
+    HRESULT QueryNvidiaVsr(Renderer& r)
+    {
+        // Primary probe: 4-byte bitfield (bit0 available, bit1 fields valid,
+        // bit3 in-use, bits4..6 level).
+        UINT info = 0;
+        const HRESULT status = r.vsrVideoContext->VideoProcessorGetStreamExtension(
+            r.vsrProcessor, 0, &NvidiaPpeInterfaceGuid, sizeof(info), &info);
+        if (SUCCEEDED(status))
+        {
+            std::lock_guard lock(r.stateMutex);
+            r.state.vsrQueryRaw = info;
+            r.vsrAvailable = (info & 0x1u) != 0;
+            const bool otherFieldsValid = (info & 0x2u) != 0;
+            r.vsrEffective = otherFieldsValid && (info & 0x8u) != 0;
+            r.vsrLevel = otherFieldsValid ? ((info >> 4) & 0x7u) : 0;
+            return S_OK;
+        }
+
+        // Fallback probe: same 12-byte struct shape used by the setter; some
+        // driver branches only accept the full payload once the stream ran.
+        struct NvidiaExtension { unsigned int version; unsigned int method; unsigned int enable; };
+        NvidiaExtension query{ 1, 2, 0 };
+        const HRESULT structStatus = r.vsrVideoContext->VideoProcessorGetStreamExtension(
+            r.vsrProcessor, 0, &NvidiaPpeInterfaceGuid, sizeof(query), &query);
+        std::lock_guard lock(r.stateMutex);
+        if (SUCCEEDED(structStatus))
+        {
+            // Marker 0x4000_0000 distinguishes the struct probe in the audit.
+            r.state.vsrQueryRaw = 0x40000000u | (query.enable & 0xFFFFu);
+            r.vsrEffective = query.enable != 0;
+            r.vsrLevel = 0;
+            return S_OK;
+        }
+
+        // Both probes rejected: record the failing HRESULT for the audit but
+        // keep the availability established at initialisation. Also snapshot
+        // the video-device health — a silently removed device explains
+        // "successful" Blts that actually execute nothing.
+        r.state.vsrQueryRaw = static_cast<uint32_t>(status);
+        const HRESULT removed = r.vsrDevice ? r.vsrDevice->GetDeviceRemovedReason() : S_OK;
+        r.state.lastVsrStatus = static_cast<int32_t>(removed);
+        r.vsrEffective = false;
+        r.vsrLevel = 0;
+        return status;
+    }
+
     void ReleaseVsrResources(Renderer& r)
     {
+        SafeRelease(r.convVs);
+        SafeRelease(r.convPsLuma);
+        SafeRelease(r.convPsChroma);
+        SafeRelease(r.convSampler);
+        SafeRelease(r.convSrcSrv);
+        SafeRelease(r.nv12LumaRtv);
+        SafeRelease(r.nv12ChromaRtv);
+        r.convUseShader = false;
         SafeRelease(r.vsrInputView);
         SafeRelease(r.vsrOutputView);
         SafeRelease(r.vsrProcessor);
         SafeRelease(r.vsrEnumerator);
+        SafeRelease(r.convInputView);
+        SafeRelease(r.convOutputView);
+        SafeRelease(r.convProcessor);
+        SafeRelease(r.convEnumerator);
+        SafeRelease(r.copyMutexMain);
+        SafeRelease(r.copyMutexRemote);
+        SafeRelease(r.outMutexMain);
+        SafeRelease(r.outMutexRemote);
+        SafeRelease(r.vsrCopyRemote);
+        SafeRelease(r.vsrCopy);
+        SafeRelease(r.vsrOutputMain);
+        SafeRelease(r.vsrResult);
+        SafeRelease(r.vsrNv12);
         SafeRelease(r.vsrOutput);
+        SafeRelease(r.vsrTsDisjoint);
+        SafeRelease(r.vsrTsBegin);
+        SafeRelease(r.vsrTsEnd);
+        r.vsrTsPending = false;
+        r.vsrBltAvgMs = 0;
         r.vsrActive = false;
+        r.vsrAvailable = false;
+        r.vsrEffective = false;
+        r.vsrLevel = 0;
         r.vsrFrameIndex = 0;
         r.vsrContentWidth = 0;
         r.vsrContentHeight = 0;
+        std::lock_guard lock(r.stateMutex);
+        r.state.videoProcessorCreated = 0;
+        r.state.vsrExtensionEnabled = 0;
+        r.state.vsrConverterActive = 0;
+    }
+
+    HRESULT InitializeVsrConversionShaders(Renderer& r)
+    {
+        static constexpr char source[] = R"hlsl(
+struct VSOut { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
+VSOut VsMain(uint id : SV_VertexID)
+{
+    VSOut o;
+    float2 t = float2((id << 1) & 2, id & 2);
+    o.pos = float4(t.x * 2.0 - 1.0, 1.0 - t.y * 2.0, 0.0, 1.0);
+    o.uv = t;
+    return o;
+}
+Texture2D srcTex : register(t0);
+SamplerState smp : register(s0);
+float PsLuma(VSOut i) : SV_Target
+{
+    float3 rgb = srcTex.Sample(smp, i.uv).rgb;
+    float y = dot(rgb, float3(0.2126, 0.7152, 0.0722));
+    return 16.0 / 255.0 + y * (219.0 / 255.0);
+}
+float2 PsChroma(VSOut i) : SV_Target
+{
+    float3 rgb = srcTex.Sample(smp, i.uv).rgb;
+    float cb = dot(rgb, float3(-0.114572, -0.385428, 0.5));
+    float cr = dot(rgb, float3(0.5, -0.454153, -0.045847));
+    return float2(128.0 / 255.0 + cb * (224.0 / 255.0),
+                  128.0 / 255.0 + cr * (224.0 / 255.0));
+}
+)hlsl";
+
+        auto compile = [&](const char* entry, const char* target, ID3DBlob** code)
+        {
+            ID3DBlob* errors = nullptr;
+            const HRESULT hr = D3DCompile(source, sizeof(source) - 1, "ElyFlowVsrConversion",
+                nullptr, nullptr, entry, target,
+                D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3,
+                0, code, &errors);
+            SafeRelease(errors);
+            return hr;
+        };
+
+        ID3DBlob* vsCode = nullptr;
+        ID3DBlob* lumaCode = nullptr;
+        ID3DBlob* chromaCode = nullptr;
+        HRESULT hr = compile("VsMain", "vs_5_0", &vsCode);
+        if (SUCCEEDED(hr)) hr = compile("PsLuma", "ps_5_0", &lumaCode);
+        if (SUCCEEDED(hr)) hr = compile("PsChroma", "ps_5_0", &chromaCode);
+        if (SUCCEEDED(hr)) hr = r.vsrDevice->CreateVertexShader(
+            vsCode->GetBufferPointer(), vsCode->GetBufferSize(), nullptr, &r.convVs);
+        if (SUCCEEDED(hr)) hr = r.vsrDevice->CreatePixelShader(
+            lumaCode->GetBufferPointer(), lumaCode->GetBufferSize(), nullptr, &r.convPsLuma);
+        if (SUCCEEDED(hr)) hr = r.vsrDevice->CreatePixelShader(
+            chromaCode->GetBufferPointer(), chromaCode->GetBufferSize(), nullptr, &r.convPsChroma);
+        SafeRelease(vsCode);
+        SafeRelease(lumaCode);
+        SafeRelease(chromaCode);
+        if (FAILED(hr)) return hr;
+
+        hr = r.vsrDevice->CreateShaderResourceView(r.vsrCopyRemote, nullptr, &r.convSrcSrv);
+        D3D11_RENDER_TARGET_VIEW_DESC view{};
+        view.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+        view.Format = DXGI_FORMAT_R8_UNORM;
+        if (SUCCEEDED(hr))
+            hr = r.vsrDevice->CreateRenderTargetView(r.vsrNv12, &view, &r.nv12LumaRtv);
+        view.Format = DXGI_FORMAT_R8G8_UNORM;
+        if (SUCCEEDED(hr))
+            hr = r.vsrDevice->CreateRenderTargetView(r.vsrNv12, &view, &r.nv12ChromaRtv);
+
+        D3D11_SAMPLER_DESC sampler{};
+        sampler.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+        sampler.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sampler.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sampler.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sampler.MaxLOD = D3D11_FLOAT32_MAX;
+        if (SUCCEEDED(hr)) hr = r.vsrDevice->CreateSamplerState(&sampler, &r.convSampler);
+        return hr;
+    }
+
+    // Both stages of the VSR chain share this rect/colorspace setup helper.
+    void ConfigureProcessorStream(Renderer& r, ID3D11VideoProcessor* processor,
+                                  const RECT& sourceRect, const RECT& destinationRect,
+                                  const RECT& outputRect,
+                                  DXGI_COLOR_SPACE_TYPE streamColorSpace,
+                                  DXGI_COLOR_SPACE_TYPE outputColorSpace)
+    {
+        r.vsrVideoContext->VideoProcessorSetStreamFrameFormat(
+            processor, 0, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE);
+        r.vsrVideoContext->VideoProcessorSetStreamSourceRect(processor, 0, TRUE, &sourceRect);
+        r.vsrVideoContext->VideoProcessorSetStreamDestRect(processor, 0, TRUE, &destinationRect);
+        r.vsrVideoContext->VideoProcessorSetOutputTargetRect(processor, TRUE, &outputRect);
+        r.vsrVideoContext->VideoProcessorSetStreamAutoProcessingMode(processor, 0, FALSE);
+        r.vsrVideoContext->VideoProcessorSetStreamOutputRate(
+            processor, 0, D3D11_VIDEO_PROCESSOR_OUTPUT_RATE_NORMAL, FALSE, nullptr);
+        D3D11_VIDEO_COLOR background{};
+        background.RGBA.A = 1.0f;
+        r.vsrVideoContext->VideoProcessorSetOutputBackgroundColor(processor, FALSE, &background);
+        if (r.vsrVideoContext1)
+        {
+            r.vsrVideoContext1->VideoProcessorSetStreamColorSpace1(processor, 0, streamColorSpace);
+            r.vsrVideoContext1->VideoProcessorSetOutputColorSpace1(processor, outputColorSpace);
+        }
+        else
+        {
+            // Windows 8.x fallback: legacy colour-space description. 709 matrix,
+            // studio range on the YCbCr side, full range on the RGB side.
+            D3D11_VIDEO_PROCESSOR_COLOR_SPACE stream{};
+            stream.Usage = 0;
+            stream.RGB_Range = 0;                 // full-range RGB
+            stream.YCbCr_Matrix = 1;              // BT.709
+            stream.Nominal_Range = D3D11_VIDEO_PROCESSOR_NOMINAL_RANGE_16_235;
+            r.vsrVideoContext->VideoProcessorSetStreamColorSpace(processor, 0, &stream);
+            D3D11_VIDEO_PROCESSOR_COLOR_SPACE output = stream;
+            r.vsrVideoContext->VideoProcessorSetOutputColorSpace(processor, &output);
+        }
+    }
+
+    // Opens a keyed-mutex shared texture created on one device onto another.
+    bool OpenSharedOnDevice(ID3D11Texture2D* created, ID3D11Device* target,
+                            ID3D11Texture2D** opened, IDXGIKeyedMutex** createdMutex,
+                            IDXGIKeyedMutex** openedMutex)
+    {
+        IDXGIResource* resource = nullptr;
+        if (FAILED(created->QueryInterface(__uuidof(IDXGIResource), reinterpret_cast<void**>(&resource))))
+            return false;
+        HANDLE handle = nullptr;
+        const HRESULT handleHr = resource->GetSharedHandle(&handle);
+        resource->Release();
+        if (FAILED(handleHr) || !handle) return false;
+
+        if (FAILED(target->OpenSharedResource(handle, __uuidof(ID3D11Texture2D),
+                reinterpret_cast<void**>(opened))))
+            return false;
+        if (FAILED(created->QueryInterface(__uuidof(IDXGIKeyedMutex), reinterpret_cast<void**>(createdMutex))))
+            return false;
+        return SUCCEEDED((*opened)->QueryInterface(__uuidof(IDXGIKeyedMutex), reinterpret_cast<void**>(openedMutex)));
     }
 
     bool InitializeVsrResources(Renderer& r, uint32_t inputWidth, uint32_t inputHeight,
                                 uint32_t outputWidth, uint32_t outputHeight, HRESULT& status)
     {
         status = E_FAIL;
-        if (!r.videoDevice || !r.videoContext || !r.renderTarget) return false;
+        if (!r.vsrVideoDevice || !r.vsrVideoContext || !r.renderTarget) return false;
+        if (r.adapterVendorId != 0x10DE)
+        {
+            status = E_NOTIMPL;
+            return false;
+        }
 
+        // NV12 is 4:2:0: chroma plane dimensions must be integral.
+        inputWidth &= ~1u;
+        inputHeight &= ~1u;
+        if (inputWidth < 2 || inputHeight < 2) return false;
+
+        // Aspect-fitted content size: the VSR VP renders full-frame into a
+        // target of exactly this size (dest rect == output rect, mandatory —
+        // see vsrDestOffsetX comment), centering happens post-VSR.
+        const double scale = std::min(outputWidth / static_cast<double>(inputWidth),
+                                      outputHeight / static_cast<double>(inputHeight));
+        const uint32_t fittedWidth = std::max<uint32_t>(2,
+            static_cast<uint32_t>(std::lround(inputWidth * scale)) & ~1u);
+        const uint32_t fittedHeight = std::max<uint32_t>(2,
+            static_cast<uint32_t>(std::lround(inputHeight * scale)) & ~1u);
+        r.vsrContentWidth = fittedWidth;
+        r.vsrContentHeight = fittedHeight;
+        r.vsrDestOffsetX = (outputWidth - std::min(outputWidth, fittedWidth)) / 2;
+        r.vsrDestOffsetY = (outputHeight - std::min(outputHeight, fittedHeight)) / 2;
+
+        // ---- Stage 1: RGBA (mpv render target) -> NV12 at source size. ----
+        D3D11_VIDEO_PROCESSOR_CONTENT_DESC convContent{};
+        convContent.InputFrameFormat = D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE;
+        convContent.InputFrameRate = { 60, 1 };
+        convContent.InputWidth = inputWidth;
+        convContent.InputHeight = inputHeight;
+        convContent.OutputFrameRate = { 60, 1 };
+        convContent.OutputWidth = inputWidth;
+        convContent.OutputHeight = inputHeight;
+        convContent.Usage = D3D11_VIDEO_USAGE_PLAYBACK_NORMAL;
+        status = r.vsrVideoDevice->CreateVideoProcessorEnumerator(&convContent, &r.convEnumerator);
+        if (FAILED(status)) return false;
+
+        UINT rgbaSupport = 0, nv12Support = 0;
+        if (FAILED(r.convEnumerator->CheckVideoProcessorFormat(DXGI_FORMAT_R8G8B8A8_UNORM, &rgbaSupport)) ||
+            FAILED(r.convEnumerator->CheckVideoProcessorFormat(DXGI_FORMAT_NV12, &nv12Support)) ||
+            (rgbaSupport & D3D11_VIDEO_PROCESSOR_FORMAT_SUPPORT_INPUT) == 0 ||
+            (nv12Support & D3D11_VIDEO_PROCESSOR_FORMAT_SUPPORT_OUTPUT) == 0)
+        {
+            status = DXGI_ERROR_UNSUPPORTED;
+            return false;
+        }
+
+        status = r.vsrVideoDevice->CreateVideoProcessor(r.convEnumerator, 0, &r.convProcessor);
+        if (FAILED(status)) return false;
+
+        // NV12 intermediate lives entirely on the video device. The VsrProbe
+        // matrix proved a plain RENDER_TARGET NV12 engages VSR — no decoder
+        // bind or 16-alignment required.
+        D3D11_TEXTURE2D_DESC nv12Desc{};
+        nv12Desc.Width = inputWidth;
+        nv12Desc.Height = inputHeight;
+        nv12Desc.MipLevels = 1;
+        nv12Desc.ArraySize = 1;
+        nv12Desc.Format = DXGI_FORMAT_NV12;
+        nv12Desc.SampleDesc.Count = 1;
+        nv12Desc.Usage = D3D11_USAGE_DEFAULT;
+        nv12Desc.BindFlags = D3D11_BIND_RENDER_TARGET; // required by the VP output view
+        status = r.vsrDevice->CreateTexture2D(&nv12Desc, nullptr, &r.vsrNv12);
+        if (FAILED(status)) return false;
+
+        // Source-frame bridge: created shared on the main device (which copies
+        // the mpv render target into it), consumed by the video device.
+        D3D11_TEXTURE2D_DESC copyDesc{};
+        copyDesc.Width = inputWidth;
+        copyDesc.Height = inputHeight;
+        copyDesc.MipLevels = 1;
+        copyDesc.ArraySize = 1;
+        copyDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        copyDesc.SampleDesc.Count = 1;
+        copyDesc.Usage = D3D11_USAGE_DEFAULT;
+        copyDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+        copyDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
+        status = r.device->CreateTexture2D(&copyDesc, nullptr, &r.vsrCopy);
+        if (FAILED(status)) return false;
+        if (!OpenSharedOnDevice(r.vsrCopy, r.vsrDevice, &r.vsrCopyRemote,
+                &r.copyMutexMain, &r.copyMutexRemote))
+        {
+            status = E_FAIL;
+            return false;
+        }
+
+        D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC convInDesc{};
+        convInDesc.ViewDimension = D3D11_VPIV_DIMENSION_TEXTURE2D;
+        status = r.vsrVideoDevice->CreateVideoProcessorInputView(
+            r.vsrCopyRemote, r.convEnumerator, &convInDesc, &r.convInputView);
+        if (FAILED(status)) return false;
+
+        D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC convOutDesc{};
+        convOutDesc.ViewDimension = D3D11_VPOV_DIMENSION_TEXTURE2D;
+        status = r.vsrVideoDevice->CreateVideoProcessorOutputView(
+            r.vsrNv12, r.convEnumerator, &convOutDesc, &r.convOutputView);
+        if (FAILED(status)) return false;
+
+        RECT convRect{ 0, 0, static_cast<LONG>(inputWidth), static_cast<LONG>(inputHeight) };
+        ConfigureProcessorStream(r, r.convProcessor, convRect, convRect, convRect,
+            DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709,
+            DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709);
+
+        // Keep the VP converter alive as a fallback, but prefer graphics-pipeline
+        // writes: NVIDIA's VSR works in both cases, while NVCP only recognizes
+        // the latter as an active Super Resolution session.
+        const HRESULT shaderStatus = InitializeVsrConversionShaders(r);
+        const bool forceVpConverter =
+            GetEnvironmentVariableA("ELYFLOW_VSR_CONV_VP", nullptr, 0) != 0;
+        r.convUseShader = SUCCEEDED(shaderStatus) && !forceVpConverter;
+        if (FAILED(shaderStatus))
+        {
+            std::lock_guard lock(r.stateMutex);
+            r.state.lastConvStatus = static_cast<int32_t>(shaderStatus);
+        }
+
+        // ---- Stage 2: NV12 -> RGBA at fitted content size, RTX VSR on. ----
         D3D11_VIDEO_PROCESSOR_CONTENT_DESC content{};
         content.InputFrameFormat = D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE;
         content.InputFrameRate = { 60, 1 };
         content.InputWidth = inputWidth;
         content.InputHeight = inputHeight;
         content.OutputFrameRate = { 60, 1 };
-        content.OutputWidth = outputWidth;
-        content.OutputHeight = outputHeight;
+        content.OutputWidth = fittedWidth;
+        content.OutputHeight = fittedHeight;
         content.Usage = D3D11_VIDEO_USAGE_PLAYBACK_NORMAL;
-        status = r.videoDevice->CreateVideoProcessorEnumerator(&content, &r.vsrEnumerator);
+        status = r.vsrVideoDevice->CreateVideoProcessorEnumerator(&content, &r.vsrEnumerator);
         if (FAILED(status)) return false;
 
-        UINT formatSupport = 0;
-        status = r.vsrEnumerator->CheckVideoProcessorFormat(
-            DXGI_FORMAT_R8G8B8A8_UNORM, &formatSupport);
-        if (FAILED(status) ||
-            (formatSupport & D3D11_VIDEO_PROCESSOR_FORMAT_SUPPORT_INPUT) == 0 ||
-            (formatSupport & D3D11_VIDEO_PROCESSOR_FORMAT_SUPPORT_OUTPUT) == 0)
+        UINT inputSupport = 0, outputSupport = 0;
+        if (FAILED(r.vsrEnumerator->CheckVideoProcessorFormat(DXGI_FORMAT_NV12, &inputSupport)) ||
+            FAILED(r.vsrEnumerator->CheckVideoProcessorFormat(DXGI_FORMAT_R8G8B8A8_UNORM, &outputSupport)) ||
+            (inputSupport & D3D11_VIDEO_PROCESSOR_FORMAT_SUPPORT_INPUT) == 0 ||
+            (outputSupport & D3D11_VIDEO_PROCESSOR_FORMAT_SUPPORT_OUTPUT) == 0)
+        {
+            status = DXGI_ERROR_UNSUPPORTED;
+            return false;
+        }
+
+        status = r.vsrVideoDevice->CreateVideoProcessor(r.vsrEnumerator, 0, &r.vsrProcessor);
+        if (FAILED(status)) return false;
+        {
+            std::lock_guard lock(r.stateMutex);
+            r.state.videoProcessorCreated = 1;
+        }
+
+        status = QueryNvidiaVsr(r);
+        if (FAILED(status) || !r.vsrAvailable)
         {
             if (SUCCEEDED(status)) status = DXGI_ERROR_UNSUPPORTED;
             return false;
         }
 
-        status = r.videoDevice->CreateVideoProcessor(r.vsrEnumerator, 0, &r.vsrProcessor);
-        if (FAILED(status)) return false;
-
+        // VSR result bridge (content-sized): written by the video device, read
+        // by the main device; plus the window-sized composition target the
+        // rest of the pipeline consumes.
         D3D11_TEXTURE2D_DESC outputDesc{};
-        outputDesc.Width = outputWidth;
-        outputDesc.Height = outputHeight;
+        outputDesc.Width = fittedWidth;
+        outputDesc.Height = fittedHeight;
         outputDesc.MipLevels = 1;
         outputDesc.ArraySize = 1;
         outputDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
         outputDesc.SampleDesc.Count = 1;
         outputDesc.Usage = D3D11_USAGE_DEFAULT;
         outputDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-        status = r.device->CreateTexture2D(&outputDesc, nullptr, &r.vsrOutput);
+        outputDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
+        status = r.vsrDevice->CreateTexture2D(&outputDesc, nullptr, &r.vsrOutput);
         if (FAILED(status)) return false;
+        if (!OpenSharedOnDevice(r.vsrOutput, r.device, &r.vsrOutputMain,
+                &r.outMutexRemote, &r.outMutexMain))
+        {
+            status = E_FAIL;
+            return false;
+        }
+        outputDesc.Width = outputWidth;
+        outputDesc.Height = outputHeight;
+        outputDesc.MiscFlags = 0;
+        status = r.device->CreateTexture2D(&outputDesc, nullptr, &r.vsrResult);
+        if (FAILED(status)) return false;
+        // Black background once: the letterbox bars live in vsrResult, only
+        // the fitted content region is refreshed every frame.
+        ID3D11RenderTargetView* clearView = nullptr;
+        if (SUCCEEDED(r.device->CreateRenderTargetView(r.vsrResult, nullptr, &clearView)))
+        {
+            const float black[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+            r.context->ClearRenderTargetView(clearView, black);
+            clearView->Release();
+        }
 
         D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC inputViewDesc{};
         inputViewDesc.ViewDimension = D3D11_VPIV_DIMENSION_TEXTURE2D;
         inputViewDesc.Texture2D.MipSlice = 0;
         inputViewDesc.Texture2D.ArraySlice = 0;
-        status = r.videoDevice->CreateVideoProcessorInputView(
-            r.renderTarget, r.vsrEnumerator, &inputViewDesc, &r.vsrInputView);
+        status = r.vsrVideoDevice->CreateVideoProcessorInputView(
+            r.vsrNv12, r.vsrEnumerator, &inputViewDesc, &r.vsrInputView);
         if (FAILED(status)) return false;
 
         D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC outputViewDesc{};
         outputViewDesc.ViewDimension = D3D11_VPOV_DIMENSION_TEXTURE2D;
         outputViewDesc.Texture2D.MipSlice = 0;
-        status = r.videoDevice->CreateVideoProcessorOutputView(
+        status = r.vsrVideoDevice->CreateVideoProcessorOutputView(
             r.vsrOutput, r.vsrEnumerator, &outputViewDesc, &r.vsrOutputView);
         if (FAILED(status)) return false;
 
         RECT sourceRect{ 0, 0, static_cast<LONG>(inputWidth), static_cast<LONG>(inputHeight) };
-        const double scale = std::min(outputWidth / static_cast<double>(inputWidth),
-                                      outputHeight / static_cast<double>(inputHeight));
-        const LONG fittedWidth = std::max<LONG>(1, static_cast<LONG>(std::lround(inputWidth * scale)));
-        const LONG fittedHeight = std::max<LONG>(1, static_cast<LONG>(std::lround(inputHeight * scale)));
-        r.vsrContentWidth = static_cast<uint32_t>(fittedWidth);
-        r.vsrContentHeight = static_cast<uint32_t>(fittedHeight);
-        RECT destinationRect{
-            (static_cast<LONG>(outputWidth) - fittedWidth) / 2,
-            (static_cast<LONG>(outputHeight) - fittedHeight) / 2,
-            (static_cast<LONG>(outputWidth) + fittedWidth) / 2,
-            (static_cast<LONG>(outputHeight) + fittedHeight) / 2
-        };
-        RECT outputRect{ 0, 0, static_cast<LONG>(outputWidth), static_cast<LONG>(outputHeight) };
-        r.videoContext->VideoProcessorSetStreamFrameFormat(
-            r.vsrProcessor, 0, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE);
-        r.videoContext->VideoProcessorSetStreamSourceRect(r.vsrProcessor, 0, TRUE, &sourceRect);
-        r.videoContext->VideoProcessorSetStreamDestRect(r.vsrProcessor, 0, TRUE, &destinationRect);
-        r.videoContext->VideoProcessorSetOutputTargetRect(r.vsrProcessor, TRUE, &outputRect);
-        r.videoContext->VideoProcessorSetStreamAutoProcessingMode(r.vsrProcessor, 0, FALSE);
-        r.videoContext->VideoProcessorSetStreamOutputRate(
-            r.vsrProcessor, 0, D3D11_VIDEO_PROCESSOR_OUTPUT_RATE_NORMAL, FALSE, nullptr);
-        D3D11_VIDEO_COLOR background{};
-        background.RGBA.A = 1.0f;
-        r.videoContext->VideoProcessorSetOutputBackgroundColor(r.vsrProcessor, FALSE, &background);
+        RECT fittedRect{ 0, 0, static_cast<LONG>(fittedWidth), static_cast<LONG>(fittedHeight) };
+        ConfigureProcessorStream(r, r.vsrProcessor, sourceRect, fittedRect, fittedRect,
+            DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709,
+            DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709);
 
-        struct NvidiaExtension { unsigned int version; unsigned int method; unsigned int enable; };
-        NvidiaExtension extension{ 1, 2, 1 };
-        status = r.videoContext->VideoProcessorSetStreamExtension(
-            r.vsrProcessor, 0, &NvidiaPpeInterfaceGuid, sizeof(extension), &extension);
-        if (FAILED(status)) return false;
+        // Debug isolation switch: ELYFLOW_VSR_NO_EXT=1 keeps the whole NV12
+        // chain but never enables the NVIDIA extension — separates "the VP
+        // chain crashes" from "the VSR kernel crashes".
+        const bool skipExtension = GetEnvironmentVariableA("ELYFLOW_VSR_NO_EXT", nullptr, 0) != 0;
+        if (!skipExtension)
+        {
+            struct NvidiaExtension { unsigned int version; unsigned int method; unsigned int enable; };
+            NvidiaExtension extension{ 1, 2, 1 };
+            status = r.vsrVideoContext->VideoProcessorSetStreamExtension(
+                r.vsrProcessor, 0, &NvidiaPpeInterfaceGuid, sizeof(extension), &extension);
+            if (FAILED(status)) return false;
+        }
+        {
+            std::lock_guard lock(r.stateMutex);
+            r.state.vsrExtensionEnabled = skipExtension ? 0 : 1;
+            r.state.vsrConverterActive = 1;
+        }
+
+        // GPU timestamp instrumentation around the VSR Blt (optional).
+        D3D11_QUERY_DESC disjointDesc{ D3D11_QUERY_TIMESTAMP_DISJOINT, 0 };
+        D3D11_QUERY_DESC timestampDesc{ D3D11_QUERY_TIMESTAMP, 0 };
+        r.vsrDevice->CreateQuery(&disjointDesc, &r.vsrTsDisjoint);
+        r.vsrDevice->CreateQuery(&timestampDesc, &r.vsrTsBegin);
+        r.vsrDevice->CreateQuery(&timestampDesc, &r.vsrTsEnd);
+        r.vsrTsPending = false;
 
         r.vsrActive = true;
         status = S_OK;
         return true;
     }
 
+    // Collects the previous frame's VSR Blt GPU time without stalling: the
+    // query results are simply skipped when not ready yet.
+    void CollectVsrTiming(Renderer& r)
+    {
+        if (!r.vsrTsPending || !r.vsrTsDisjoint) return;
+        D3D11_QUERY_DATA_TIMESTAMP_DISJOINT disjoint{};
+        // Flushed at the end of the previous RunVsr: by the next frame the
+        // result is normally ready. S_FALSE (not ready) simply retries later.
+        if (r.vsrDeviceContext->GetData(r.vsrTsDisjoint, &disjoint, sizeof(disjoint), 0) != S_OK)
+            return;
+        r.vsrTsPending = false;
+        if (disjoint.Disjoint || disjoint.Frequency == 0) return;
+        UINT64 begin = 0, end = 0;
+        if (r.vsrDeviceContext->GetData(r.vsrTsBegin, &begin, sizeof(begin), 0) != S_OK ||
+            r.vsrDeviceContext->GetData(r.vsrTsEnd, &end, sizeof(end), 0) != S_OK ||
+            end <= begin)
+            return;
+        const double ms = (end - begin) * 1000.0 / static_cast<double>(disjoint.Frequency);
+        r.vsrBltAvgMs = r.vsrBltAvgMs == 0 ? ms : r.vsrBltAvgMs * 0.9 + ms * 0.1;
+        std::lock_guard lock(r.stateMutex);
+        r.state.vsrBltAvgMs = r.vsrBltAvgMs;
+    }
+
     bool RunVsr(Renderer& r, HRESULT& status)
     {
+        // Stage 0 (main device): hand the freshly rendered frame to the video
+        // device. The mpv render target itself is registered with the WGL
+        // interop and must never be touched by another device/engine.
+        status = E_FAIL;
+        if (r.copyMutexMain->AcquireSync(0, 100) != S_OK) return false;
+        r.context->CopyResource(r.vsrCopy, r.renderTarget);
+        r.copyMutexMain->ReleaseSync(1);
+        r.context->Flush();
+
+        // Stage 1 (video device): RGB full 709 -> NV12 studio 709.
+        if (r.copyMutexRemote->AcquireSync(1, 100) != S_OK) return false;
+        if (r.convUseShader)
+        {
+            ID3D11DeviceContext* context = r.vsrDeviceContext;
+            context->IASetInputLayout(nullptr);
+            context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            context->VSSetShader(r.convVs, nullptr, 0);
+            context->PSSetSamplers(0, 1, &r.convSampler);
+            context->PSSetShaderResources(0, 1, &r.convSrcSrv);
+            context->RSSetState(nullptr);
+            context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
+            context->OMSetDepthStencilState(nullptr, 0);
+
+            D3D11_VIEWPORT viewport{ 0.0f, 0.0f,
+                static_cast<float>(r.renderWidth & ~1u),
+                static_cast<float>(r.renderHeight & ~1u), 0.0f, 1.0f };
+            context->RSSetViewports(1, &viewport);
+            context->OMSetRenderTargets(1, &r.nv12LumaRtv, nullptr);
+            context->PSSetShader(r.convPsLuma, nullptr, 0);
+            context->Draw(3, 0);
+
+            viewport.Width = static_cast<float>((r.renderWidth & ~1u) / 2);
+            viewport.Height = static_cast<float>((r.renderHeight & ~1u) / 2);
+            context->RSSetViewports(1, &viewport);
+            context->OMSetRenderTargets(1, &r.nv12ChromaRtv, nullptr);
+            context->PSSetShader(r.convPsChroma, nullptr, 0);
+            context->Draw(3, 0);
+
+            ID3D11ShaderResourceView* nullSrv = nullptr;
+            context->PSSetShaderResources(0, 1, &nullSrv);
+            ID3D11RenderTargetView* nullRtv = nullptr;
+            context->OMSetRenderTargets(1, &nullRtv, nullptr);
+            status = S_OK;
+        }
+        else
+        {
+            D3D11_VIDEO_PROCESSOR_STREAM convStream{};
+            convStream.Enable = TRUE;
+            convStream.pInputSurface = r.convInputView;
+            convStream.InputFrameOrField = r.vsrFrameIndex;
+            status = r.vsrVideoContext->VideoProcessorBlt(
+                r.convProcessor, r.convOutputView, r.vsrFrameIndex, 1, &convStream);
+        }
+        r.copyMutexRemote->ReleaseSync(0);
+        {
+            std::lock_guard lock(r.stateMutex);
+            r.state.lastConvStatus = static_cast<int32_t>(status);
+        }
+        if (FAILED(status)) return false;
+
+        // Stage 2 (video device): NV12 -> RGBA upscale — the pass RTX VSR
+        // actually processes. GPU-timed as execution proof.
+        CollectVsrTiming(r);
+        if (r.outMutexRemote->AcquireSync(0, 100) != S_OK) return false;
+        const bool timeThisFrame = !r.vsrTsPending && r.vsrTsDisjoint;
+        if (timeThisFrame)
+        {
+            r.vsrDeviceContext->Begin(r.vsrTsDisjoint);
+            r.vsrDeviceContext->End(r.vsrTsBegin);
+        }
         D3D11_VIDEO_PROCESSOR_STREAM stream{};
         stream.Enable = TRUE;
         stream.pInputSurface = r.vsrInputView;
         stream.InputFrameOrField = r.vsrFrameIndex;
-        status = r.videoContext->VideoProcessorBlt(
+        status = r.vsrVideoContext->VideoProcessorBlt(
             r.vsrProcessor, r.vsrOutputView, r.vsrFrameIndex++, 1, &stream);
-        return SUCCEEDED(status);
+        if (timeThisFrame)
+        {
+            r.vsrDeviceContext->End(r.vsrTsEnd);
+            r.vsrDeviceContext->End(r.vsrTsDisjoint);
+            r.vsrTsPending = true;
+        }
+        r.outMutexRemote->ReleaseSync(1);
+        r.vsrDeviceContext->Flush();
+        if (FAILED(status)) return false;
+
+        // Debug isolation switch: ELYFLOW_VSR_NO_QUERY=1 keeps VSR enabled but
+        // never issues the state query after Blt — separates "the VSR kernel
+        // crashes" from "querying the extension while VSR runs crashes".
+        static const bool skipQuery = GetEnvironmentVariableA("ELYFLOW_VSR_NO_QUERY", nullptr, 0) != 0;
+        if (!skipQuery)
+            QueryNvidiaVsr(r);
+
+        // Stage 3 (main device): compose the content-sized result centered
+        // into the window-sized target (the letterbox the VP must not do).
+        if (r.outMutexMain->AcquireSync(1, 100) != S_OK) return false;
+        r.context->CopySubresourceRegion(r.vsrResult, 0,
+            r.vsrDestOffsetX, r.vsrDestOffsetY, 0, r.vsrOutputMain, 0, nullptr);
+        r.outMutexMain->ReleaseSync(0);
+        status = S_OK;
+        return true;
     }
 
     void ReleaseTargets(Renderer& r)
@@ -506,6 +1053,9 @@ namespace
             r.state.vsrInputHeight = 0;
             r.state.vsrContentWidth = 0;
             r.state.vsrContentHeight = 0;
+            r.state.vsrAvailable = 0;
+            r.state.vsrEffective = 0;
+            r.state.vsrLevel = 0;
         }
     }
 
@@ -517,7 +1067,7 @@ namespace
         const bool upscaleRequested = r.vsrWanted.load(std::memory_order_relaxed) &&
             sourceWidth > 0 && sourceHeight > 0 &&
             (sourceWidth < w || sourceHeight < h) &&
-            r.videoDevice && r.videoContext;
+            r.vsrVideoDevice && r.vsrVideoContext;
         const bool rejectedSameConfiguration =
             sourceWidth == r.failedVsrSourceWidth && sourceHeight == r.failedVsrSourceHeight &&
             w == r.failedVsrOutputWidth && h == r.failedVsrOutputHeight;
@@ -533,10 +1083,16 @@ namespace
         auto buildTargets = [&](bool enableVsr) -> bool
         {
             ReleaseTargets(r);
+            {
+                std::lock_guard lock(r.stateMutex);
+                r.state.targetRebuilds++;
+            }
             r.width = w;
             r.height = h;
-            r.renderWidth = enableVsr ? sourceWidth : w;
-            r.renderHeight = enableVsr ? sourceHeight : h;
+            // NV12 (the VSR input) is 4:2:0: keep the source-size render target
+            // even in both dimensions so the conversion pass maps 1:1.
+            r.renderWidth = enableVsr ? (sourceWidth & ~1u) : w;
+            r.renderHeight = enableVsr ? (sourceHeight & ~1u) : h;
 
             // Resize the swapchain only when the window really changed size.
             // ResizeBuffers throws the on-screen buffers away, so calling it
@@ -552,6 +1108,10 @@ namespace
                 }
                 r.swapWidth = w;
                 r.swapHeight = h;
+                {
+                    std::lock_guard lock(r.stateMutex);
+                    r.state.swapchainResizes++;
+                }
             }
 
             // mpv renders at source resolution when VSR is active. RTX VSR then
@@ -613,12 +1173,22 @@ namespace
                 r.state.texturesShared = 1;
                 r.state.width = w;
                 r.state.height = h;
-                r.state.vsrActive = r.vsrActive ? 1 : 0;
+                r.state.vsrActive = r.vsrEffective ? 1 : 0;
                 r.state.lastVsrStatus = static_cast<int32_t>(vsrStatus);
                 r.state.vsrInputWidth = r.vsrActive ? r.renderWidth : 0;
                 r.state.vsrInputHeight = r.vsrActive ? r.renderHeight : 0;
                 r.state.vsrContentWidth = r.vsrActive ? r.vsrContentWidth : 0;
                 r.state.vsrContentHeight = r.vsrActive ? r.vsrContentHeight : 0;
+                r.state.vsrAvailable = r.vsrAvailable ? 1 : 0;
+                r.state.vsrRequested = r.vsrWanted.load(std::memory_order_relaxed) ? 1 : 0;
+                r.state.vsrEffective = r.vsrEffective ? 1 : 0;
+                r.state.vsrLevel = static_cast<int32_t>(r.vsrLevel);
+                r.state.adapterVendorId = r.adapterVendorId;
+                r.state.vsrInputFormat = enableVsr ? DXGI_FORMAT_NV12 : DXGI_FORMAT_R8G8B8A8_UNORM;
+                r.state.vsrOutputFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+                r.state.vsrColorSpace = enableVsr
+                    ? DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709
+                    : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
             }
 
             // FRUC session creation is deliberately NOT done here: it is
@@ -656,11 +1226,14 @@ namespace
         std::lock_guard lock(r.stateMutex);
         if (FAILED(hr))
         {
+            r.state.presentErrors++;
             // DEVICE_REMOVED/RESET here is the signature of a driver TDR — the
             // swapchain then shows black. Surface it in the state message so
             // the C# diagnostics can tell this apart from a pacing problem.
-            char buf[128];
-            sprintf_s(buf, "Present a échoué (0x%08X) — device D3D11 perdu ?", static_cast<unsigned>(hr));
+            const HRESULT removed = r.device ? r.device->GetDeviceRemovedReason() : S_OK;
+            char buf[160];
+            sprintf_s(buf, "Present a echoue (0x%08X), GetDeviceRemovedReason=0x%08X.",
+                static_cast<unsigned>(hr), static_cast<unsigned>(removed));
             strncpy_s(r.state.message, buf, _TRUNCATE);
             return;
         }
@@ -708,6 +1281,7 @@ namespace
         r.context->QueryInterface(__uuidof(ID3D11DeviceContext4), reinterpret_cast<void**>(&r.context4));
         r.device->QueryInterface(__uuidof(ID3D11VideoDevice), reinterpret_cast<void**>(&r.videoDevice));
         r.context->QueryInterface(__uuidof(ID3D11VideoContext), reinterpret_cast<void**>(&r.videoContext));
+        r.context->QueryInterface(__uuidof(ID3D11VideoContext1), reinterpret_cast<void**>(&r.videoContext1));
         if (r.device5)
             r.device5->CreateFence(0, D3D11_FENCE_FLAG_SHARED, __uuidof(ID3D11Fence), reinterpret_cast<void**>(&r.fence));
 
@@ -726,6 +1300,32 @@ namespace
         {
             SafeRelease(factory); SafeRelease(adapter); SafeRelease(dxgiDevice);
             return ELYFLOW_RENDERER_SWAPCHAIN_FAILED;
+        }
+        DXGI_ADAPTER_DESC adapterDescription{};
+        if (SUCCEEDED(adapter->GetDesc(&adapterDescription)))
+        {
+            r.adapterVendorId = adapterDescription.VendorId;
+            WideCharToMultiByte(CP_UTF8, 0, adapterDescription.Description, -1,
+                r.state.adapterName, static_cast<int>(sizeof(r.state.adapterName)), nullptr, nullptr);
+        }
+
+        // Dedicated video-processing device on the same adapter (see the
+        // Renderer member comment: VSR must not run on the GL-interop device).
+        if (SUCCEEDED(D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr,
+                D3D11_CREATE_DEVICE_BGRA_SUPPORT, levels, 2, D3D11_SDK_VERSION,
+                &r.vsrDevice, nullptr, &r.vsrDeviceContext)))
+        {
+            r.vsrDevice->QueryInterface(__uuidof(ID3D11VideoDevice), reinterpret_cast<void**>(&r.vsrVideoDevice));
+            r.vsrDeviceContext->QueryInterface(__uuidof(ID3D11VideoContext), reinterpret_cast<void**>(&r.vsrVideoContext));
+            r.vsrDeviceContext->QueryInterface(__uuidof(ID3D11VideoContext1), reinterpret_cast<void**>(&r.vsrVideoContext1));
+        }
+        LARGE_INTEGER driverVersion{};
+        if (SUCCEEDED(adapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &driverVersion)))
+        {
+            const auto high = static_cast<uint64_t>(driverVersion.QuadPart) >> 32;
+            const auto low = static_cast<uint64_t>(driverVersion.QuadPart) & 0xffffffffULL;
+            sprintf_s(r.state.driverVersion, "%llu.%llu.%llu.%llu",
+                (high >> 16) & 0xffff, high & 0xffff, (low >> 16) & 0xffff, low & 0xffff);
         }
 
         RECT rc{};
@@ -885,7 +1485,26 @@ namespace
                         "RTX VSR a échoué pendant VideoProcessorBlt; repli au prochain frame.", _TRUNCATE);
                     continue;
                 }
-                processedTexture = r.vsrOutput;
+                processedTexture = r.vsrResult;
+                {
+                    std::lock_guard lock(r.stateMutex);
+                    r.state.videoProcessorFrames++;
+                    if (r.vsrEffective) r.state.vsrFramesProcessed++;
+                    else r.state.vsrFramesBypassed++;
+                    r.state.vsrActive = r.vsrEffective ? 1 : 0;
+                    r.state.vsrAvailable = r.vsrAvailable ? 1 : 0;
+                    r.state.vsrEffective = r.vsrEffective ? 1 : 0;
+                    r.state.vsrLevel = static_cast<int32_t>(r.vsrLevel);
+                    if (!r.vsrEffective)
+                        strncpy_s(r.state.message,
+                            "Passe D3D11 active, mais le driver NVIDIA ne déclare pas RTX VSR en utilisation (réglage pilote/source).",
+                            _TRUNCATE);
+                }
+            }
+            else
+            {
+                std::lock_guard lock(r.stateMutex);
+                r.state.vsrFramesBypassed++;
             }
             r.context->CopyResource(r.current, processedTexture);
             {
@@ -1017,12 +1636,23 @@ namespace
         SafeRelease(r.swapChain);
         SafeRelease(r.context4);
         SafeRelease(r.videoContext);
+        SafeRelease(r.videoContext1);
         SafeRelease(r.videoDevice);
+        SafeRelease(r.vsrVideoContext1);
+        SafeRelease(r.vsrVideoContext);
+        SafeRelease(r.vsrVideoDevice);
+        SafeRelease(r.vsrDeviceContext);
+        SafeRelease(r.vsrDevice);
         SafeRelease(r.device5);
         SafeRelease(r.context);
         SafeRelease(r.device);
         if (r.waitTimer) { CloseHandle(r.waitTimer); r.waitTimer = nullptr; }
     }
+}
+
+uint32_t ElyFlowRenderer_GetAbiVersion()
+{
+    return ELYFLOW_RENDERER_ABI_VERSION;
 }
 
 int32_t ElyFlowRenderer_Preflight(char* message, int32_t messageSize)
@@ -1137,6 +1767,10 @@ void ElyFlowRenderer_ConfigureVsr(int32_t enable, uint32_t sourceWidth, uint32_t
     g_renderer->sourceWidthHint.store(sourceWidth, std::memory_order_relaxed);
     g_renderer->sourceHeightHint.store(sourceHeight, std::memory_order_relaxed);
     g_renderer->vsrWanted.store(enable != 0, std::memory_order_relaxed);
+    {
+        std::lock_guard stateLock(g_renderer->stateMutex);
+        g_renderer->state.vsrRequested = enable != 0 ? 1 : 0;
+    }
     if (g_renderer->wakeEvent) SetEvent(g_renderer->wakeEvent);
 }
 

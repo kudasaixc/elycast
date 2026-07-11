@@ -17,6 +17,9 @@ public sealed class AudioVisualEngine : IDisposable
 {
     public const int Bands = 56;
     private const int FftSize = 2048;
+    private const double AnalysisHz = 120.0;
+    private static readonly float[] Hann = Enumerable.Range(0, FftSize)
+        .Select(i => (float)NAudio.Dsp.FastFourierTransform.HannWindow(i, FftSize)).ToArray();
 
     private readonly object _sync = new();
     private readonly double[] _spectrum = new double[Bands];
@@ -31,11 +34,17 @@ public sealed class AudioVisualEngine : IDisposable
     private volatile bool _playerIsPlaying;
 
     private double _bass, _energy, _bassAverage, _bpm, _lastBeatSeconds;
+    private double _analysisRateHz;
+    private readonly int[] _bandStart = new int[Bands];
+    private readonly int[] _bandEnd = new int[Bands];
+    private readonly double[] _bandUpperHz = new double[Bands];
+    private int _mappedSampleRate;
 
     /// <summary>False when the format cannot be decoded (idle animation).</summary>
     public bool HasAnalysis { get; private set; }
 
     public double EstimatedBpm { get { lock (_sync) return _bpm; } }
+    public double ActualAnalysisRateHz => Volatile.Read(ref _analysisRateHz);
 
     public void Start(string path)
     {
@@ -64,6 +73,12 @@ public sealed class AudioVisualEngine : IDisposable
 
         _reader = reader;
         HasAnalysis = reader != null;
+        // Play() has already been issued before the visualizer starts. Begin
+        // analysis optimistically instead of waiting for the asynchronous
+        // backend Playing event; subsequent UI snapshots remain authoritative.
+        _playerIsPlaying = true;
+        Volatile.Write(ref _analysisRateHz, 0);
+        Interlocked.Exchange(ref _playerPositionMs, 0);
         _running = true;
         lock (_sync)
         {
@@ -76,7 +91,7 @@ public sealed class AudioVisualEngine : IDisposable
         {
             IsBackground = true,
             Name = "AudioVisualEngine",
-            Priority = ThreadPriority.BelowNormal
+            Priority = ThreadPriority.AboveNormal
         };
         _thread.Start();
     }
@@ -96,6 +111,7 @@ public sealed class AudioVisualEngine : IDisposable
         // to race over the same decoder and could throw ObjectDisposedException.
         if (thread == null) reader?.Dispose();
         HasAnalysis = false;
+        Volatile.Write(ref _analysisRateHz, 0);
 
         lock (_sync)
         {
@@ -116,12 +132,21 @@ public sealed class AudioVisualEngine : IDisposable
 
     public void ReadSnapshot(double[] spectrumOut, out double bass, out double energy)
     {
-        lock (_sync)
+        // Never stall the UI behind the FFT publisher. Keeping the previous
+        // 8 ms-old spectrum for one frame is invisible; blocking is not.
+        if (Monitor.TryEnter(_sync))
         {
-            Array.Copy(_spectrum, spectrumOut, Math.Min(spectrumOut.Length, Bands));
-            bass = _bass;
-            energy = _energy;
+            try
+            {
+                Array.Copy(_spectrum, spectrumOut, Math.Min(spectrumOut.Length, Bands));
+                bass = _bass;
+                energy = _energy;
+                return;
+            }
+            finally { Monitor.Exit(_sync); }
         }
+        bass = Volatile.Read(ref _bass);
+        energy = Volatile.Read(ref _energy);
     }
 
     public bool TryDequeueBeat(out double strength) => _beats.TryDequeue(out strength);
@@ -133,12 +158,24 @@ public sealed class AudioVisualEngine : IDisposable
     {
         var clock = Stopwatch.StartNew();
         var last = 0.0;
+        var nextTick = 0.0;
+        var rateWindowStart = 0.0;
+        var rateFrames = 0;
 
         try
         {
             while (_running && sessionId == Volatile.Read(ref _sessionId))
             {
                 var now = clock.Elapsed.TotalSeconds;
+                if (now < nextTick)
+                {
+                    var remainingMs = (nextTick - now) * 1000;
+                    if (remainingMs >= 2) Thread.Sleep((int)remainingMs - 1);
+                    else Thread.Yield();
+                    continue;
+                }
+                nextTick += 1.0 / AnalysisHz;
+                if (now - nextTick > 0.1) nextTick = now;
                 var dt = Math.Clamp(now - last, 0.001, 0.25);
                 last = now;
 
@@ -150,7 +187,13 @@ public sealed class AudioVisualEngine : IDisposable
                     break;
                 }
 
-                Thread.Sleep(16); // ~60 analyses/s — the render side interpolates.
+                rateFrames++;
+                if (now - rateWindowStart >= 0.75)
+                {
+                    Volatile.Write(ref _analysisRateHz, rateFrames / Math.Max(0.001, now - rateWindowStart));
+                    rateFrames = 0;
+                    rateWindowStart = now;
+                }
             }
         }
         finally { reader?.Dispose(); }
@@ -241,23 +284,21 @@ public sealed class AudioVisualEngine : IDisposable
 
         for (var i = 0; i < FftSize; i++)
         {
-            fft[i].X = (float)(window[i] * NAudio.Dsp.FastFourierTransform.HannWindow(i, FftSize));
+            fft[i].X = window[i] * Hann[i];
             fft[i].Y = 0;
         }
         NAudio.Dsp.FastFourierTransform.FFT(true, 11 /* 2^11 = 2048 */, fft);
 
-        var fMin = 35.0;
+        const double fMin = 35.0;
         var fMax = Math.Min(16000.0, sampleRate * 0.45);
-        var binWidth = sampleRate / (double)FftSize;
+        EnsureBandMap(sampleRate, fMin, fMax);
         var bassRaw = 0.0;
 
         Span<double> values = stackalloc double[Bands];
         for (var band = 0; band < Bands; band++)
         {
-            var f0 = fMin * Math.Pow(fMax / fMin, band / (double)Bands);
-            var f1 = fMin * Math.Pow(fMax / fMin, (band + 1) / (double)Bands);
-            var b0 = Math.Clamp((int)(f0 / binWidth), 1, FftSize / 2 - 1);
-            var b1 = Math.Clamp((int)Math.Ceiling(f1 / binWidth), b0 + 1, FftSize / 2);
+            var b0 = _bandStart[band];
+            var b1 = _bandEnd[band];
 
             var magnitude = 0.0;
             for (var bin = b0; bin < b1; bin++)
@@ -285,14 +326,28 @@ public sealed class AudioVisualEngine : IDisposable
                     ? current + (values[band] - current) * 0.62
                     : current * 0.74 + values[band] * 0.26;
 
-                var f1 = fMin * Math.Pow(fMax / fMin, (band + 1) / (double)Bands);
-                if (f1 <= 160) bassRaw = Math.Max(bassRaw, _spectrum[band]);
+                if (_bandUpperHz[band] <= 160) bassRaw = Math.Max(bassRaw, _spectrum[band]);
             }
             _bass = bassRaw;
             _energy = rms;
         }
 
         DetectBeat(sessionId, now, bassRaw);
+    }
+
+    private void EnsureBandMap(int sampleRate, double fMin, double fMax)
+    {
+        if (_mappedSampleRate == sampleRate) return;
+        _mappedSampleRate = sampleRate;
+        var binWidth = sampleRate / (double)FftSize;
+        for (var band = 0; band < Bands; band++)
+        {
+            var f0 = fMin * Math.Pow(fMax / fMin, band / (double)Bands);
+            var f1 = fMin * Math.Pow(fMax / fMin, (band + 1) / (double)Bands);
+            _bandStart[band] = Math.Clamp((int)(f0 / binWidth), 1, FftSize / 2 - 1);
+            _bandEnd[band] = Math.Clamp((int)Math.Ceiling(f1 / binWidth), _bandStart[band] + 1, FftSize / 2);
+            _bandUpperHz[band] = f1;
+        }
     }
 
     // Bass onset against a slow-moving average; beats are queued for the UI.

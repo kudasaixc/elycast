@@ -7,12 +7,13 @@ add_library(ElyFlow.Native SHARED
     src/ElyFlowRenderer.cpp
     src/NvidiaFrucAdapter.cpp
     src/NvidiaRuntimeLoader.cpp
+    src/SystemMediaTransport.cpp
 )
 
 target_compile_features(ElyFlow.Native PRIVATE cxx_std_20)
 target_compile_definitions(ElyFlow.Native PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX ELYFLOW_NATIVE_EXPORTS)
 target_include_directories(ElyFlow.Native PUBLIC include)
-target_link_libraries(ElyFlow.Native PRIVATE d3d11 dxgi opengl32 user32 gdi32 avrt)
+target_link_libraries(ElyFlow.Native PRIVATE d3d11 d3dcompiler dxgi opengl32 user32 gdi32 avrt runtimeobject shell32 ole32 propsys)
 
 set(NVOF_SDK_ROOT "${CMAKE_CURRENT_LIST_DIR}/../NVIDIA-Optical-Flow-SDK-5.0.7/Optical_Flow_SDK_5.0.7" CACHE PATH "NVIDIA Optical Flow SDK root")
 find_path(NVOFFRUC_INCLUDE_DIR

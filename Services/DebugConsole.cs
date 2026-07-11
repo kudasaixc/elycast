@@ -20,6 +20,10 @@ public static class DebugConsole
 
     private const int SW_HIDE = 0, SW_SHOW = 5, SW_RESTORE = 9;
 
+    /// <summary>Console accent (banner, prompt, cube…), kept in sync with the
+    /// UI accent colour by ThemeManager.</summary>
+    public static ConsoleColor AccentColor { get; set; } = ConsoleColor.Magenta;
+
     private static readonly object _lock = new();
     private static bool _visible = true;
     private static readonly Dictionary<string, (string desc, Func<string[], string?> handler)> _commands = new();
@@ -91,17 +95,17 @@ public static class DebugConsole
     public static void RunBootSequence(double seconds, Action initializationWork)
     {
         Console.Clear();
-        Console.ForegroundColor = ConsoleColor.Magenta;
+        Console.ForegroundColor = AccentColor;
         foreach (var line in Banner) Console.WriteLine(line);
         Console.ResetColor();
 
         var tasks = new[]
         {
             "Initialisation du runtime WPF",
-            "PrÃ©paration des backends vidÃ©o",
+            "Préparation des backends vidéo",
             "Préparation du cache vidéo",
             "Lecture des profils utilisateur",
-            "Application du thème (pitch black · violet)",
+            "Application du thème (pitch black + accent)",
             "Démarrage de l'interface"
         };
 
@@ -130,7 +134,7 @@ public static class DebugConsole
         while (!workDone && sw.Elapsed.TotalSeconds < seconds + 8) Thread.Sleep(50);
 
         Console.Clear();
-        Console.ForegroundColor = ConsoleColor.Magenta;
+        Console.ForegroundColor = AccentColor;
         foreach (var line in Banner) Console.WriteLine(line);
         Console.ResetColor();
         Success("Système prêt. L'interface est lancée.");
@@ -151,7 +155,7 @@ public static class DebugConsole
             for (int y = 0; y < H; y++)
             {
                 // cube column
-                Console.ForegroundColor = ConsoleColor.Magenta;
+                Console.ForegroundColor = AccentColor;
                 Console.Write("   " + new string(buf, y * W, W));
 
                 // task / log column
@@ -172,13 +176,13 @@ public static class DebugConsole
                     int barLen = 40;
                     int filled = (int)(progress * barLen);
                     Console.Write("   ");
-                    Console.ForegroundColor = ConsoleColor.Magenta;
+                    Console.ForegroundColor = AccentColor;
                     Console.Write("[");
-                    Console.ForegroundColor = ConsoleColor.Magenta;
+                    Console.ForegroundColor = AccentColor;
                     Console.Write(new string('█', filled));
                     Console.ForegroundColor = ConsoleColor.DarkGray;
                     Console.Write(new string('░', barLen - filled));
-                    Console.ForegroundColor = ConsoleColor.Magenta;
+                    Console.ForegroundColor = AccentColor;
                     Console.Write($"] {(int)(progress * 100),3}%   ");
                 }
                 else
@@ -268,7 +272,7 @@ public static class DebugConsole
     public static void Warn(string msg) => Write("WARN", msg, ConsoleColor.Yellow);
     public static void Error(string msg) => Write("ERR ", msg, ConsoleColor.Red);
     public static void Debug(string msg) => Write("DBG ", msg, ConsoleColor.DarkGray);
-    public static void Step(string msg) => Write("STEP", msg, ConsoleColor.Magenta);
+    public static void Step(string msg) => Write("STEP", msg, AccentColor);
 
     /// <summary>
     /// Logs a full exception report: type, message, complete stack trace and the
@@ -330,7 +334,7 @@ public static class DebugConsole
 
     private static void WritePrompt()
     {
-        Console.ForegroundColor = ConsoleColor.Magenta;
+        Console.ForegroundColor = AccentColor;
         Console.Write("ely> ");
         Console.ForegroundColor = ConsoleColor.White;
     }
@@ -408,7 +412,7 @@ public static class DebugConsole
         RegisterCommand("clear", "Efface la console", _ => { Console.Clear(); return null; });
         RegisterCommand("banner", "Réaffiche la bannière ElyCast", _ =>
         {
-            Console.ForegroundColor = ConsoleColor.Magenta;
+            Console.ForegroundColor = AccentColor;
             foreach (var l in Banner) Console.WriteLine(l);
             Console.ResetColor();
             return null;
@@ -425,7 +429,7 @@ public static class DebugConsole
                 {
                     Console.SetCursorPosition(0, 0);
                     var buf = RenderCube(44, 22, a);
-                    Console.ForegroundColor = ConsoleColor.Magenta;
+                    Console.ForegroundColor = AccentColor;
                     for (int y = 0; y < 22; y++) Console.WriteLine("   " + new string(buf, y * 44, 44));
                     Console.ResetColor();
                 }
@@ -433,7 +437,7 @@ public static class DebugConsole
             }
             return null;
         });
-        RegisterCommand("version", "Affiche la version", _ => "ElyCast TV Player v2.1 — WPF / IVideoBackend / mpv+VLC");
+        RegisterCommand("version", "Affiche la version", _ => "ElyCast v1.1 — WPF / IVideoBackend / mpv+VLC");
         RegisterCommand("time", "Heure courante", _ => DateTime.Now.ToString("F"));
         RegisterCommand("console", "console hide | show | front", args =>
         {

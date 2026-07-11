@@ -1,0 +1,361 @@
+﻿<Window x:Class="Elysium_Cast_IPTV.OnboardingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ElyCast" Icon="Assets/ElyCast.ico"
+        Height="700" Width="1020" MinHeight="620" MinWidth="900"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        ResizeMode="CanResize"
+        Background="{DynamicResource AppBackground}"
+        FontFamily="{StaticResource UiFont}"
+        Foreground="{DynamicResource TextBrush}"
+        MouseLeftButtonDown="Window_Drag">
+
+    <!-- Same chromeless setup as MainWindow: without this, WindowStyle=None
+         still paints the default white non-client strip at the top. -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="6"
+                      CornerRadius="0" GlassFrameThickness="0" UseAeroCaptionButtons="False"/>
+    </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <!-- Big selectable option card (connection method, backend…). -->
+        <!-- ToggleButton does not inherit the window Foreground through its
+             default theme style: set it explicitly or the titles render black. -->
+        <Style x:Key="OptionCard" TargetType="ToggleButton">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="Margin" Value="0,0,14,14"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="bd" CornerRadius="16" Padding="18,16"
+                                Background="{StaticResource FieldBrush}"
+                                BorderBrush="{DynamicResource FieldStroke}" BorderThickness="1.5">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentABrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentABrush}"/>
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource HoverFaintBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Small multi-select chip (content preferences). -->
+        <Style x:Key="Chip" TargetType="ToggleButton">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="Margin" Value="0,0,10,10"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="bd" CornerRadius="20" Padding="16,9"
+                                Background="{StaticResource FieldBrush}"
+                                BorderBrush="{DynamicResource FieldStroke}" BorderThickness="1.5">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentABrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource AccentBrush}"/>
+                                <Setter TargetName="bd" Property="BorderBrush" Value="Transparent"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="StepLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Margin" Value="0,0,0,14"/>
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="26">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="250"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ===== LEFT RAIL : progress ===== -->
+        <Border Grid.Column="0" CornerRadius="20" Background="{StaticResource CardBrush}"
+                BorderBrush="{DynamicResource CardStroke}" BorderThickness="1" Padding="22,26">
+            <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="26" Height="26" CornerRadius="8" Background="{DynamicResource AccentBrush}">
+                        <Path Data="M 5,3 L 12,8 L 5,13 Z" Fill="White" Stretch="Uniform"
+                              Width="10" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" FontSize="15" FontWeight="Bold">
+                        ELY<Run Foreground="{DynamicResource AccentBBrush}">CAST</Run>
+                    </TextBlock>
+                </StackPanel>
+                <TextBlock Text="Configuration initiale" Margin="0,8,0,26" FontSize="12"
+                           Foreground="{DynamicResource MutedBrush}"/>
+
+                <StackPanel x:Name="StepList">
+                    <TextBlock Style="{StaticResource StepLabel}" Text="1 · Ton profil"/>
+                    <TextBlock Style="{StaticResource StepLabel}" Text="2 · Connexion"/>
+                    <TextBlock Style="{StaticResource StepLabel}" Text="3 · Couleur d'accent"/>
+                    <TextBlock Style="{StaticResource StepLabel}" Text="4 · Tes contenus"/>
+                    <TextBlock Style="{StaticResource StepLabel}" Text="5 · Ton PC &amp; le moteur vidéo"/>
+                    <TextBlock Style="{StaticResource StepLabel}" Text="6 · Installation &amp; tests"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- ===== RIGHT : step content ===== -->
+        <Border Grid.Column="1" Margin="20,0,0,0" CornerRadius="20" Background="{StaticResource CardBrush}"
+                BorderBrush="{DynamicResource CardStroke}" BorderThickness="1" Padding="34,30">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- STEP 1 : profil -->
+                <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+                    <Grid>
+                        <StackPanel x:Name="Step1">
+                            <TextBlock Text="Bienvenue 👋" FontSize="30" FontWeight="Bold"/>
+                            <TextBlock Margin="0,10,0,0" FontSize="14" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource MutedBrush}"
+                                       Text="ElyCast va se configurer pour toi en quelques étapes : ton profil, ta source de contenus, ton style, puis le moteur vidéo adapté à ton PC."/>
+                            <TextBlock Text="COMMENT VEUX-TU QU'ON T'APPELLE ?" Margin="0,34,0,10" FontSize="11"
+                                       FontWeight="SemiBold" Foreground="{DynamicResource MutedBrush}"/>
+                            <TextBox x:Name="NameBox" Style="{StaticResource FieldBox}" MaxWidth="380"
+                                     HorizontalAlignment="Left" Width="380" Tag="Ton prénom ou pseudo"/>
+                        </StackPanel>
+
+                        <!-- STEP 2 : connexion -->
+                        <StackPanel x:Name="Step2" Visibility="Collapsed">
+                            <TextBlock Text="Comment vas-tu regarder ?" FontSize="26" FontWeight="Bold"/>
+                            <TextBlock Margin="0,10,0,24" FontSize="14" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource MutedBrush}"
+                                       Text="Choisis ta méthode principale — tu pourras toujours en changer sur l'écran de connexion."/>
+                            <WrapPanel>
+                                <ToggleButton x:Name="ConnXtream" Style="{StaticResource OptionCard}" Width="240"
+                                              Checked="Connection_Checked" Tag="xtream">
+                                    <StackPanel>
+                                        <TextBlock Text="📡  Xtream Codes" FontSize="16" FontWeight="SemiBold"/>
+                                        <TextBlock Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource MutedBrush}"
+                                                   Text="Compte IPTV avec URL, utilisateur et mot de passe. Live, films, séries et EPG."/>
+                                    </StackPanel>
+                                </ToggleButton>
+                                <ToggleButton x:Name="ConnM3u" Style="{StaticResource OptionCard}" Width="240"
+                                              Checked="Connection_Checked" Tag="m3u">
+                                    <StackPanel>
+                                        <TextBlock Text="📄  Playlist M3U" FontSize="16" FontWeight="SemiBold"/>
+                                        <TextBlock Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource MutedBrush}"
+                                                   Text="Un fichier ou une URL .m3u/.m3u8 qui liste tes chaînes."/>
+                                    </StackPanel>
+                                </ToggleButton>
+                                <ToggleButton x:Name="ConnLocal" Style="{StaticResource OptionCard}" Width="240"
+                                              Checked="Connection_Checked" Tag="local">
+                                    <StackPanel>
+                                        <TextBlock Text="💻  Local uniquement" FontSize="16" FontWeight="SemiBold"/>
+                                        <TextBlock Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource MutedBrush}"
+                                                   Text="Pas d'IPTV : tes vidéos et ta musique locales, directement dans la bibliothèque."/>
+                                    </StackPanel>
+                                </ToggleButton>
+                            </WrapPanel>
+
+                            <!-- Immediate connection: fill the credentials here and ElyCast
+                                 connects by itself once the wizard finishes. -->
+                            <StackPanel x:Name="ObXtreamPanel" Margin="0,8,0,0" MaxWidth="520" HorizontalAlignment="Left">
+                                <TextBlock Text="URL DU SERVEUR" Margin="0,10,0,8" FontSize="11"
+                                           FontWeight="SemiBold" Foreground="{DynamicResource MutedBrush}"/>
+                                <TextBox x:Name="ObUrlBox" Style="{StaticResource FieldBox}" Width="520"
+                                         HorizontalAlignment="Left" Tag="http://exemple.com:8080"/>
+                                <Grid Width="520" HorizontalAlignment="Left">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="12"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="NOM D'UTILISATEUR" Margin="0,14,0,8" FontSize="11"
+                                                   FontWeight="SemiBold" Foreground="{DynamicResource MutedBrush}"/>
+                                        <TextBox x:Name="ObUserBox" Style="{StaticResource FieldBox}" Tag="utilisateur"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="MOT DE PASSE" Margin="0,14,0,8" FontSize="11"
+                                                   FontWeight="SemiBold" Foreground="{DynamicResource MutedBrush}"/>
+                                        <PasswordBox x:Name="ObPassBox" Foreground="{DynamicResource TextBrush}"
+                                                     CaretBrush="{DynamicResource AccentBBrush}" FontSize="14" Height="48"
+                                                     VerticalContentAlignment="Center">
+                                            <PasswordBox.Template>
+                                                <ControlTemplate TargetType="PasswordBox">
+                                                    <Border CornerRadius="12" Background="{StaticResource FieldBrush}"
+                                                            BorderBrush="{DynamicResource FieldStroke}" BorderThickness="1.5"
+                                                            Padding="16,0">
+                                                        <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </PasswordBox.Template>
+                                        </PasswordBox>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                            <StackPanel x:Name="ObM3uPanel" Margin="0,8,0,0" MaxWidth="520"
+                                        HorizontalAlignment="Left" Visibility="Collapsed">
+                                <TextBlock Text="FICHIER OU URL M3U" Margin="0,10,0,8" FontSize="11"
+                                           FontWeight="SemiBold" Foreground="{DynamicResource MutedBrush}"/>
+                                <Grid Width="520" HorizontalAlignment="Left">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="ObM3uBox" Style="{StaticResource FieldBox}"
+                                             Tag="C:\playlist.m3u ou http://…/list.m3u"/>
+                                    <Button Grid.Column="1" Content="Parcourir…" Style="{StaticResource GhostButton}"
+                                            Height="48" Width="110" Margin="8,0,0,0" Click="ObBrowse_Click"/>
+                                </Grid>
+                            </StackPanel>
+                            <StackPanel x:Name="ObTestRow" Orientation="Horizontal" Margin="0,16,0,0">
+                                <Button x:Name="ObTestBtn" Style="{StaticResource GhostButton}" Width="190" Height="42"
+                                        Content="Tester la connexion" Click="ObTestConnection_Click"/>
+                                <TextBlock x:Name="ObTestStatus" Margin="14,0,0,0" MaxWidth="330" VerticalAlignment="Center"
+                                           FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- STEP 3 : accent -->
+                        <StackPanel x:Name="Step3" Visibility="Collapsed">
+                            <TextBlock Text="Ta couleur" FontSize="26" FontWeight="Bold"/>
+                            <TextBlock Margin="0,10,0,24" FontSize="14" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource MutedBrush}"
+                                       Text="Elle teinte toute l'interface — l'aperçu est appliqué en direct."/>
+                            <ItemsControl x:Name="AccentList">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Click="AccentSwatch_Click" Tag="{Binding}" Cursor="Hand"
+                                                Width="56" Height="56" Margin="0,0,12,12">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="bd" CornerRadius="16" BorderThickness="2"
+                                                            BorderBrush="Transparent" Background="{Binding}"/>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="bd" Property="BorderBrush" Value="White"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock x:Name="AccentValue" Margin="0,10,0,0" FontSize="12"
+                                       Foreground="{DynamicResource MutedBrush}" Text="Accent actuel : #FF8B5CF6"/>
+                        </StackPanel>
+
+                        <!-- STEP 4 : contenus -->
+                        <StackPanel x:Name="Step4" Visibility="Collapsed">
+                            <TextBlock Text="Tu streames quoi, surtout ?" FontSize="26" FontWeight="Bold"/>
+                            <TextBlock Margin="0,10,0,24" FontSize="14" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource MutedBrush}"
+                                       Text="Plusieurs choix possibles. ElyCast s'en sert pour prérégler l'upscaling, ELYCOLOR et la fluidité."/>
+                            <WrapPanel>
+                                <ToggleButton x:Name="IntSport" Style="{StaticResource Chip}" Tag="sport" Content="⚽ Sport &amp; live"/>
+                                <ToggleButton x:Name="IntAnime" Style="{StaticResource Chip}" Tag="anime" Content="🎌 Animé"/>
+                                <ToggleButton x:Name="IntCinema" Style="{StaticResource Chip}" Tag="cinema" Content="🎬 Films &amp; séries"/>
+                                <ToggleButton x:Name="IntTv" Style="{StaticResource Chip}" Tag="tv" Content="📺 Télévision générale"/>
+                                <ToggleButton x:Name="IntMusic" Style="{StaticResource Chip}" Tag="music" Content="🎵 Musique"/>
+                                <ToggleButton x:Name="IntDocs" Style="{StaticResource Chip}" Tag="docs" Content="🌍 Documentaires"/>
+                            </WrapPanel>
+                        </StackPanel>
+
+                        <!-- STEP 5 : hardware + moteur -->
+                        <StackPanel x:Name="Step5" Visibility="Collapsed">
+                            <TextBlock Text="Ton PC" FontSize="26" FontWeight="Bold"/>
+                            <TextBlock x:Name="HwSummary" Margin="0,12,0,18" FontSize="13" TextWrapping="Wrap"
+                                       FontFamily="Consolas" Foreground="{DynamicResource TextBrush}"
+                                       Text="Analyse du matériel en cours…"/>
+                            <Border CornerRadius="14" Background="{DynamicResource HoverFaintBrush}" Padding="16,12" Margin="0,0,0,18">
+                                <TextBlock x:Name="RecoText" FontSize="13" TextWrapping="Wrap"
+                                           Text="Recommandation en cours…"/>
+                            </Border>
+                            <TextBlock x:Name="ElySmartStageText" Margin="0,0,0,7" FontSize="12" Foreground="{DynamicResource MutedBrush}" Text="ELYSMART prépare l’analyse mesurée…"/>
+                            <ProgressBar x:Name="ElySmartOnboardingProgress" Height="7" Minimum="0" Maximum="100" Visibility="Collapsed"/>
+                            <Button x:Name="ElySmartCancelButton" Content="Annuler l’analyse" Style="{StaticResource GhostButton}" Width="150" Height="36" HorizontalAlignment="Left" Margin="0,9,0,14" Visibility="Collapsed" Click="ElySmartCancel_Click"/>
+                            <Grid MaxWidth="640" HorizontalAlignment="Left">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="220"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Text="Moteur vidéo" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource MutedBrush}"/>
+                                <ComboBox x:Name="EngineCombo" Grid.Row="0" Grid.Column="1" Height="40" Margin="0,0,0,12"
+                                          Style="{StaticResource FieldCombo}">
+                                    <ComboBoxItem Tag="elycore" Content="ELYCORE Renderer (libmpv + D3D11 + VSR/FRUC)"/>
+                                    <ComboBoxItem Tag="rtx-sdk" Content="mpv GPU + RTX Video Super Resolution"/>
+                                    <ComboBoxItem Tag="mpv-gpu" Content="mpv GPU (gpu-next, D3D11)"/>
+                                    <ComboBoxItem Tag="vlc-bitmap" Content="VLC (compatibilité)"/>
+                                </ComboBox>
+                                <CheckBox x:Name="VsrSwitch" Grid.Row="1" Grid.Column="1" Style="{StaticResource Switch}"
+                                          Content="RTX Video Super Resolution" Margin="0,0,0,10"/>
+                                <CheckBox x:Name="FrucSwitch" Grid.Row="2" Grid.Column="1" Style="{StaticResource Switch}"
+                                          Content="ELYFLOW — interpolation NVIDIA FRUC ×2"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- STEP 6 : installation -->
+                        <StackPanel x:Name="Step6" Visibility="Collapsed">
+                            <TextBlock Text="Installation &amp; tests" FontSize="26" FontWeight="Bold"/>
+                            <TextBlock Margin="0,10,0,18" FontSize="14" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource MutedBrush}"
+                                       Text="ElyCast télécharge les dépendances manquantes (libmpv, shaders), vérifie le moteur choisi et teste RTX VSR si nécessaire."/>
+                            <Border CornerRadius="14" Background="{StaticResource FieldBrush}"
+                                    BorderBrush="{DynamicResource FieldStroke}" BorderThickness="1" Padding="14"
+                                    Height="260">
+                                <ScrollViewer x:Name="InstallScroll" VerticalScrollBarVisibility="Auto">
+                                    <TextBlock x:Name="InstallLog" FontFamily="Consolas" FontSize="12"
+                                               TextWrapping="Wrap" Text=""/>
+                                </ScrollViewer>
+                            </Border>
+                            <Button x:Name="InstallBtn" Style="{StaticResource PrimaryButton}" Margin="0,16,0,0"
+                                    HorizontalAlignment="Left" MinWidth="240" Click="Install_Click"
+                                    Content="Lancer l'installation"/>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+
+                <!-- NAV BUTTONS -->
+                <Grid Grid.Row="1" Margin="0,22,0,0">
+                    <Button x:Name="SkipBtn" Style="{StaticResource GhostButton}" HorizontalAlignment="Left"
+                            Width="150" Height="44" Content="Passer" Click="Skip_Click"
+                            ToolTip="Ignorer l'assistant (configuration par défaut)"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button x:Name="BackBtn" Style="{StaticResource GhostButton}" Width="130" Height="44"
+                                Margin="0,0,12,0" Content="Précédent" Click="Back_Click" Visibility="Hidden"/>
+                        <Button x:Name="NextBtn" Style="{StaticResource PrimaryButton}" MinWidth="160" Height="44"
+                                Content="Continuer" Click="Next_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

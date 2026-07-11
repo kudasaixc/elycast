@@ -25,7 +25,7 @@ public sealed class VlcBackend : IVideoBackend
 
         _player.Playing += (_, _) => Playing?.Invoke();
         _player.Paused += (_, _) => Paused?.Invoke();
-        _player.EndReached += (_, _) => { _hasMedia = false; Ended?.Invoke(); };
+        _player.EndReached += (_, _) => { _hasMedia = false; Ended?.Invoke(PlaybackEndReason.NaturalEnd); };
         _player.EncounteredError += (_, _) => { _hasMedia = false; Failed?.Invoke("Impossible de lire ce flux."); };
     }
 
@@ -51,7 +51,7 @@ public sealed class VlcBackend : IVideoBackend
 
     public event Action? Playing;
     public event Action? Paused;
-    public event Action? Ended;
+    public event Action<PlaybackEndReason>? Ended;
     public event Action<string>? Failed;
 
     public void Play(string url)
@@ -64,10 +64,12 @@ public sealed class VlcBackend : IVideoBackend
     public void Resume() => _player.Play();
     public void Pause() => _player.Pause();
 
-    public void Stop()
+    public void Stop(PlaybackEndReason reason = PlaybackEndReason.UserStop)
     {
+        var notify = _hasMedia;
         _player.Stop();
         _hasMedia = false;
+        if (notify) Ended?.Invoke(reason);
     }
 
     public void Clear() => _view.Clear();

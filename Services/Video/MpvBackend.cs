@@ -120,7 +120,7 @@ public sealed class MpvBackend : IVideoBackend
 
     public event Action? Playing;
     public event Action? Paused;
-    public event Action? Ended;
+    public event Action<PlaybackEndReason>? Ended;
     public event Action<string>? Failed;
 
     public void Play(string url)
@@ -163,16 +163,17 @@ public sealed class MpvBackend : IVideoBackend
         Paused?.Invoke();
     }
 
-    public void Stop()
+    public void Stop(PlaybackEndReason reason = PlaybackEndReason.UserStop)
     {
+        var notify = _hasMedia;
         Try(() => _player.ExecuteCommand(["stop"]));
         _hasMedia = false;
-        Ended?.Invoke();
+        if (notify) Ended?.Invoke(reason);
     }
 
     public void Clear()
     {
-        // mpv clears the surface on stop.
+        Try(() => _player.ExecuteCommand(["stop"]));
     }
 
     public void SeekRelative(long deltaMs)
@@ -242,7 +243,7 @@ public sealed class MpvBackend : IVideoBackend
     public void Dispose()
     {
         DebugConsole.Step("mpv: disposition du backend…");
-        try { Stop(); }
+        try { Stop(PlaybackEndReason.Teardown); }
         catch (Exception ex) { DebugConsole.Exception("mpv: échec de l'arrêt pendant Dispose", ex); }
 
         // NOTE: we intentionally do NOT set _view.MediaPlayer = null here. In the

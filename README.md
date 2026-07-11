@@ -21,24 +21,39 @@
 <p align="center">
   <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0078D4?logo=windows11&logoColor=white">
   <img alt=".NET 8" src="https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white">
+  <img alt="ElyCast 1.1" src="https://img.shields.io/badge/ElyCast-1.1-27c4e8">
   <a href="LICENSE"><img alt="License MPL-2.0" src="https://img.shields.io/github/license/kudasaixc/elycast?color=2ea44f"></a>
   <a href="https://github.com/kudasaixc/elycast"><img alt="Open source" src="https://img.shields.io/badge/Open%20Source-GitHub-181717?logo=github"></a>
 </p>
 
 ---
 
+## ElyCast 1.1
+
+Cette version transforme ElyCast en lecteur multimédia adaptatif et consolide son architecture :
+
+- **ELYSMART** détecte la machine, mesure les capacités réellement disponibles, recommande une configuration expliquée et surveille la santé du lecteur avec historique, diagnostic exportable et notifications non intrusives.
+- **Onboarding intelligent** : le premier lancement inclut le profil d’usage, la détection matérielle, le benchmark ELYSMART, les recommandations de renderer et les tests de compatibilité.
+- **Lecteur audio repensé** : visualiseur FFT temps réel, particules, palettes extraites de la pochette ou du fond, backgrounds animés, flou/assombrissement réglables, VSync et cibles jusqu’à 360 FPS.
+- **Métadonnées Windows** : les fichiers audio locaux publient exclusivement leur titre, artiste, album et pochette intégrés dans les contrôles multimédias Windows. Les lives et vidéos ne créent aucune session audio système.
+- **Identité ElyCast** : nouvel exécutable `ElyCast.exe`, icône officielle, AppUserModelID Windows et raccourci Shell cohérent.
+- **Architecture maintenable** : MainWindow est découpée par domaines, ELYSMART et l’audio disposent de services dédiés, et les politiques de fin de lecture sont testées indépendamment.
+- **Corrections de stabilité** : restauration correcte des catalogues après les paramètres, terminaison/reconnexion déterministes, visualiseur non bloquant et fallbacks préservés lorsque les runtimes optionnels sont absents.
+
 ## ElyCast, simplement
 
 | Vous voulez… | ElyCast s’en charge |
 | --- | --- |
+| 🚀 **Démarrer sans rien régler** | Au premier lancement, un assistant détecte votre CPU/GPU, télécharge les dépendances (libmpv, shaders), teste RTX VSR et propose le moteur vidéo adapté à vos contenus. |
+| 🧠 **Optimiser automatiquement ElyCast** | ELYSMART benchmarke la machine, explique ses recommandations et surveille les baisses durables de performances sans réagir aux pics ponctuels. |
 | 📺 **Regarder votre IPTV** | Connectez un compte Xtream Codes ou une playlist M3U, puis retrouvez le direct par catégories. |
 | 🎬 **Profiter des films et séries** | Parcourez la VOD, les saisons et les épisodes dans la même interface. |
 | 💻 **Lire vos propres fichiers** | Ajoutez vos vidéos ou musiques locales et gardez-les dans une bibliothèque intégrée. |
 | ✨ **Améliorer une image moyenne** | Activez RTX VSR, les shaders GPU ou Magpie pour gagner en netteté et en définition. |
 | 🌊 **Rendre les mouvements plus fluides** | ELYFLOW peut créer des images intermédiaires avec NVIDIA Optical Flow. |
 | 🎨 **Ajuster le rendu à votre goût** | ELYCOLOR permet de régler couleurs, contraste, gamma et traitements d’image. |
-| 🔊 **Donner plus d’ampleur au son** | ELYSOUND+ propose égalisation, dynamique, clarté et spatialisation. |
-| 🎵 **Écouter de la musique avec un vrai visuel** | Le visualiseur réagit au spectre, aux basses et aux rythmes avec des particules animées. |
+| 🔊 **Donner plus d’ampleur au son** | ELYSOUND+ applique un graphe libmpv stable : EQ en dB réels, dynamique douce, plafond anti-clipping et largeur stéréo pilotés à chaud sans seek ni rechargement. |
+| 🎵 **Écouter de la musique avec un vrai visuel** | Le visualiseur réagit au spectre, aux basses et aux rythmes avec des particules animées, une palette liée à la pochette et des fonds personnalisables. |
 
 Vous n’avez pas à choisir le moteur parfait avant chaque lecture : ElyCast sélectionne le backend demandé et bascule automatiquement vers une solution compatible si une technologie n’est pas disponible.
 
@@ -69,6 +84,7 @@ Vous n’avez pas à choisir le moteur parfait avant chaque lecture : ElyCast s�
 - Musique locale : MP3, FLAC, WAV, AAC, M4A, OGG, Opus, WMA, ALAC, AIFF et APE
 - Pistes audio multiples et sous-titres sélectionnables
 - Favoris, reprise de lecture, catégories et recherche
+- Contrôles multimédias Windows pour l’audio local avec titre, artiste, album et pochette
 
 > ElyCast ne fournit aucun abonnement, chaîne ou contenu. Vous devez utiliser un service et des médias auxquels vous êtes autorisé à accéder.
 
@@ -139,14 +155,18 @@ Les outils téléchargés par l’application — libmpv, shaders et Magpie — 
 
 ```text
 App.xaml(.cs)                 Démarrage, ressources et styles globaux
-MainWindow.xaml(.cs)          Interface principale et orchestration des fonctions
+MainWindow.xaml               Shell visuel principal et surfaces du player
+MainWindow.*.cs               Coordination par domaine : catalogue, playback, settings, OSD et fonctions ELY
 Models/                       Réglages, profils et modèles multimédias
-Services/                     IPTV, état, thème, console et analyse audio
+Services/Audio/               Métadonnées, analyse FFT et contrôle ELYSOUND+
+Services/ElySmart/            Benchmark, scoring, recommandations et supervision runtime
+Services/                     IPTV, état, thème, console et services Windows
 Services/Video/               Backends mpv/VLC, HWND, shaders et interop natif
 native/ElyFlow.Native/        Renderer ELYCORE C++20 et adaptateur NVIDIA FRUC
 Assets/                       Ressources visuelles de l’application
 docs/images/                  Images utilisées par la documentation
 scripts/                      Commandes de build reproductibles
+tests/                        Régressions audio/playback et probe RTX VSR
 AGENTS.md                     Carte technique complète et invariants du projet
 ```
 

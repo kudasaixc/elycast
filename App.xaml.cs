@@ -10,6 +10,12 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // The onboarding wizard is the first (and briefly the only) window: with
+        // the default OnLastWindowClose policy, closing it shuts the app down
+        // before MainWindow is even created. Stay explicit until the real main
+        // window exists.
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
         // 0) load persisted settings + favourites, apply the accent colour
         StateStore.Load();
         ThemeManager.Apply(StateStore.Settings.AccentColor);
@@ -27,7 +33,25 @@ public partial class App : Application
 
         // 3) show the UI
         DispatcherUnhandledException += OnUnhandledException;
+
+        // First run: the onboarding wizard collects the profile, connection
+        // method, accent colour and content tastes, detects the hardware and
+        // downloads the missing dependencies before the player appears.
+        if (!StateStore.Settings.OnboardingCompleted)
+        {
+            DebugConsole.Step("Premier lancement détecté — ouverture de l'assistant de configuration…");
+            try { new OnboardingWindow().ShowDialog(); }
+            catch (Exception ex)
+            {
+                DebugConsole.Exception("Onboarding : échec de l'assistant, configuration par défaut", ex);
+                StateStore.Settings.OnboardingCompleted = true;
+                StateStore.Save();
+            }
+        }
+
         var window = new MainWindow();
+        MainWindow = window;
+        ShutdownMode = ShutdownMode.OnMainWindowClose;
         window.Show();
 
         // 4) interactive command interpreter

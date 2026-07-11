@@ -155,9 +155,33 @@ struct ElyFlowRendererState
     uint32_t vsrInputHeight;
     uint32_t vsrContentWidth;
     uint32_t vsrContentHeight;
+    int32_t vsrAvailable;       // NVIDIA extension reports this GPU as capable
+    int32_t vsrRequested;       // managed control plane requested native VSR
+    int32_t vsrEffective;       // driver reports VSR in use for this processor
+    int32_t vsrLevel;           // NVIDIA driver quality level (0..4), when valid
+    uint32_t adapterVendorId;   // DXGI vendor (0x10DE = NVIDIA)
+    uint32_t vsrInputFormat;    // DXGI_FORMAT numeric value
+    uint32_t vsrOutputFormat;   // DXGI_FORMAT numeric value
+    uint32_t vsrColorSpace;     // DXGI_COLOR_SPACE_TYPE numeric value
+    uint64_t targetRebuilds;    // render-target topology rebuilds (VSR/size/layout)
+    uint64_t swapchainResizes;  // actual ResizeBuffers calls
+    uint64_t vsrFramesProcessed;// successful VideoProcessorBlt frames while VSR effective
+    uint64_t vsrFramesBypassed; // source frames for which RTX VSR was not effective
+    uint64_t videoProcessorFrames;// successful D3D11 VideoProcessorBlt frames (generic or RTX)
+    uint64_t presentErrors;     // failed swapchain Present calls
+    int32_t videoProcessorCreated;
+    int32_t vsrExtensionEnabled;
+    int32_t vsrConverterActive; // GPU RGB->NV12 conversion pass feeding the VP
+    int32_t lastConvStatus;     // HRESULT of the RGB->NV12 conversion Blt
+    uint32_t vsrQueryRaw;       // raw NVIDIA GetStreamExtension payload (last query)
+    double vsrBltAvgMs;         // GPU time of the VSR Blt (timestamp queries, EWMA)
+    char adapterName[128];
+    char driverVersion[64];
     char message[512];
 };
 
+constexpr uint32_t ELYFLOW_RENDERER_ABI_VERSION = 5;
+ELYFLOW_API uint32_t ElyFlowRenderer_GetAbiVersion();
 // Checks D3D11 + WGL_NV_DX_interop2 availability without mpv (cheap, safe).
 ELYFLOW_API int32_t ElyFlowRenderer_Preflight(char* message, int32_t messageSize);
 // mpvHandle = mpv_handle* (client API), hwnd = target child window.
@@ -172,3 +196,12 @@ ELYFLOW_API void ElyFlowRenderer_ConfigureVsr(int32_t enable, uint32_t sourceWid
 ELYFLOW_API void ElyFlowRenderer_ConfigureFruc(int32_t enable);
 ELYFLOW_API int32_t ElyFlowRenderer_GetState(ElyFlowRendererState* state);
 ELYFLOW_API void ElyFlowRenderer_Destroy();
+
+// Windows System Media Transport Controls (SMTC) bridge. The native ABI keeps
+// WinRT projection dependencies out of the managed WPF application.
+using ElyMediaTransportCommand = void(__stdcall*)(int32_t command, void* context);
+ELYFLOW_API void* ElyMediaTransport_Create(void* hwnd, ElyMediaTransportCommand callback, void* context);
+ELYFLOW_API void ElyMediaTransport_Destroy(void* instance);
+ELYFLOW_API int32_t ElyMediaTransport_SetMedia(void* instance, const wchar_t* title, const wchar_t* artist,
+                                               const wchar_t* album, const wchar_t* artworkPath);
+ELYFLOW_API void ElyMediaTransport_SetState(void* instance, int32_t hasMedia, int32_t playing);

@@ -1,4 +1,6 @@
 using System.Windows;
+using Elysium_Cast_IPTV.Models;
+using Elysium_Cast_IPTV.Services.Audio;
 
 namespace Elysium_Cast_IPTV.Services.Video;
 
@@ -15,13 +17,13 @@ public interface IVideoBackend : IDisposable
 
     event Action? Playing;
     event Action? Paused;
-    event Action? Ended;
+    event Action<PlaybackEndReason>? Ended;
     event Action<string>? Failed;
 
     void Play(string url);
     void Resume();
     void Pause();
-    void Stop();
+    void Stop(PlaybackEndReason reason = PlaybackEndReason.UserStop);
     void Clear();
     void SeekRelative(long deltaMs);
     void SetFullscreen(bool fullscreen);
@@ -30,6 +32,12 @@ public interface IVideoBackend : IDisposable
     void SetSubtitleTrack(int id);
     IReadOnlyList<VideoTrack> GetAudioTracks();
     void SetAudioTrack(int id);
+}
+
+/// <summary>Optional mpv-owned ELYSOUND+ control plane.</summary>
+public interface IElySoundBackend
+{
+    ElySoundApplyResult ApplyElySound(ElySoundProfile profile, bool enabled, bool virtualSurround);
 }
 
 public sealed record VideoStats(

@@ -12,6 +12,7 @@ namespace Elysium_Cast_IPTV.Services.Video;
 /// </summary>
 public static class ElyFlowRendererInterop
 {
+    public const uint RequiredAbiVersion = 5;
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
     public struct RendererState
     {
@@ -36,9 +37,33 @@ public static class ElyFlowRendererInterop
         public uint VsrInputHeight;
         public uint VsrContentWidth;
         public uint VsrContentHeight;
+        public int VsrAvailable;
+        public int VsrRequested;
+        public int VsrEffective;
+        public int VsrLevel;
+        public uint AdapterVendorId;
+        public uint VsrInputFormat;
+        public uint VsrOutputFormat;
+        public uint VsrColorSpace;
+        public ulong TargetRebuilds;
+        public ulong SwapchainResizes;
+        public ulong VsrFramesProcessed;
+        public ulong VsrFramesBypassed;
+        public ulong VideoProcessorFrames;
+        public ulong PresentErrors;
+        public int VideoProcessorCreated;
+        public int VsrExtensionEnabled;
+        public int VsrConverterActive;
+        public int LastConvStatus;
+        public uint VsrQueryRaw;
+        public double VsrBltAvgMs;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string AdapterName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)] public string DriverVersion;
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 512)] public string Message;
     }
 
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate uint GetAbiVersionFn();
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int PreflightFn(byte[] message, int messageSize);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -57,6 +82,7 @@ public static class ElyFlowRendererInterop
     private static readonly object Sync = new();
     private static bool _probed;
     private static PreflightFn? _preflight;
+    private static GetAbiVersionFn? _getAbiVersion;
     private static CreateFn? _create;
     private static SetSourceFpsFn? _setSourceFps;
     private static ConfigureVsrFn? _configureVsr;
@@ -151,22 +177,30 @@ public static class ElyFlowRendererInterop
                 }
 
                 _preflight = GetDelegate<PreflightFn>(module, "ElyFlowRenderer_Preflight");
+                _getAbiVersion = GetDelegate<GetAbiVersionFn>(module, "ElyFlowRenderer_GetAbiVersion");
                 _create = GetDelegate<CreateFn>(module, "ElyFlowRenderer_Create");
                 _setSourceFps = GetDelegate<SetSourceFpsFn>(module, "ElyFlowRenderer_SetSourceFps");
                 _configureVsr = GetDelegate<ConfigureVsrFn>(module, "ElyFlowRenderer_ConfigureVsr");
                 _configureFruc = GetDelegate<ConfigureFrucFn>(module, "ElyFlowRenderer_ConfigureFruc");
                 _getState = GetDelegate<GetStateFn>(module, "ElyFlowRenderer_GetState");
                 _destroy = GetDelegate<DestroyFn>(module, "ElyFlowRenderer_Destroy");
-                if (_create != null && _setSourceFps != null && _configureVsr != null &&
+                var abiVersion = _getAbiVersion?.Invoke() ?? 0;
+                if (abiVersion == RequiredAbiVersion && _create != null && _setSourceFps != null && _configureVsr != null &&
                     _configureFruc != null && _getState != null && _destroy != null && _preflight != null)
                 {
                     DebugConsole.Info("ELYCORE: renderer natif chargé -> " + path);
                     return;
                 }
 
-                _preflight = null; _create = null; _setSourceFps = null; _configureVsr = null;
+                _preflight = null; _getAbiVersion = null; _create = null; _setSourceFps = null; _configureVsr = null;
                 _configureFruc = null; _getState = null; _destroy = null;
-                _loadError = path + " -> exports ElyFlowRenderer_* absents (DLL trop ancienne ?).";
+                _loadError = abiVersion switch
+                {
+                    0 => path + $" -> ABI ELYCORE absente (DLL antérieure à ABI v{RequiredAbiVersion}).",
+                    not RequiredAbiVersion => path + $" -> ABI ELYCORE incompatible (DLL v{abiVersion}, application v{RequiredAbiVersion}).",
+                    _ => path + $" -> ABI ELYCORE v{abiVersion}, mais exports obligatoires incomplets."
+                };
+                FreeLibrary(module);
             }
 
             if (string.IsNullOrEmpty(_loadError)) _loadError = "ElyFlow.Native.dll introuvable.";
@@ -184,4 +218,7 @@ public static class ElyFlowRendererInterop
 
     [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Ansi)]
     private static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool FreeLibrary(IntPtr hModule);
 }
