@@ -15,16 +15,30 @@ public sealed class LocalLibraryService
     public static bool IsAudio(string path) => AudioExtensions.Contains(Path.GetExtension(path));
     public static bool IsVideo(string path) => VideoExtensions.Contains(Path.GetExtension(path));
 
-    public Task<IReadOnlyList<PlayItem>> ImportFolderAsync(string folder, bool audio, CancellationToken ct = default) =>
+    public Task<IReadOnlyList<PlayItem>> ImportFolderAsync(
+        string folder, bool audio, IProgress<int>? progress = null, CancellationToken ct = default) =>
         Task.Run<IReadOnlyList<PlayItem>>(() =>
         {
             Func<string, bool> predicate = audio ? IsAudio : IsVideo;
-            var result = new List<PlayItem>();
-            foreach (var path in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).Where(predicate))
-            {
-                ct.ThrowIfCancellationRequested();
-                result.Add(audio ? CreateAudioItem(path) : PlayItem.FromLocalFile(path));
-            }
+
+            // Enumeration is materialised first so we can parallelise the expensive
+            // part (tag parsing = many small reads + decode, one file at a time
+            // otherwise). Independent per-file work → PLINQ scales it across cores
+            // and hides I/O latency; ordering is imposed at the end anyway.
+            var files = Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
+                .Where(predicate).ToList();
+
+            var done = 0;
+            var query = files.AsParallel().WithCancellation(ct)
+                .WithDegreeOfParallelism(Math.Min(Environment.ProcessorCount, 8))
+                .Select(path =>
+                {
+                    var item = audio ? CreateAudioItem(path) : PlayItem.FromLocalFile(path);
+                    if (progress != null) progress.Report(Interlocked.Increment(ref done));
+                    return item;
+                });
+
+            var result = query.ToList();
             return audio
                 ? result.OrderBy(i => i.AlbumArtist ?? i.Artist ?? "Artiste inconnu", StringComparer.CurrentCultureIgnoreCase)
                     .ThenBy(i => i.Album ?? "Album inconnu", StringComparer.CurrentCultureIgnoreCase)
@@ -37,7 +51,9 @@ public sealed class LocalLibraryService
     private static PlayItem CreateAudioItem(string path)
     {
         var item = PlayItem.FromLocalFile(path);
-        var metadata = AudioMetadataReader.Read(path, item.Name);
+        // readCover: false — the cover is fetched lazily and cached by CoverArtCache
+        // when a thumbnail is actually shown, so we skip decoding it here.
+        var metadata = AudioMetadataReader.Read(path, item.Name, readCover: false);
         item.Name = metadata.Title;
         item.Artist = metadata.Artist;
         item.Album = metadata.Album;

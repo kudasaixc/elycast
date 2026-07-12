@@ -203,6 +203,23 @@ public partial class MainWindow
         RemoveLocalItem(item);
     }
 
+    private void ResetAudioLibrary_Click(object sender, RoutedEventArgs e)
+    {
+        if (_localAudioItems.Count == 0)
+        {
+            ShowOverlay("La bibliothèque audio est déjà vide", spinning: false);
+            return;
+        }
+        var answer = MessageBox.Show(this,
+            $"Retirer les {_localAudioItems.Count} titre(s) de la bibliothèque audio ?\n" +
+            "Les fichiers ne sont pas supprimés du disque.",
+            "Réinitialiser la bibliothèque", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (answer != MessageBoxResult.Yes) return;
+
+        CloseMusicPanel();
+        RemoveLocalItems(_localAudioItems.ToList());
+    }
+
     private void RemoveLocalItem(PlayItem item)
     {
         RemoveLocalItems([item]);
@@ -868,7 +885,9 @@ public partial class MainWindow
 
         var now = _audioVisualStopwatch.Elapsed.TotalSeconds;
         var settings = StateStore.Settings;
-        var frameInterval = 1.0 / Math.Clamp(settings.AudioVisualizerTargetFps, 30, 360);
+        // 0 = illimité : aucune limite de cadence (intervalle nul = pas de gate).
+        var frameInterval = settings.AudioVisualizerTargetFps > 0
+            ? 1.0 / Math.Clamp(settings.AudioVisualizerTargetFps, 30, 480) : 0.0;
         // Phase accumulator instead of elapsed-time skipping. On a 360 Hz
         // display, a naive 240 FPS gate accepts every other VSync (=180 FPS);
         // this alternates 1/2 display intervals and converges to exactly 240.

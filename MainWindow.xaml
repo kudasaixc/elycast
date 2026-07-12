@@ -423,6 +423,10 @@
                                         <Button Grid.Column="3" Content="Vider" Height="28" FontSize="11" Padding="8,0"
                                                 Style="{StaticResource GhostButton}" ToolTip="Vider la file d’attente" Click="ClearQueue_Click"/>
                                     </Grid>
+                                    <Button x:Name="ResetAudioLibraryButton" Content="Réinitialiser la bibliothèque" Height="32"
+                                            FontSize="11" Margin="0,8,0,0" Style="{StaticResource GhostButton}"
+                                            ToolTip="Retirer tous les titres importés (les fichiers ne sont pas supprimés du disque)"
+                                            Click="ResetAudioLibrary_Click"/>
                                 </StackPanel>
                                 <StackPanel x:Name="VideoLibraryActions" Visibility="Collapsed"/>
                                 <Button x:Name="RemoveLocalButton" Content="Retirer de la liste" Style="{StaticResource GhostButton}"
@@ -1271,7 +1275,7 @@
                                                     <TextBlock Text="FPS cible du visualiseur" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}"/>
                                                     <ComboBox x:Name="AudioFpsCombo" Grid.Column="1" Height="40" Style="{StaticResource FieldCombo}" SelectionChanged="AudioVisualizerSetting_Changed">
                                                         <ComboBoxItem Tag="30" Content="30 FPS (économie)"/><ComboBoxItem Tag="60" Content="60 FPS"/>
-                                                        <ComboBoxItem Tag="120" Content="120 FPS"/><ComboBoxItem Tag="144" Content="144 FPS"/><ComboBoxItem Tag="240" Content="240 FPS"/><ComboBoxItem Tag="360" Content="360 FPS"/>
+                                                        <ComboBoxItem Tag="120" Content="120 FPS"/><ComboBoxItem Tag="144" Content="144 FPS"/><ComboBoxItem Tag="240" Content="240 FPS"/><ComboBoxItem Tag="360" Content="360 FPS"/><ComboBoxItem Tag="480" Content="480 FPS"/><ComboBoxItem Tag="0" Content="Illimité"/>
                                                     </ComboBox>
                                                 </Grid>
                                                 <TextBlock Text="Nombre de particules" Margin="0,18,0,5" Foreground="{DynamicResource TextBrush}"/>

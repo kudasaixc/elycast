@@ -16,7 +16,12 @@ public sealed record AudioMetadata(
 /// <summary>Single source of truth for local audio tags used by the UI and SMTC.</summary>
 public static class AudioMetadataReader
 {
-    public static AudioMetadata Read(string path, string fallbackTitle)
+    /// <param name="readCover">
+    /// When false, the embedded picture bytes are not materialised. Bulk import
+    /// uses this: cover art is loaded lazily and memoised by <see cref="CoverArtCache"/>
+    /// at display time, so extracting full-res artwork here is pure wasted work.
+    /// </param>
+    public static AudioMetadata Read(string path, string fallbackTitle, bool readCover = true)
     {
         try
         {
@@ -27,7 +32,7 @@ public static class AudioMetadataReader
             var album = Clean(tag.Album);
             var albumArtist = Clean(tag.JoinedAlbumArtists);
             var genre = Clean(tag.JoinedGenres);
-            var picture = tag.Pictures.FirstOrDefault(p => p.Data?.Data is { Length: > 0 });
+            var picture = readCover ? tag.Pictures.FirstOrDefault(p => p.Data?.Data is { Length: > 0 }) : null;
             return new AudioMetadata(
                 embeddedTitle ?? fallbackTitle,
                 artist,

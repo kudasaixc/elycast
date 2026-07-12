@@ -55,7 +55,17 @@ public partial class MainWindow
         LocalImportButton.Content = "Analyse en cours…";
         try
         {
-            var imported = await _localLibrary.ImportFolderAsync(dialog.FolderName, audio);
+            // Throttled UI updates: the parallel import fires one report per file,
+            // but we only refresh the button label a few times per second.
+            var lastTick = 0L;
+            var progress = new Progress<int>(count =>
+            {
+                var now = Environment.TickCount64;
+                if (now - lastTick < 120) return;
+                lastTick = now;
+                LocalImportButton.Content = $"Analyse… {count} fichier(s)";
+            });
+            var imported = await _localLibrary.ImportFolderAsync(dialog.FolderName, audio, progress);
             var target = audio ? _localAudioItems : _localVideoItems;
             var before = target.Count;
             LocalLibraryService.MergeInto(target, imported);
