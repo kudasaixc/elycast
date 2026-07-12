@@ -355,7 +355,7 @@ namespace
 
     void RefreshSourceCadence(Renderer& r, double observedDelta)
     {
-        const double fps = r.sourceFpsHint.load(std::memory_order_relaxed);
+        const double fps = r.sourceFpsHint.load();
         if (std::isfinite(fps) && fps >= 5.0 && fps <= 240.0)
         {
             r.frameInterval = 1.0 / fps;
@@ -375,7 +375,7 @@ namespace
     void WaitUntil(Renderer& r, double deadline)
     {
         const double remaining = deadline - QpcSeconds();
-        if (remaining <= 0 || r.quit.load(std::memory_order_relaxed)) return;
+        if (remaining <= 0 || r.quit.load()) return;
 
         if (r.waitTimer)
         {
@@ -1065,13 +1065,13 @@ float2 PsChroma(VSOut i) : SV_Target
     bool EnsureTargets(Renderer& r, uint32_t w, uint32_t h)
     {
         if (w == 0 || h == 0) return false;
-        const uint32_t sourceWidth = r.sourceWidthHint.load(std::memory_order_relaxed);
-        const uint32_t sourceHeight = r.sourceHeightHint.load(std::memory_order_relaxed);
+        const uint32_t sourceWidth = r.sourceWidthHint.load();
+        const uint32_t sourceHeight = r.sourceHeightHint.load();
         // AudioCore+ must render in swapchain coordinates. Feeding it through
         // the video VSR source-size/aspect-fit path letterboxes the scene and
         // makes its WPF overlay coordinates impossible to align.
-        const bool upscaleRequested = !r.audioCoreScene.load(std::memory_order_relaxed) &&
-            r.vsrWanted.load(std::memory_order_relaxed) &&
+        const bool upscaleRequested = !r.audioCoreScene.load() &&
+            r.vsrWanted.load() &&
             sourceWidth > 0 && sourceHeight > 0 &&
             (sourceWidth < w || sourceHeight < h) &&
             r.vsrVideoDevice && r.vsrVideoContext;
@@ -1187,7 +1187,7 @@ float2 PsChroma(VSOut i) : SV_Target
                 r.state.vsrContentWidth = r.vsrActive ? r.vsrContentWidth : 0;
                 r.state.vsrContentHeight = r.vsrActive ? r.vsrContentHeight : 0;
                 r.state.vsrAvailable = r.vsrAvailable ? 1 : 0;
-                r.state.vsrRequested = r.vsrWanted.load(std::memory_order_relaxed) ? 1 : 0;
+                r.state.vsrRequested = r.vsrWanted.load() ? 1 : 0;
                 r.state.vsrEffective = r.vsrEffective ? 1 : 0;
                 r.state.vsrLevel = static_cast<int32_t>(r.vsrLevel);
                 r.state.adapterVendorId = r.adapterVendorId;
@@ -1229,7 +1229,7 @@ float2 PsChroma(VSOut i) : SV_Target
             return;
         r.context->CopyResource(backBuffer, tex);
         backBuffer->Release();
-        const UINT syncInterval = r.audioCoreScene.load(std::memory_order_relaxed) && r.audioCore.VSync() ? 1u : 0u;
+        const UINT syncInterval = r.audioCoreScene.load() && r.audioCore.VSync() ? 1u : 0u;
         const HRESULT hr = r.swapChain->Present(syncInterval, 0);
         std::lock_guard lock(r.stateMutex);
         if (FAILED(hr))
@@ -1407,9 +1407,9 @@ float2 PsChroma(VSOut i) : SV_Target
         bool previousAudioScene = false;
         double audioNextPresent = 0.0;
         double audioInterval = 1.0 / 240.0;
-        while (!r.quit.load(std::memory_order_relaxed))
+        while (!r.quit.load())
         {
-            const bool audioScene = r.audioCoreScene.load(std::memory_order_relaxed);
+            const bool audioScene = r.audioCoreScene.load();
             if (audioScene != previousAudioScene)
             {
                 r.havePrevious = false;
@@ -1439,7 +1439,7 @@ float2 PsChroma(VSOut i) : SV_Target
             {
                 WaitForSingleObject(r.wakeEvent, 50);
             }
-            if (r.quit.load(std::memory_order_relaxed)) break;
+            if (r.quit.load()) break;
 
             const uint64_t flags = r.mpvApi.Update(r.renderContext);
             const bool hasMpvFrame = (flags & MPV_RENDER_UPDATE_FRAME) != 0;
@@ -1531,8 +1531,8 @@ float2 PsChroma(VSOut i) : SV_Target
                 HRESULT vsrStatus = S_OK;
                 if (!RunVsr(r, vsrStatus))
                 {
-                    r.failedVsrSourceWidth = r.sourceWidthHint.load(std::memory_order_relaxed);
-                    r.failedVsrSourceHeight = r.sourceHeightHint.load(std::memory_order_relaxed);
+                    r.failedVsrSourceWidth = r.sourceWidthHint.load();
+                    r.failedVsrSourceHeight = r.sourceHeightHint.load();
                     r.failedVsrOutputWidth = w;
                     r.failedVsrOutputHeight = h;
                     std::lock_guard lock(r.stateMutex);
@@ -1580,7 +1580,7 @@ float2 PsChroma(VSOut i) : SV_Target
             // only built once the target size stayed stable for 250 ms so
             // resize storms and zaps do not stack expensive NvOFFRUCCreate
             // calls (each one froze presentation and read as a black blink).
-            const bool wantFruc = r.frucWanted.load(std::memory_order_relaxed) && !audioScene;
+            const bool wantFruc = r.frucWanted.load() && !audioScene;
             if (!wantFruc && frucInit)
             {
                 ElyFlow_Shutdown();
@@ -1757,7 +1757,7 @@ int32_t ElyFlowRenderer_Create(void* mpvHandle, void* hwnd, int32_t enableFruc)
     auto* r = new Renderer();
     r->mpv = static_cast<mpv_handle*>(mpvHandle);
     r->target = static_cast<HWND>(hwnd);
-    r->frucWanted.store(enableFruc != 0, std::memory_order_relaxed);
+    r->frucWanted.store(enableFruc != 0);
     r->state.structSize = sizeof(ElyFlowRendererState);
     r->wakeEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
 
@@ -1814,16 +1814,16 @@ void ElyFlowRenderer_SetSourceFps(double sourceFps)
 
     std::lock_guard lock(g_rendererMutex);
     if (g_renderer)
-        g_renderer->sourceFpsHint.store(sourceFps, std::memory_order_relaxed);
+        g_renderer->sourceFpsHint.store(sourceFps);
 }
 
 void ElyFlowRenderer_ConfigureVsr(int32_t enable, uint32_t sourceWidth, uint32_t sourceHeight)
 {
     std::lock_guard lock(g_rendererMutex);
     if (!g_renderer) return;
-    g_renderer->sourceWidthHint.store(sourceWidth, std::memory_order_relaxed);
-    g_renderer->sourceHeightHint.store(sourceHeight, std::memory_order_relaxed);
-    g_renderer->vsrWanted.store(enable != 0, std::memory_order_relaxed);
+    g_renderer->sourceWidthHint.store(sourceWidth);
+    g_renderer->sourceHeightHint.store(sourceHeight);
+    g_renderer->vsrWanted.store(enable != 0);
     {
         std::lock_guard stateLock(g_renderer->stateMutex);
         g_renderer->state.vsrRequested = enable != 0 ? 1 : 0;
@@ -1835,7 +1835,7 @@ void ElyFlowRenderer_ConfigureFruc(int32_t enable)
 {
     std::lock_guard lock(g_rendererMutex);
     if (!g_renderer) return;
-    g_renderer->frucWanted.store(enable != 0, std::memory_order_relaxed);
+    g_renderer->frucWanted.store(enable != 0);
     if (g_renderer->wakeEvent) SetEvent(g_renderer->wakeEvent);
 }
 
@@ -1843,7 +1843,7 @@ int32_t ElyAudioCore_SetScene(int32_t enabled)
 {
     std::lock_guard lock(g_rendererMutex);
     if (!g_renderer) return ELYFLOW_RENDERER_ALREADY_ACTIVE;
-    g_renderer->audioCoreScene.store(enabled != 0, std::memory_order_relaxed);
+    g_renderer->audioCoreScene.store(enabled != 0);
     if (g_renderer->wakeEvent) SetEvent(g_renderer->wakeEvent);
     return ELYFLOW_RENDERER_OK;
 }

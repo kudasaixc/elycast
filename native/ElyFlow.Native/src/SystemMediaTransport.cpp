@@ -15,7 +15,7 @@
 #include <knownfolders.h>
 #include <propkey.h>
 #include <propvarutil.h>
-#include <new>
+#include <memory>
 #include <string>
 
 #define RETURN_IF_FAILED(expression) do { const HRESULT returnHr = (expression); if (FAILED(returnHr)) return returnHr; } while (false)
@@ -76,6 +76,14 @@ void EnsureAppIdentity(HWND hwnd)
 class MediaTransport final
 {
 public:
+    MediaTransport() = default;
+    // Owns COM registrations + the RoInitialize apartment: non-copyable and
+    // non-movable so the destructor's teardown can never run twice.
+    MediaTransport(const MediaTransport&) = delete;
+    MediaTransport& operator=(const MediaTransport&) = delete;
+    MediaTransport(MediaTransport&&) = delete;
+    MediaTransport& operator=(MediaTransport&&) = delete;
+
     HRESULT Initialize(HWND hwnd, ElyMediaTransportCommand callback, void* context)
     {
         callback_ = callback;
@@ -197,17 +205,17 @@ private:
 void* ElyMediaTransport_Create(void* hwnd, ElyMediaTransportCommand callback, void* context)
 {
     if (!hwnd || !callback) return nullptr;
-    auto* instance = new (std::nothrow) MediaTransport();
-    if (!instance) return nullptr;
+    auto instance = std::make_unique<MediaTransport>();
     if (FAILED(instance->Initialize(static_cast<HWND>(hwnd), callback, context)))
-    {
-        delete instance;
-        return nullptr;
-    }
-    return instance;
+        return nullptr; // unique_ptr tears the partial instance down for us
+    return instance.release(); // ownership crosses the C ABI as an opaque handle
 }
 
-void ElyMediaTransport_Destroy(void* instance) { delete static_cast<MediaTransport*>(instance); }
+void ElyMediaTransport_Destroy(void* instance)
+{
+    // Re-adopt the handle so its lifetime ends through RAII, not a bare delete.
+    std::unique_ptr<MediaTransport>(static_cast<MediaTransport*>(instance));
+}
 
 int32_t ElyMediaTransport_SetMedia(void* instance, const wchar_t* title, const wchar_t* artist,
                                   const wchar_t* album, const wchar_t* artworkPath)
