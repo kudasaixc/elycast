@@ -18,6 +18,21 @@ public partial class App : Application
 
         // 0) load persisted settings + favourites, apply the accent colour
         StateStore.Load();
+        // Opt-in renderer validation runs must be reproducible on a clean
+        // machine and must not persist test preferences into the user's state.
+        // The diagnostic media hook below already scopes the process to a local
+        // file; this companion selector bypasses onboarding and pins ELYCORE.
+        var diagnosticFile = Environment.GetEnvironmentVariable("ELYCAST_DIAGNOSTIC_FILE");
+        var diagnosticAudioRenderer = Environment.GetEnvironmentVariable("ELYCAST_DIAGNOSTIC_AUDIO_RENDERER");
+        if (!string.IsNullOrWhiteSpace(diagnosticFile) &&
+            diagnosticAudioRenderer is "classic" or "audiocore")
+        {
+            StateStore.SuppressSaves = true;
+            StateStore.Settings.OnboardingCompleted = true;
+            StateStore.Settings.PreferredConnection = "local";
+            StateStore.Settings.VideoBackend = "elycore";
+            StateStore.Settings.AudioVisualizerRenderer = diagnosticAudioRenderer;
+        }
         ThemeManager.Apply(StateStore.Settings.AccentColor);
 
         // 1) bring up the debug console immediately

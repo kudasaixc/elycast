@@ -113,8 +113,10 @@ public sealed class LocalLibraryService
                     };
                 }).ToList();
 
-            default: // artists
-                return tracks.GroupBy(t => t.Artist ?? t.AlbumArtist ?? "Artiste inconnu", StringComparer.CurrentCultureIgnoreCase)
+            default: // artists (a collaboration belongs to every performer group)
+                return tracks.SelectMany(track => AudioMetadataWriter.SplitList(track.Artist ?? track.AlbumArtist ?? "Artiste inconnu")
+                        .Select(artist => (Artist: artist, Track: track)))
+                    .GroupBy(pair => pair.Artist, pair => pair.Track, StringComparer.CurrentCultureIgnoreCase)
                     .Select(g =>
                     {
                         var albums = g.Select(t => t.Album).Where(a => a != null).Distinct(StringComparer.CurrentCultureIgnoreCase).Count();

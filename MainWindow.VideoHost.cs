@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -84,11 +85,20 @@ public partial class MainWindow
         OsdBottomChrome.Padding = new Thickness(20, 28, 20, 16);
         OsdBottomChrome.Margin = new Thickness(0);
 
-        var offset = GetVideoBottomLetterboxDip();
-        if (WindowState == WindowState.Maximized && !_isFullscreen)
-            offset += Math.Max(GetTaskbarBottomReserveDip(), 56);
+        // The overlay window already matches VideoStage exactly. Reserving the
+        // taskbar or the video's letterbox here lifts the whole HUD into the
+        // picture and leaves an empty strip below it. The transport chrome must
+        // stay attached to the player's bottom edge in every window state.
+        OsdBottomOffset.Y = 0;
 
-        OsdBottomOffset.Y = -Math.Min(offset, Math.Max(0, VideoStage.ActualHeight - 96));
+        // At compact player widths the geometrically-centred transport would
+        // overlap the independent left/right control groups. Give it a full
+        // row of its own; wide layouts keep the single-line composition.
+        var compact = VideoStage.ActualWidth < 1180;
+        Grid.SetRow(OsdCenterTransportControls, 0);
+        Grid.SetRow(OsdLeftTransportControls, compact ? 1 : 0);
+        Grid.SetRow(OsdRightTransportControls, compact ? 1 : 0);
+        OsdCenterTransportControls.Margin = compact ? new Thickness(0, 0, 0, 8) : new Thickness(0);
     }
 
     private double GetTaskbarBottomReserveDip()

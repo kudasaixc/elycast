@@ -112,7 +112,7 @@ public partial class MainWindow
             if (_current != null && IsAudioOnlyItem(_current))
                 AudioVisualizerLayer.Visibility = Visibility.Visible;
         }
-        else if (ItemList.SelectedItem is PlayItem c && c.Kind != PlayItemKind.Series) Play(c);
+        else if (ItemList.Visibility == Visibility.Visible && ItemList.SelectedItem is PlayItem c && c.Kind != PlayItemKind.Series) Play(c);
         else if (_current != null) Play(_current);
     }
 
@@ -132,6 +132,9 @@ public partial class MainWindow
         if (_videoBackend?.HasMedia == true)
             _videoBackend.Stop(PlaybackEndReason.UserStop);
     }
+
+    private void PreviousMedia_Click(object sender, RoutedEventArgs e) => Zap(-1);
+    private void NextMedia_Click(object sender, RoutedEventArgs e) => Zap(1);
 
     private void Volume_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
@@ -245,8 +248,8 @@ public partial class MainWindow
         UpdateSkipButtons(_videoBackend.LengthMs, t);
     }
 
-    private void SkipBack_Click(object sender, RoutedEventArgs e) => SeekRelative(-30_000);
-    private void SkipFwd_Click(object sender, RoutedEventArgs e) => SeekRelative(30_000);
+    private void SkipBack_Click(object sender, RoutedEventArgs e) => SeekRelative(-15_000);
+    private void SkipFwd_Click(object sender, RoutedEventArgs e) => SeekRelative(15_000);
 
     private void UpdateSkipButtons(long lengthMs, long positionMs)
     {
@@ -258,8 +261,8 @@ public partial class MainWindow
         }
 
         // Avoid the annoying trap at the beginning: no "-30" button until it can do useful work.
-        SkipBackBtn.Visibility = positionMs >= 30_000 ? Visibility.Visible : Visibility.Collapsed;
-        SkipFwdBtn.Visibility = positionMs <= lengthMs - 30_000 ? Visibility.Visible : Visibility.Collapsed;
+        SkipBackBtn.Visibility = positionMs >= 15_000 ? Visibility.Visible : Visibility.Collapsed;
+        SkipFwdBtn.Visibility = positionMs <= lengthMs - 15_000 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private static string Fmt(long ms)
@@ -514,6 +517,12 @@ public partial class MainWindow
 
         var bpm = _audioEngine.EstimatedBpm > 0 ? $"≈ {_audioEngine.EstimatedBpm:0}" : "détection…";
         var analysis = _audioEngine.HasAnalysis ? "FFT temps réel (thread dédié)" : "indisponible (format)";
+        var audioCore = WantsAudioCore && CanUseAudioCore && ElyAudioCoreInterop.Available
+            ? ElyAudioCoreInterop.GetStats() : default;
+        var visualFps = audioCore.Active != 0 ? audioCore.ActualFps : _audioActualFps;
+        var renderLine = audioCore.Active != 0
+            ? $"Render GPU : {audioCore.GpuFrameMs:0.00} ms/frame\n"
+            : $"Render CPU : {AudioSurface.AverageRenderTimeMs:0.00} ms/frame\n";
 
         return
             $"Backend    : {_videoBackend?.Name}\n" +
@@ -523,9 +532,10 @@ public partial class MainWindow
             $"Bitrate    : {bitrate}\n" +
             $"Analyse    : {analysis}\n" +
             $"FFT réel   : {_audioEngine.ActualAnalysisRateHz:0.0} Hz\n" +
-            $"FPS visuel : {(_audioActualFps > 0 ? _audioActualFps.ToString("0.0", CultureInfo.InvariantCulture) : "mesure…")} " +
+            $"Renderer   : {(audioCore.Active != 0 ? "ELYCAST AudioCore+" : "Classique (WPF)")}\n" +
+            $"FPS visuel : {(visualFps > 0 ? visualFps.ToString("0.0", CultureInfo.InvariantCulture) : "mesure…")} " +
             $"(cible {StateStore.Settings.AudioVisualizerTargetFps}, VSync {(StateStore.Settings.AudioVisualizerVSync ? "ON" : "OFF")})\n" +
-            $"Render CPU : {AudioSurface.AverageRenderTimeMs:0.00} ms/frame\n" +
+            renderLine +
             $"Basses     : {Gauge(_audioBassEnergy)}\n" +
             $"Énergie    : {Gauge(_audioFullEnergy)}\n" +
             $"BPM        : {bpm}\n" +

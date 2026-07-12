@@ -5,6 +5,7 @@ project(ElyFlow.Native LANGUAGES CXX)
 add_library(ElyFlow.Native SHARED
     src/ElyFlowNative.cpp
     src/ElyFlowRenderer.cpp
+    src/ElyAudioCoreScene.cpp
     src/NvidiaFrucAdapter.cpp
     src/NvidiaRuntimeLoader.cpp
     src/SystemMediaTransport.cpp

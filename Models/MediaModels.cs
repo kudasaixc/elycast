@@ -139,6 +139,14 @@ public class PlayItem : System.ComponentModel.INotifyPropertyChanged
     [JsonIgnore]
     public string TrackNumberLabel => TrackNumber > 0 ? TrackNumber.ToString() : Initial;
 
+    private string? _displayTrackNumberLabel;
+    [JsonIgnore]
+    public string DisplayTrackNumberLabel
+    {
+        get => _displayTrackNumberLabel ?? TrackNumberLabel;
+        set { if (_displayTrackNumberLabel != value) { _displayTrackNumberLabel = value; PropertyChanged?.Invoke(this, new(nameof(DisplayTrackNumberLabel))); } }
+    }
+
     [JsonIgnore]
     public string DurationLabel
     {

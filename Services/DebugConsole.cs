@@ -25,6 +25,7 @@ public static class DebugConsole
     public static ConsoleColor AccentColor { get; set; } = ConsoleColor.Magenta;
 
     private static readonly object _lock = new();
+    private static bool _consoleAvailable;
     private static bool _visible = true;
     private static readonly Dictionary<string, (string desc, Func<string[], string?> handler)> _commands = new();
 
@@ -70,19 +71,23 @@ public static class DebugConsole
         }
         catch { /* ignore */ }
 
-        AllocConsole();
+        try
+        {
+            AllocConsole();
 
-        // Re-bind the standard streams so Console.ReadLine / WriteLine work in
-        // a process that was not launched from a console.
-        var stdout = new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true };
-        Console.SetOut(stdout);
-        Console.SetIn(new StreamReader(Console.OpenStandardInput()));
-        try { Console.OutputEncoding = Encoding.UTF8; } catch { /* ignore */ }
-
-        Console.Title = "ElyCast — Debug Console";
-        Console.CursorVisible = false;
-        try { Console.SetWindowSize(Math.Min(110, Console.LargestWindowWidth),
-                                    Math.Min(36, Console.LargestWindowHeight)); } catch { }
+            // Re-bind the standard streams so Console.ReadLine / WriteLine work
+            // in a process that was not launched from a console.
+            var stdout = new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true };
+            Console.SetOut(stdout);
+            Console.SetIn(new StreamReader(Console.OpenStandardInput()));
+            try { Console.OutputEncoding = Encoding.UTF8; } catch { /* ignore */ }
+            try { Console.Title = "ElyCast — Debug Console"; } catch { }
+            try { Console.CursorVisible = false; } catch { }
+            try { Console.SetWindowSize(Math.Min(110, Console.LargestWindowWidth),
+                                        Math.Min(36, Console.LargestWindowHeight)); } catch { }
+            _consoleAvailable = true;
+        }
+        catch { _consoleAvailable = false; }
 
         RegisterBuiltins();
     }
@@ -94,6 +99,12 @@ public static class DebugConsole
     /// </summary>
     public static void RunBootSequence(double seconds, Action initializationWork)
     {
+        if (!_consoleAvailable)
+        {
+            try { initializationWork(); }
+            catch (Exception ex) { Error(ex.Message); }
+            return;
+        }
         Console.Clear();
         Console.ForegroundColor = AccentColor;
         foreach (var line in Banner) Console.WriteLine(line);
@@ -347,6 +358,7 @@ public static class DebugConsole
 
     public static void StartCommandLoop()
     {
+        if (!_consoleAvailable) return;
         var t = new Thread(() =>
         {
             while (true)

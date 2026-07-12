@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
 using Elysium_Cast_IPTV.Services;
 using Elysium_Cast_IPTV.Services.Audio;
 using Microsoft.Win32;
@@ -43,7 +44,7 @@ public partial class MetadataEditorWindow : Window
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape) { DialogResult = false; return; }
-        if (e.Key == Key.Enter && Keyboard.FocusedElement is not System.Windows.Controls.Button)
+        if (e.Key == Key.Enter && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
             Save_Click(sender, e);
     }
 
@@ -64,14 +65,20 @@ public partial class MetadataEditorWindow : Window
                 MessageBox.Show(this, "Cette image est illisible.", "Métadonnées", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
-            _newCoverBytes = bytes;
-            _newCoverMime = Path.GetExtension(dialog.FileName).ToLowerInvariant() switch
-            {
-                ".png" => "image/png",
-                ".webp" => "image/webp",
-                ".bmp" => "image/bmp",
-                _ => "image/jpeg"
-            };
+            using var sourceStream = new MemoryStream(bytes);
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.StreamSource = sourceStream;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            using var jpeg = new MemoryStream();
+            var frame = BitmapFrame.Create(bitmap);
+            var encoder = new JpegBitmapEncoder { QualityLevel = 92 };
+            encoder.Frames.Add(frame);
+            encoder.Save(jpeg);
+            _newCoverBytes = jpeg.ToArray();
+            _newCoverMime = "image/jpeg";
             _removeCover = false;
             CoverImage.Source = preview;
             RemoveCoverBtn.IsEnabled = true;

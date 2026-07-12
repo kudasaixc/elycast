@@ -153,6 +153,43 @@
                 </Setter>
             </Style>
 
+            <!-- ============ COMPACT AUDIO ACTION TOGGLE ============ -->
+            <Style x:Key="AudioActionToggle" TargetType="ToggleButton">
+                <Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/>
+                <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Height" Value="30"/>
+                <Setter Property="Padding" Value="11,0"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ToggleButton">
+                            <Border x:Name="bg" CornerRadius="15" Background="{StaticResource CardBrush}"
+                                    BorderBrush="{DynamicResource CardStroke}" BorderThickness="1"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="bg" Property="Background" Value="{DynamicResource HoverFaintBrush}"/>
+                                    <Setter TargetName="bg" Property="BorderBrush" Value="{DynamicResource AccentSoftBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="bg" Property="Background" Value="{DynamicResource HighlightBrush}"/>
+                                    <Setter TargetName="bg" Property="BorderBrush" Value="{DynamicResource AccentABrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="bg" Property="Opacity" Value="0.78"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!-- ============ ICON BUTTON (round) ============ -->
             <Style x:Key="IconButton" TargetType="Button">
                 <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>

@@ -532,6 +532,8 @@ public partial class MainWindow : Window
 
     private void Disconnect_Click(object sender, RoutedEventArgs e)
     {
+        CloseSeriesPanel();
+        CloseMusicPanel();
         _connectCts?.Cancel();
         _sectionCts?.Cancel();
         _seriesCts?.Cancel();
@@ -753,14 +755,57 @@ public partial class MainWindow : Window
         if (SearchBox.IsKeyboardFocusWithin) return;
 
         if (e.Key == Key.Space) { PlayPause_Click(this, new RoutedEventArgs()); e.Handled = true; }
-        else if (SeekArea.Visibility == Visibility.Visible && e.Key == Key.Left) { SeekRelative(-30_000); ShowOsd(); e.Handled = true; }
-        else if (SeekArea.Visibility == Visibility.Visible && e.Key == Key.Right) { SeekRelative(30_000); ShowOsd(); e.Handled = true; }
+        else if (SeekArea.Visibility == Visibility.Visible && e.Key == Key.Left) { SeekRelative(-15_000); ShowOsd(); e.Handled = true; }
+        else if (SeekArea.Visibility == Visibility.Visible && e.Key == Key.Right) { SeekRelative(15_000); ShowOsd(); e.Handled = true; }
         else if (StateStore.Settings.ZapWithArrows && e.Key == Key.Up) { Zap(-1); e.Handled = true; }
         else if (StateStore.Settings.ZapWithArrows && e.Key == Key.Down) { Zap(1); e.Handled = true; }
-        else if (e.Key == Key.Enter && ItemList.SelectedItem is PlayItem c)
+        else if (e.Key == Key.Enter && ItemList.Visibility == Visibility.Visible && ItemList.SelectedItem is PlayItem c)
         {
             if (c.Kind == PlayItemKind.Series) OpenSeries(c); else Play(c);
         }
+    }
+
+    private void OverlayRoot_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_videoBackend?.HasMedia != true || IsPanelOpen()) return;
+        if (FindInteractiveAncestor(e.OriginalSource as DependencyObject)) return;
+        var point = e.GetPosition(OverlayRoot);
+        if (point.X < OverlayRoot.ActualWidth * 0.2 || point.X > OverlayRoot.ActualWidth * 0.8
+            || point.Y < OverlayRoot.ActualHeight * 0.15 || point.Y > OverlayRoot.ActualHeight * 0.78) return;
+
+        var wasPlaying = _videoBackend.IsPlaying;
+        PlayPause_Click(this, new RoutedEventArgs());
+        ShowCenterTransportFeedback(showPause: wasPlaying);
+        e.Handled = true;
+    }
+
+    private static bool FindInteractiveAncestor(DependencyObject? source)
+    {
+        for (var current = source; current != null; current = VisualTreeHelper.GetParent(current))
+            // ComboBoxItem is hosted in a separate Popup visual tree, so walking
+            // upward from it never reaches the owning ComboBox.
+            if (current is ButtonBase or Slider or ComboBox or ComboBoxItem or TextBox) return true;
+        return false;
+    }
+
+    private void ShowCenterTransportFeedback(bool showPause)
+    {
+        CenterTransportIcon.Data = Geometry.Parse(showPause
+            ? "M 4,2 L 11,2 L 11,18 L 4,18 Z M 15,2 L 22,2 L 22,18 L 15,18 Z"
+            : "M 5,2 L 21,10 L 5,18 Z");
+        CenterTransportFeedback.BeginAnimation(OpacityProperty, null);
+        CenterTransportScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        CenterTransportScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        CenterTransportFeedback.Opacity = 1;
+        CenterTransportScale.ScaleX = CenterTransportScale.ScaleY = 0.82;
+
+        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var scale = new DoubleAnimation(0.82, 1.08, TimeSpan.FromMilliseconds(420)) { EasingFunction = easing };
+        CenterTransportScale.BeginAnimation(ScaleTransform.ScaleXProperty, scale);
+        CenterTransportScale.BeginAnimation(ScaleTransform.ScaleYProperty, scale);
+        CenterTransportFeedback.BeginAnimation(OpacityProperty,
+            new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(520))
+            { BeginTime = TimeSpan.FromMilliseconds(180), EasingFunction = easing });
     }
 
     // ============ OVERLAY / SPINNER ============

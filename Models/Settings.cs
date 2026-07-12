@@ -24,6 +24,7 @@ public class Settings
     public bool AudioBackgroundSlowZoom { get; set; } = true;
     public bool AudioBackgroundSlowPan { get; set; } = true;
     public bool AudioBackgroundMouseParallax { get; set; } = false;
+    public double AudioBackgroundParallaxIntensity { get; set; } = 1.0;
     public bool AudioPaletteAutomatic { get; set; } = true;
     public bool AudioParticleAdaptiveColors { get; set; } = true;
     public int AudioVisualizerTargetFps { get; set; } = 60;
@@ -31,7 +32,10 @@ public class Settings
     public int AudioParticleCount { get; set; } = 96;
     public double AudioParticleDistance { get; set; } = 1.0;
     public bool AudioVisualizerShake { get; set; } = true;
+    public string AudioVisualizerRenderer { get; set; } = "classic"; // "classic" | "audiocore"
+    public string AudioBrowseMode { get; set; } = "albums";
     public bool ElySmartAutoOptimizeDecorative { get; set; }
+    public bool ElySmartNotificationsEnabled { get; set; } = true;
     public string ElySmartWorkload { get; set; } = "Mixed";
     public List<string> ElySmartIgnoredHealthIssues { get; set; } = new();
 

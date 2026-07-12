@@ -34,7 +34,7 @@ Cette version transforme ElyCast en lecteur multimédia adaptatif et consolide s
 
 - **ELYSMART** détecte la machine, mesure les capacités réellement disponibles, recommande une configuration expliquée et surveille la santé du lecteur avec historique, diagnostic exportable et notifications non intrusives.
 - **Onboarding intelligent** : le premier lancement inclut le profil d’usage, la détection matérielle, le benchmark ELYSMART, les recommandations de renderer et les tests de compatibilité.
-- **Lecteur audio repensé** : visualiseur FFT temps réel, particules, palettes extraites de la pochette ou du fond, backgrounds animés, flou/assombrissement réglables, VSync et cibles jusqu’à 360 FPS.
+- **Lecteur audio repensé** : visualiseur FFT temps réel, particules, palettes extraites de la pochette ou du fond, backgrounds animés, flou/assombrissement réglables, VSync et cibles jusqu’à 360 FPS. Avec ELYCORE, **AudioCore+** porte la même scène en D3D11 — mêmes barres, particules, ondes, couleurs et réglages — avec retour automatique au renderer WPF si le pipeline natif est indisponible.
 - **Bibliothèques locales séparées** : import récursif de dossiers audio classés par artiste, album et genre grâce aux tags, playlists, file d’attente, shuffle/répétition et menu contextuel ; la vidéothèque reste volontairement simple et dédiée à la lecture.
 - **Métadonnées Windows** : les fichiers audio locaux publient exclusivement leur titre, artiste, album et pochette intégrés dans les contrôles multimédias Windows. Les lives et vidéos ne créent aucune session audio système.
 - **Identité ElyCast** : nouvel exécutable `ElyCast.exe`, icône officielle, AppUserModelID Windows et raccourci Shell cohérent.
@@ -54,7 +54,7 @@ Cette version transforme ElyCast en lecteur multimédia adaptatif et consolide s
 | 🌊 **Rendre les mouvements plus fluides** | ELYFLOW peut créer des images intermédiaires avec NVIDIA Optical Flow. |
 | 🎨 **Ajuster le rendu à votre goût** | ELYCOLOR permet de régler couleurs, contraste, gamma et traitements d’image. |
 | 🔊 **Donner plus d’ampleur au son** | ELYSOUND+ applique un graphe libmpv stable : EQ en dB réels, dynamique douce, plafond anti-clipping et largeur stéréo pilotés à chaud sans seek ni rechargement. |
-| 🎵 **Écouter de la musique avec un vrai visuel** | Le visualiseur réagit au spectre, aux basses et aux rythmes avec des particules animées, une palette liée à la pochette et des fonds personnalisables. |
+| 🎵 **Écouter de la musique avec un vrai visuel** | Le visualiseur réagit au spectre, aux basses et aux rythmes avec des particules animées, une palette liée à la pochette et des fonds personnalisables. Le renderer classique WPF et AudioCore+ D3D11 partagent exactement la même simulation et les mêmes réglages. |
 
 Vous n’avez pas à choisir le moteur parfait avant chaque lecture : ElyCast sélectionne le backend demandé et bascule automatiquement vers une solution compatible si une technologie n’est pas disponible.
 
@@ -101,6 +101,8 @@ libmpv
   → NVIDIA FRUC / ELYFLOW (optionnel)
   → présentation DXGI dans le player
 ```
+
+Pour l’audio local, ELYCORE peut remplacer la surface de visualisation WPF par AudioCore+ : l’analyse FFT et la simulation restent communes, puis les primitives résolues sont rasterisées en D3D11 tandis que la pochette, les anneaux et les métadonnées conservent leur composition WPF. FRUC est automatiquement contourné pendant cette scène audio.
 
 | Backend | Fonctionnement | Idéal pour |
 | --- | --- | --- |

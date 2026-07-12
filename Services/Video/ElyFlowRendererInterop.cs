@@ -12,7 +12,7 @@ namespace Elysium_Cast_IPTV.Services.Video;
 /// </summary>
 public static class ElyFlowRendererInterop
 {
-    public const uint RequiredAbiVersion = 5;
+    public const uint RequiredAbiVersion = 10;
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
     public struct RendererState
     {

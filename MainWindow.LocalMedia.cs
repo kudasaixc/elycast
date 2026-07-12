@@ -15,9 +15,12 @@ public partial class MainWindow
 {
     private List<MusicGroup> _musicGroups = new();
     private MusicGroup? _openMusicGroup;
+    private MusicGroup? _menuTargetGroup;
     // Tracks the list playback should advance through (the group the current
     // song was launched from). Null = the whole flat library.
     private List<PlayItem>? _audioPlayContext;
+    private int _audioAutoIndex = -1;
+    private bool _audioPlayingManualQueue;
 
     private string AudioBrowseMode => (AudioBrowseCombo?.SelectedItem as ComboBoxItem)?.Tag as string ?? "albums";
     private bool IsAudioGroupMode => AudioBrowseMode is "albums" or "artists" or "genres" or "playlists";
@@ -76,6 +79,11 @@ public partial class MainWindow
     // ============ BROWSE MODES / GROUPS ============
     private void AudioBrowse_Changed(object sender, SelectionChangedEventArgs e)
     {
+        if (!_initializing)
+        {
+            StateStore.Settings.AudioBrowseMode = AudioBrowseMode;
+            StateStore.Save();
+        }
         if (!_connected || _section != Section.LocalAudio) return;
         CloseMusicPanel();
         ShowSection(Section.LocalAudio);
@@ -139,11 +147,15 @@ public partial class MainWindow
         _openMusicGroup = group;
         MusicPanelKind.Text = group.KindLabel.ToUpperInvariant();
         MusicPanelTitle.Text = group.Name;
-        MusicPanelSubtitle.Text = group.Subtitle;
-        MusicPanelSubtitle.Visibility = string.IsNullOrWhiteSpace(group.Subtitle) ? Visibility.Collapsed : Visibility.Visible;
+        var redundantSubtitle = group.Kind is MusicGroupKind.Genre or MusicGroupKind.Playlist;
+        MusicPanelSubtitle.Text = redundantSubtitle ? "" : group.Subtitle;
+        MusicPanelSubtitle.Visibility = redundantSubtitle || string.IsNullOrWhiteSpace(group.Subtitle) ? Visibility.Collapsed : Visibility.Visible;
         MusicPanelDetail.Text = group.DetailLine;
         MusicPanelCover.Source = group.Cover;
         MusicPanelInitial.Text = group.Initial;
+        for (var i = 0; i < group.Tracks.Count; i++)
+            group.Tracks[i].DisplayTrackNumberLabel = group.Kind == MusicGroupKind.Playlist
+                ? (i + 1).ToString() : group.Tracks[i].TrackNumberLabel;
         MusicTrackList.ItemsSource = null;
         MusicTrackList.ItemsSource = group.Tracks;
 
@@ -166,22 +178,30 @@ public partial class MainWindow
     }
 
     /// <summary>Group targeted by a panel button or a sidebar context menu action.</summary>
-    private MusicGroup? ContextMusicGroup() =>
-        MusicPanel.Visibility == Visibility.Visible ? _openMusicGroup : MusicGroupList.SelectedItem as MusicGroup;
+    private MusicGroup? ContextMusicGroup(object? sender = null)
+    {
+        if (sender is MenuItem && _menuTargetGroup is { } menuTarget)
+        {
+            _menuTargetGroup = null;
+            return menuTarget;
+        }
+        return (sender as FrameworkElement)?.DataContext as MusicGroup
+            ?? (MusicPanel.Visibility == Visibility.Visible ? _openMusicGroup : MusicGroupList.SelectedItem as MusicGroup);
+    }
 
     private void GroupPlay_Click(object sender, RoutedEventArgs e)
     {
-        if (ContextMusicGroup() is { } group) PlayGroupTracks(group.Tracks, shuffle: false);
+        if (ContextMusicGroup(sender) is { } group) PlayGroupTracks(group.Tracks, shuffle: false);
     }
 
     private void GroupShuffle_Click(object sender, RoutedEventArgs e)
     {
-        if (ContextMusicGroup() is { } group) PlayGroupTracks(group.Tracks, shuffle: true);
+        if (ContextMusicGroup(sender) is { } group) PlayGroupTracks(group.Tracks, shuffle: true);
     }
 
     private void GroupQueue_Click(object sender, RoutedEventArgs e)
     {
-        if (ContextMusicGroup() is not { } group) return;
+        if (ContextMusicGroup(sender) is not { } group) return;
         foreach (var track in group.Tracks)
             if (!_audioQueue.Any(q => q.SameAs(track))) _audioQueue.Add(track);
         UpdateQueueLabel();
@@ -193,9 +213,8 @@ public partial class MainWindow
         if (tracks.Count == 0) return;
         var order = shuffle ? tracks.OrderBy(_ => _queueRandom.Next()).ToList() : tracks.ToList();
         _audioPlayContext = order;
-        _audioQueue.Clear();
-        foreach (var track in order.Skip(1)) _audioQueue.Add(track);
-        UpdateQueueLabel();
+        _audioAutoIndex = 0;
+        _audioPlayingManualQueue = false;
         CloseMusicPanel();
         Play(order[0]);
     }
@@ -203,7 +222,7 @@ public partial class MainWindow
     private void MusicTrack_DoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (MusicTrackList.SelectedItem is not PlayItem track) return;
-        _audioPlayContext = _openMusicGroup?.Tracks.ToList();
+        PrepareMusicGroupTrackPlayback(track);
         CloseMusicPanel();
         Play(track);
     }
@@ -211,9 +230,25 @@ public partial class MainWindow
     private void MusicTrackPlay_Click(object sender, RoutedEventArgs e)
     {
         if (ContextAudioItem(sender) is not { } track) return;
-        _audioPlayContext = _openMusicGroup?.Tracks.ToList();
+        PrepareMusicGroupTrackPlayback(track);
         CloseMusicPanel();
         Play(track);
+    }
+
+    private void PrepareMusicGroupTrackPlayback(PlayItem track)
+    {
+        _audioPlayContext = _openMusicGroup?.Tracks.ToList();
+        if (_openMusicGroup is not { } group) return;
+        _audioAutoIndex = group.Tracks.FindIndex(item => item.SameAs(track));
+        _audioPlayingManualQueue = false;
+    }
+
+    private void PrepareVisibleAudioPlayback(PlayItem track)
+    {
+        var visible = _view?.Cast<PlayItem>().Where(IsAudioOnlyItem).ToList() ?? _localAudioItems.ToList();
+        _audioPlayContext = visible;
+        _audioAutoIndex = visible.FindIndex(item => item.SameAs(track));
+        _audioPlayingManualQueue = false;
     }
 
     // ============ PLAYLISTS ============
@@ -234,7 +269,7 @@ public partial class MainWindow
 
     private void DeletePlaylist_Click(object sender, RoutedEventArgs e)
     {
-        if (ContextMusicGroup() is not { Playlist: { } playlist }) return;
+        if (ContextMusicGroup(sender) is not { Playlist: { } playlist }) return;
         StateStore.Current.LocalPlaylists.Remove(playlist);
         StateStore.Save();
         CloseMusicPanel();
@@ -243,9 +278,27 @@ public partial class MainWindow
 
     private void MusicGroupMenu_Opened(object sender, RoutedEventArgs e)
     {
-        var isPlaylist = MusicGroupList.SelectedItem is MusicGroup { Kind: MusicGroupKind.Playlist };
+        _menuTargetGroup = MusicGroupList.SelectedItem as MusicGroup;
+        var isPlaylist = _menuTargetGroup is { Kind: MusicGroupKind.Playlist };
+        ContextRemoveMusicGroup.IsEnabled = _menuTargetGroup?.Tracks.Count > 0;
+        ContextRemoveMusicGroup.Header = _menuTargetGroup is { } group
+            ? $"Retirer {group.Tracks.Count} titre(s) de la bibliothèque"
+            : "Retirer de la bibliothèque";
         ContextPlaylistSeparator.Visibility = isPlaylist ? Visibility.Visible : Visibility.Collapsed;
         ContextDeletePlaylist.Visibility = isPlaylist ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void RemoveMusicGroup_Click(object sender, RoutedEventArgs e)
+    {
+        if (ContextMusicGroup(sender) is not { Tracks.Count: > 0 } group) return;
+        var tracks = group.Tracks.ToList();
+        var answer = MessageBox.Show(this,
+            $"Retirer les {tracks.Count} titre(s) de « {group.Name} » de la bibliothèque locale ?\n\nLes fichiers resteront sur le disque.",
+            "Retirer de la bibliothèque", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (answer != MessageBoxResult.Yes) return;
+
+        CloseMusicPanel();
+        RemoveLocalItems(tracks);
     }
 
     private void AddTrackToPlaylist(PlayItem track, LocalPlaylist playlist)
@@ -309,6 +362,7 @@ public partial class MainWindow
         ContextAddQueue.Visibility = audio ? Visibility.Visible : Visibility.Collapsed;
         ContextAddPlaylist.Visibility = audio ? Visibility.Visible : Visibility.Collapsed;
         ContextEditMeta.Visibility = audio ? Visibility.Visible : Visibility.Collapsed;
+        ContextRemoveLibrary.Visibility = item?.Kind == PlayItemKind.Local ? Visibility.Visible : Visibility.Collapsed;
         if (audio) PopulatePlaylistMenu(ContextAddPlaylist, item);
     }
 
@@ -322,7 +376,7 @@ public partial class MainWindow
     private void PlayNow_Click(object sender, RoutedEventArgs e)
     {
         if (ContextAudioItem(sender) is not { } item) return;
-        if (IsAudioOnlyItem(item)) _audioPlayContext = null;
+        if (IsAudioOnlyItem(item)) PrepareVisibleAudioPlayback(item);
         Play(item);
     }
 
@@ -395,12 +449,14 @@ public partial class MainWindow
         }
 
         LocalLibraryService.RefreshFromFile(item);
+        SynchronizeFavoriteCopy(item);
         SaveLocalLibrary();
         DebugConsole.Info($"Métadonnées enregistrées : {item.Name}");
         ShowOverlay("Métadonnées enregistrées", spinning: false);
 
-        if (_section == Section.LocalAudio)
+        if (_section is Section.LocalAudio or Section.Fav)
         {
+            if (_section == Section.Fav) { ShowSection(Section.Fav); return; }
             var reopen = _openMusicGroup?.Name;
             ShowSection(Section.LocalAudio);
             if (reopen != null && IsAudioGroupMode)
@@ -431,6 +487,7 @@ public partial class MainWindow
             var next = _audioQueue[0];
             _audioQueue.RemoveAt(0);
             UpdateQueueLabel();
+            _audioPlayingManualQueue = true;
             Play(next);
             return true;
         }
@@ -442,9 +499,16 @@ public partial class MainWindow
     {
         var source = GetAudioPlaybackSource();
         if (source.Count == 0) return false;
-        var index = _current == null ? -1 : source.FindIndex(item => item.SameAs(_current));
-        index = _audioShuffle ? _queueRandom.Next(source.Count) : (index + direction + source.Count) % source.Count;
-        Play(source[index]);
+        if (!_audioPlayingManualQueue && _current != null)
+        {
+            var currentIndex = source.FindIndex(item => item.SameAs(_current));
+            if (currentIndex >= 0) _audioAutoIndex = currentIndex;
+        }
+        _audioAutoIndex = _audioShuffle
+            ? _queueRandom.Next(source.Count)
+            : (_audioAutoIndex + direction + source.Count) % source.Count;
+        _audioPlayingManualQueue = false;
+        Play(source[_audioAutoIndex]);
         return true;
     }
 

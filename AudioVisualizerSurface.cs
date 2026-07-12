@@ -16,9 +16,10 @@ namespace Elysium_Cast_IPTV;
 /// </summary>
 public sealed class AudioVisualizerSurface : FrameworkElement
 {
-    private const int BarCount = 112;
+    public const int BarCount = 112;
     private const double InnerRadius = 198;
-    private const int MaxParticleCount = 192;
+    public const int MaxParticleCount = 192;
+    public const int MaxShockwaveCount = 6;
     private const int HueSteps = 32;
     private const int AlphaSteps = 8;
     private const int ThicknessSteps = 10;
@@ -26,6 +27,9 @@ public sealed class AudioVisualizerSurface : FrameworkElement
     // Fixed-size direct caches: no dictionary hashing and no unbounded growth.
     private readonly SolidColorBrush?[,] _brushCache = new SolidColorBrush?[HueSteps, AlphaSteps + 1];
     private readonly Pen?[,,,] _penCache = new Pen?[HueSteps, AlphaSteps + 1, ThicknessSteps, 2];
+    private readonly LinePrimitive[] _renderBars = new LinePrimitive[BarCount];
+    private readonly EllipsePrimitive[] _renderParticles = new EllipsePrimitive[MaxParticleCount];
+    private readonly EllipsePrimitive[] _renderWaves = new EllipsePrimitive[MaxShockwaveCount];
     private static readonly double[] BarCos = Enumerable.Range(0, BarCount).Select(i => Math.Cos(i / (double)BarCount * Math.Tau - Math.PI / 2)).ToArray();
     private static readonly double[] BarSin = Enumerable.Range(0, BarCount).Select(i => Math.Sin(i / (double)BarCount * Math.Tau - Math.PI / 2)).ToArray();
 
@@ -42,6 +46,27 @@ public sealed class AudioVisualizerSurface : FrameworkElement
         public double Age;
         public double Strength;
         public double Hue;
+    }
+
+    /// <summary>
+    /// Resolved WPF drawing primitives. AudioCore+ consumes these exact
+    /// positions, quantized colours and pen widths instead of maintaining a
+    /// second animation simulation that can drift from the classic renderer.
+    /// Coordinates are local DIPs in this element.
+    /// </summary>
+    public struct LinePrimitive
+    {
+        public double X0, Y0, X1, Y1, Thickness;
+        public Color Color;
+        public Pen? Pen;
+    }
+
+    public struct EllipsePrimitive
+    {
+        public double X, Y, RadiusX, RadiusY, Thickness;
+        public Color Color;
+        public SolidColorBrush? Brush;
+        public Pen? Pen;
     }
 
     private readonly double[] _display = new double[AudioVisualEngine.Bands];
@@ -212,34 +237,86 @@ public sealed class AudioVisualizerSurface : FrameworkElement
     protected override void OnRender(DrawingContext dc)
     {
         var renderStarted = Stopwatch.GetTimestamp();
-        if (ActualWidth < 1 || ActualHeight < 1) return;
-        var center = new Point(ActualWidth / 2, ActualHeight / 2);
+        CopyResolvedPrimitives(_renderBars, out var barCount,
+            _renderParticles, out var particleCount, _renderWaves, out var waveCount);
+        for (var i = 0; i < particleCount; i++)
+        {
+            ref var particle = ref _renderParticles[i];
+            dc.DrawEllipse(particle.Brush, null, new Point(particle.X, particle.Y), particle.RadiusX, particle.RadiusY);
+        }
+        for (var i = 0; i < waveCount; i++)
+        {
+            ref var wave = ref _renderWaves[i];
+            dc.DrawEllipse(null, wave.Pen, new Point(wave.X, wave.Y), wave.RadiusX, wave.RadiusY);
+        }
+        for (var i = 0; i < barCount; i++)
+        {
+            ref var bar = ref _renderBars[i];
+            dc.DrawLine(bar.Pen!, new Point(bar.X0, bar.Y0), new Point(bar.X1, bar.Y1));
+        }
+        var elapsed = Stopwatch.GetElapsedTime(renderStarted).TotalMilliseconds;
+        _averageRenderTimeMs = _averageRenderTimeMs <= 0 ? elapsed : _averageRenderTimeMs * 0.94 + elapsed * 0.06;
+    }
 
-        // Particles (under the bars).
-        for (var i = 0; i < Math.Min(ActiveParticleCount, _particles.Length); i++)
+    /// <summary>
+    /// Copies the already-advanced scene using the very same formulas and
+    /// cached WPF styles as <see cref="OnRender"/>. The caller owns the arrays;
+    /// this method performs no allocation and does not advance animation time.
+    /// </summary>
+    public void CopyResolvedPrimitives(
+        LinePrimitive[] bars, out int barCount,
+        EllipsePrimitive[] particles, out int particleCount,
+        EllipsePrimitive[] waves, out int waveCount)
+    {
+        barCount = particleCount = waveCount = 0;
+        if (ActualWidth < 1 || ActualHeight < 1) return;
+
+        var centerX = ActualWidth / 2;
+        var centerY = ActualHeight / 2;
+
+        var activeParticles = Math.Min(Math.Min(ActiveParticleCount, _particles.Length), particles.Length);
+        for (var i = 0; i < activeParticles; i++)
         {
             ref var p = ref _particles[i];
             var opacity = p.Burst ? Math.Clamp(p.Life, 0, 1.0) : Math.Min(0.82, p.BaseOpacity * 0.82);
             var brush = CachedBrush(p.Hue, opacity);
-            var r = p.Size / 2;
-            dc.DrawEllipse(brush, null, new Point(p.X, p.Y), r, r);
+            var radius = p.Size / 2;
+            particles[particleCount++] = new EllipsePrimitive
+            {
+                X = p.X,
+                Y = p.Y,
+                RadiusX = radius,
+                RadiusY = radius,
+                Thickness = 0,
+                Color = brush.Color,
+                Brush = brush
+            };
         }
 
-        // Shockwaves.
-        foreach (var w in _waves)
+        var activeWaves = Math.Min(_waves.Count, waves.Length);
+        for (var i = 0; i < activeWaves; i++)
         {
+            var w = _waves[i];
             var progress = w.Age / 0.65;
             var eased = 1 - (1 - progress) * (1 - progress);
             var radius = InnerRadius * _scale * (0.86 + eased * (1.04 + w.Strength * 0.5));
             var opacity = (0.55 + w.Strength * 0.35) * (1 - progress);
             var pen = CachedPen(w.Hue, opacity, 2.5 + w.Strength * 3.5, rounded: false);
-            dc.DrawEllipse(null, pen, center, radius, radius);
+            waves[waveCount++] = new EllipsePrimitive
+            {
+                X = centerX,
+                Y = centerY,
+                RadiusX = radius,
+                RadiusY = radius,
+                Thickness = pen.Thickness,
+                Color = ((SolidColorBrush)pen.Brush).Color,
+                Pen = pen
+            };
         }
 
-        // Mirrored circular spectrum: bass at the top, treble at the bottom,
-        // identical on both sides — each bar reflects a real frequency band.
+        var count = Math.Min(BarCount, bars.Length);
         var half = _display.Length;
-        for (var i = 0; i < BarCount; i++)
+        for (var i = 0; i < count; i++)
         {
             var mirrored = i < BarCount / 2 ? i : BarCount - 1 - i;
             var band = _display[Math.Min(half - 1, mirrored * half / (BarCount / 2))];
@@ -247,20 +324,23 @@ public sealed class AudioVisualizerSurface : FrameworkElement
             var kick = isBassBar ? _beatPulse : _beatPulse * 0.35;
             var radius = InnerRadius * _scale;
             var length = (12 + band * 118 + _energy * 18 + kick * 46) * _scale;
-
-            var cos = BarCos[i];
-            var sin = BarSin[i];
             var hue = (i * 360.0 / BarCount + _clock * 26) % 360;
             var opacity = 0.70 + Math.Min(0.30, band * 0.48 + kick * 0.28);
-            var thickness = (3.0 + band * 1.6 + kick * 1.6) * Math.Max(0.55, _scale);
-
-            var pen = CachedPen(hue, opacity, thickness, rounded: true);
-            dc.DrawLine(pen,
-                new Point(center.X + cos * radius, center.Y + sin * radius),
-                new Point(center.X + cos * (radius + length), center.Y + sin * (radius + length)));
+            var requestedThickness = (3.0 + band * 1.6 + kick * 1.6) * Math.Max(0.55, _scale);
+            var pen = CachedPen(hue, opacity, requestedThickness, rounded: true);
+            var cos = BarCos[i];
+            var sin = BarSin[i];
+            bars[barCount++] = new LinePrimitive
+            {
+                X0 = centerX + cos * radius,
+                Y0 = centerY + sin * radius,
+                X1 = centerX + cos * (radius + length),
+                Y1 = centerY + sin * (radius + length),
+                Thickness = pen.Thickness,
+                Color = ((SolidColorBrush)pen.Brush).Color,
+                Pen = pen
+            };
         }
-        var elapsed = Stopwatch.GetElapsedTime(renderStarted).TotalMilliseconds;
-        _averageRenderTimeMs = _averageRenderTimeMs <= 0 ? elapsed : _averageRenderTimeMs * 0.94 + elapsed * 0.06;
     }
 
     // ---- quantized frozen style caches --------------------------------------

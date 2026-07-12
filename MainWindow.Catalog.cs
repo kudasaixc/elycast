@@ -16,12 +16,24 @@ namespace Elysium_Cast_IPTV;
 public partial class MainWindow
 {
     private ImageSource? _audioEmbeddedCover;
+    private Brush? _classicAudioBackgroundBrush;
+    private string _audioCoreBackgroundKey = "";
+    private float _audioCoreCenterX = .5f, _audioCoreCenterY = .5f, _audioCoreInnerRadius = .18f, _audioCoreUnitScale = .001f;
     private double _audioLastRenderedSeconds;
     private double _audioFpsWindowStartSeconds;
     private int _audioFpsWindowFrames;
     private double _audioActualFps;
     private double _audioNextFrameSeconds;
     private double _audioLastPlayerSyncSeconds;
+    private bool _audioCoreRuntimeFailed;
+    private int _audioCoreFailureCount;
+    private double _audioCoreLastHealthCheck;
+    private readonly AudioVisualizerSurface.LinePrimitive[] _audioResolvedBars = new AudioVisualizerSurface.LinePrimitive[AudioVisualizerSurface.BarCount];
+    private readonly AudioVisualizerSurface.EllipsePrimitive[] _audioResolvedParticles = new AudioVisualizerSurface.EllipsePrimitive[AudioVisualizerSurface.MaxParticleCount];
+    private readonly AudioVisualizerSurface.EllipsePrimitive[] _audioResolvedWaves = new AudioVisualizerSurface.EllipsePrimitive[AudioVisualizerSurface.MaxShockwaveCount];
+    private readonly ElyAudioCoreInterop.LinePrimitive[] _audioCoreBars = new ElyAudioCoreInterop.LinePrimitive[AudioVisualizerSurface.BarCount];
+    private readonly ElyAudioCoreInterop.EllipsePrimitive[] _audioCoreParticles = new ElyAudioCoreInterop.EllipsePrimitive[AudioVisualizerSurface.MaxParticleCount];
+    private readonly ElyAudioCoreInterop.EllipsePrimitive[] _audioCoreWaves = new ElyAudioCoreInterop.EllipsePrimitive[AudioVisualizerSurface.MaxShockwaveCount];
 
 
     // ============ NAV / SECTIONS ============
@@ -30,6 +42,16 @@ public partial class MainWindow
         if (!_connected || _suppressNav) return;
         if (sender is not RadioButton { IsChecked: true, Tag: string target }) return;
         if (target == "Settings") { _sectionBeforeSettings = _section; OpenSettingsPanel(); return; }
+
+        // Local-only mode sets _connected so the local library can use the
+        // normal player shell, but it has no IPTV service behind Live/VOD/Series.
+        // Never turn that absence into a misleading cached "0 item" catalogue.
+        if (string.IsNullOrEmpty(_iptv.ProfileKey) && target is "Live" or "Movies" or "Series")
+        {
+            Disconnect_Click(this, new RoutedEventArgs());
+            StatusText.Text = "Connecte un profil IPTV pour accéder au Live, aux Films et aux Séries.";
+            return;
+        }
         CloseSettingsPanel();
         CloseSeriesPanel();
         CloseMusicPanel();
@@ -140,13 +162,26 @@ public partial class MainWindow
     private List<PlayItem> GetFavorites() { MarkFavorites(_state.Favorites); return _state.Favorites.ToList(); }
 
     // ============ LOCAL LIBRARY ============
-    private void LoadLocalLibrary()
+    private async void LoadLocalLibrary()
     {
-        _localAudioItems = DeduplicateLocal(StateStore.Current.LocalAudioLibrary)
-            .Select(LocalLibraryService.EnrichAudioItem).ToList();
+        _localAudioItems = DeduplicateLocal(StateStore.Current.LocalAudioLibrary);
         _localVideoItems = DeduplicateLocal(StateStore.Current.LocalVideoLibrary);
+        RepairAndEnrichLocalFavorites();
         MarkFavorites(_localAudioItems);
         MarkFavorites(_localVideoItems);
+
+        var snapshot = _localAudioItems.ToList();
+        var enriched = await Task.Run(() => snapshot.Select(LocalLibraryService.EnrichAudioItem).ToList());
+        var enrichedByPath = enriched.ToDictionary(LocalLibraryService.PathOf, StringComparer.OrdinalIgnoreCase);
+        // Merge into the live list: imports may append while TagLib is reading
+        // the startup snapshot, and removals must not be resurrected.
+        for (var i = 0; i < _localAudioItems.Count; i++)
+            if (enrichedByPath.TryGetValue(LocalLibraryService.PathOf(_localAudioItems[i]), out var refreshed))
+                _localAudioItems[i] = refreshed;
+        RepairAndEnrichLocalFavorites();
+        MarkFavorites(_localAudioItems);
+        SaveLocalLibrary();
+        if (_connected && _section == Section.LocalAudio) ShowSection(Section.LocalAudio);
     }
 
     private void SaveLocalLibrary()
@@ -169,20 +204,28 @@ public partial class MainWindow
 
     private void RemoveLocalItem(PlayItem item)
     {
-        var library = IsAudioOnlyItem(item) ? _localAudioItems : _localVideoItems;
-        library.RemoveAll(i => i.SameAs(item));
-        if (IsAudioOnlyItem(item))
-        {
-            var path = LocalLibraryService.PathOf(item);
-            foreach (var playlist in StateStore.Current.LocalPlaylists)
-                playlist.TrackPaths.RemoveAll(entry => string.Equals(entry, path, StringComparison.OrdinalIgnoreCase));
-            var queued = _audioQueue.FirstOrDefault(entry => entry.SameAs(item));
-            if (queued != null) _audioQueue.Remove(queued);
-            UpdateQueueLabel();
-        }
-        var fav = _state.Favorites.FirstOrDefault(f => f.SameAs(item));
-        if (fav != null) _state.Favorites.Remove(fav);
-        if (_current?.SameAs(item) == true)
+        RemoveLocalItems([item]);
+    }
+
+    private void RemoveLocalItems(IEnumerable<PlayItem> items)
+    {
+        var targets = items.Where(item => item.Kind == PlayItemKind.Local).DistinctBy(LocalLibraryService.PathOf).ToList();
+        if (targets.Count == 0) return;
+
+        bool Matches(PlayItem candidate) => targets.Any(target => candidate.SameAs(target));
+        var removedPaths = targets.Select(LocalLibraryService.PathOf).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        _localAudioItems.RemoveAll(Matches);
+        _localVideoItems.RemoveAll(Matches);
+        foreach (var playlist in StateStore.Current.LocalPlaylists)
+            playlist.TrackPaths.RemoveAll(path => removedPaths.Contains(path));
+        for (var i = _audioQueue.Count - 1; i >= 0; i--)
+            if (Matches(_audioQueue[i])) _audioQueue.RemoveAt(i);
+        _audioPlayContext?.RemoveAll(Matches);
+        foreach (var profile in StateStore.Current.Profiles.Values)
+            profile.Favorites.RemoveAll(Matches);
+
+        if (_current != null && Matches(_current))
         {
             try { _videoBackend?.Stop(PlaybackEndReason.Replaced); } catch { }
             HideAudioVisualizer();
@@ -190,9 +233,45 @@ public partial class MainWindow
             ShowOverlay("Fichier local retire.", spinning: false);
         }
 
+        UpdateQueueLabel();
         SaveLocalLibrary();
         StateStore.Save();
         ShowSection(_section);
+    }
+
+    private void SynchronizeFavoriteCopy(PlayItem item)
+    {
+        var favorite = _state.Favorites.FirstOrDefault(f => f.SameAs(item));
+        if (favorite == null) return;
+        favorite.Name = item.Name; favorite.Icon = item.Icon; favorite.Ext = item.Ext;
+        favorite.CategoryName = item.CategoryName; favorite.DirectUrl = item.DirectUrl;
+        favorite.Artist = item.Artist; favorite.Album = item.Album; favorite.AlbumArtist = item.AlbumArtist;
+        favorite.Genre = item.Genre; favorite.TrackNumber = item.TrackNumber;
+        favorite.DiscNumber = item.DiscNumber; favorite.DurationSeconds = item.DurationSeconds;
+    }
+
+    private void RepairAndEnrichLocalFavorites()
+    {
+        var local = _localAudioItems.Concat(_localVideoItems).ToList();
+        foreach (var favorite in StateStore.Current.Profiles.Values.SelectMany(p => p.Favorites)
+                     .Where(f => f.Kind == PlayItemKind.Local))
+        {
+            var path = LocalLibraryService.PathOf(favorite);
+            var match = local.FirstOrDefault(i => i.SameAs(favorite));
+            if (match == null && !File.Exists(path))
+            {
+                var name = Path.GetFileName(path);
+                var candidates = local.Where(i => string.Equals(Path.GetFileName(LocalLibraryService.PathOf(i)), name,
+                    StringComparison.OrdinalIgnoreCase)).Take(2).ToList();
+                if (candidates.Count == 1) match = candidates[0];
+            }
+            if (match == null) continue;
+            favorite.Id = match.Id; favorite.DirectUrl = match.DirectUrl;
+            favorite.Name = match.Name; favorite.CategoryName = match.CategoryName;
+            favorite.Artist = match.Artist; favorite.Album = match.Album; favorite.AlbumArtist = match.AlbumArtist;
+            favorite.Genre = match.Genre; favorite.TrackNumber = match.TrackNumber;
+            favorite.DiscNumber = match.DiscNumber; favorite.DurationSeconds = match.DurationSeconds;
+        }
     }
 
     private void BuildCategoryFilter(List<PlayItem> source)
@@ -237,7 +316,7 @@ public partial class MainWindow
         else
         {
             // Launched from the flat list: playback advances through the library.
-            if (IsAudioOnlyItem(item)) _audioPlayContext = null;
+            if (IsAudioOnlyItem(item)) PrepareVisibleAudioPlayback(item);
             Play(item);
         }
     }
@@ -258,7 +337,9 @@ public partial class MainWindow
             _state.Favorites.Add(new PlayItem
             {
                 Kind = item.Kind, Id = item.Id, Name = item.Name, Icon = item.Icon,
-                Ext = item.Ext, CategoryName = item.CategoryName, DirectUrl = item.DirectUrl, IsFavorite = true
+                Ext = item.Ext, CategoryName = item.CategoryName, DirectUrl = item.DirectUrl, IsFavorite = true,
+                Artist = item.Artist, Album = item.Album, AlbumArtist = item.AlbumArtist, Genre = item.Genre,
+                TrackNumber = item.TrackNumber, DiscNumber = item.DiscNumber, DurationSeconds = item.DurationSeconds
             });
         }
         else if (!item.IsFavorite && existing != null)
@@ -353,9 +434,11 @@ public partial class MainWindow
             AudioVisualizerTitle.Text = metadata.Title;
             _audioDefaultDisc ??= AudioDiscBrush.ImageSource;
             ApplyAudioMetadata(item, metadata);
+            OverlayRoot.UpdateLayout();
             _mediaTransport.SetAudio(item, metadata);
             _mediaTransport.SetState(hasMedia: true, playing: true);
             ApplyAudioVisualizerSettings();
+            ApplyAudioRendererSelection(showFeedback: false);
             AudioVisualizerLayer.Visibility = Visibility.Visible;
             _audioVisualStopwatch.Restart();
             _audioLastTickSeconds = 0;
@@ -476,6 +559,7 @@ public partial class MainWindow
         ["mountains"] = "mountains.jpg", ["sunset"] = "sunset.jpg", ["night-sky"] = "night-sky.jpg",
         ["paris"] = "paris.jpg", ["new-york"] = "new-york.jpg"
     };
+    private static readonly Dictionary<string, ImageSource> AudioBackgroundAssetCache = new(StringComparer.OrdinalIgnoreCase);
 
     private void ApplyAudioVisualizerSettings()
     {
@@ -494,15 +578,224 @@ public partial class MainWindow
         AudioSurface.ActiveParticleCount = s.AudioParticleCount;
         AudioSurface.ParticleDistance = s.AudioParticleDistance;
 
-        if (source is BitmapSource bitmap && s.AudioPaletteAutomatic && s.AudioParticleAdaptiveColors)
-            AudioSurface.SetPalette(ExtractDominantPalette(bitmap));
-        else
-            AudioSurface.SetPalette(null);
+        Color[]? palette = source is BitmapSource bitmap && s.AudioPaletteAutomatic && s.AudioParticleAdaptiveColors
+            ? ExtractDominantPalette(bitmap) : null;
+        AudioSurface.SetPalette(palette);
+        var backgroundKey = source == null ? "none"
+            : ReferenceEquals(source, _audioEmbeddedCover)
+                ? $"cover:{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(source)}"
+                : $"asset:{s.AudioBackgroundImage}";
+        var backgroundChanged = !string.Equals(backgroundKey, _audioCoreBackgroundKey, StringComparison.Ordinal);
+        if (backgroundChanged) _audioCoreBackgroundKey = backgroundKey;
+        ConfigureAudioCore(palette, source as BitmapSource, updateBackground: backgroundChanged);
+    }
+
+    private void ConfigureAudioCore(Color[]? palette, BitmapSource? background = null, Point? pointer = null, bool updateBackground = false)
+    {
+        var s = StateStore.Settings;
+        var p = pointer ?? new Point(.5, .5);
+        UpdateAudioCoreLayoutMetrics();
+        ElyAudioCoreInterop.Configure(new ElyAudioCoreInterop.Settings
+        {
+            ParticleCount = s.AudioParticleCount,
+            ParticleDistance = (float)s.AudioParticleDistance,
+            // WPF materializes the dimmer as an 8-bit alpha brush.
+            Dim = (byte)(s.AudioBackgroundDim * 255) / 255f,
+            Blur = (float)s.AudioBackgroundBlur,
+            SlowZoom = s.AudioBackgroundSlowZoom ? 1 : 0,
+            SlowPan = s.AudioBackgroundSlowPan ? 1 : 0,
+            Parallax = s.AudioBackgroundMouseParallax ? 1 : 0,
+            Shake = s.AudioVisualizerShake ? 1 : 0,
+            VSync = s.AudioVisualizerVSync ? 1 : 0,
+            TargetFps = s.AudioVisualizerTargetFps,
+            MouseX = (float)p.X,
+            MouseY = (float)p.Y,
+            CenterX = _audioCoreCenterX,
+            CenterY = _audioCoreCenterY,
+            InnerRadius = _audioCoreInnerRadius,
+            UnitScale = _audioCoreUnitScale
+        }, (palette ?? [
+                Color.FromRgb(255, 40, 40), Color.FromRgb(255, 145, 35), Color.FromRgb(245, 225, 40),
+                Color.FromRgb(55, 230, 95), Color.FromRgb(35, 220, 235), Color.FromRgb(55, 105, 255),
+                Color.FromRgb(155, 70, 255), Color.FromRgb(245, 55, 195)])
+            .Select(c => 0xff000000u | (uint)c.R << 16 | (uint)c.G << 8 | c.B).ToArray());
+        if (updateBackground && background != null)
+        {
+            // Keep the same decoded source as WPF. AudioCore+ performs WPF's
+            // 0.45 BitmapCache reduction after UniformToFill, so an early 512
+            // px resize would permanently remove detail before the blur pass.
+            var width = background.PixelWidth;
+            var height = background.PixelHeight;
+            var bgra = new FormatConvertedBitmap(background, PixelFormats.Bgra32, null, 0);
+            var pixels = new byte[width * height * 4];
+            bgra.CopyPixels(pixels, width * 4, 0);
+            ElyAudioCoreInterop.SetBackground(pixels, (uint)width, (uint)height, (uint)(width * 4));
+        }
+        else if (updateBackground) ElyAudioCoreInterop.SetBackground([], 0, 0, 0);
+    }
+
+    private void UpdateAudioCoreLayoutMetrics(bool pushNative = false)
+    {
+        if (OverlayRoot.ActualWidth <= 1 || OverlayRoot.ActualHeight <= 1
+            || AudioOuterRing.ActualWidth <= 1 || AudioOuterRing.ActualHeight <= 1) return;
+        try
+        {
+            var localCenter = new Point(AudioOuterRing.ActualWidth / 2, AudioOuterRing.ActualHeight / 2);
+            var center = AudioOuterRing.TranslatePoint(localCenter, OverlayRoot);
+            var unitPoint = AudioOuterRing.TranslatePoint(new Point(localCenter.X + 1, localCenter.Y), OverlayRoot);
+            var unitPixels = (unitPoint - center).Length / Math.Max(.001, AudioVisualizerScale.ScaleX);
+            var centerX = (float)(center.X / OverlayRoot.ActualWidth);
+            var centerY = (float)(center.Y / OverlayRoot.ActualHeight);
+            var unitScale = (float)(unitPixels / OverlayRoot.ActualHeight);
+            var innerRadius = 198 * unitScale;
+            var changed = Math.Abs(centerX - _audioCoreCenterX) > .0001f
+                || Math.Abs(centerY - _audioCoreCenterY) > .0001f
+                || Math.Abs(unitScale - _audioCoreUnitScale) > .00001f;
+            _audioCoreCenterX = centerX; _audioCoreCenterY = centerY;
+            _audioCoreUnitScale = unitScale; _audioCoreInnerRadius = innerRadius;
+            if (pushNative && changed)
+                ElyAudioCoreInterop.SetLayout(centerX, centerY, innerRadius, unitScale);
+        }
+        catch (InvalidOperationException) { }
+    }
+
+    private void PushResolvedAudioCoreFrame(double backgroundScale, double panX, double panY)
+    {
+        var rootWidth = OverlayRoot.ActualWidth;
+        var rootHeight = OverlayRoot.ActualHeight;
+        if (rootWidth <= 1 || rootHeight <= 1 || AudioSurface.ActualWidth <= 1 || AudioSurface.ActualHeight <= 1)
+            return;
+
+        AudioSurface.CopyResolvedPrimitives(
+            _audioResolvedBars, out var barCount,
+            _audioResolvedParticles, out var particleCount,
+            _audioResolvedWaves, out var waveCount);
+
+        try
+        {
+            var transform = AudioSurface.TransformToAncestor(OverlayRoot);
+            var origin = transform.Transform(new Point(0, 0));
+            var unitX = transform.Transform(new Point(1, 0));
+            var unitY = transform.Transform(new Point(0, 1));
+            var scaleX = (unitX - origin).Length;
+            var scaleY = (unitY - origin).Length;
+            var thicknessScale = (scaleX + scaleY) * 0.5;
+
+            for (var i = 0; i < barCount; i++)
+            {
+                var source = _audioResolvedBars[i];
+                var p0 = transform.Transform(new Point(source.X0, source.Y0));
+                var p1 = transform.Transform(new Point(source.X1, source.Y1));
+                _audioCoreBars[i] = new ElyAudioCoreInterop.LinePrimitive
+                {
+                    X0 = (float)(p0.X / rootWidth),
+                    Y0 = (float)(p0.Y / rootHeight),
+                    X1 = (float)(p1.X / rootWidth),
+                    Y1 = (float)(p1.Y / rootHeight),
+                    Thickness = (float)(source.Thickness * thicknessScale / rootHeight),
+                    Color = PackAudioCoreColor(source.Color)
+                };
+            }
+            for (var i = 0; i < particleCount; i++)
+            {
+                var source = _audioResolvedParticles[i];
+                var center = transform.Transform(new Point(source.X, source.Y));
+                _audioCoreParticles[i] = new ElyAudioCoreInterop.EllipsePrimitive
+                {
+                    X = (float)(center.X / rootWidth),
+                    Y = (float)(center.Y / rootHeight),
+                    RadiusX = (float)(source.RadiusX * scaleX / rootWidth),
+                    RadiusY = (float)(source.RadiusY * scaleY / rootHeight),
+                    Thickness = 0,
+                    Color = PackAudioCoreColor(source.Color)
+                };
+            }
+            for (var i = 0; i < waveCount; i++)
+            {
+                var source = _audioResolvedWaves[i];
+                var center = transform.Transform(new Point(source.X, source.Y));
+                _audioCoreWaves[i] = new ElyAudioCoreInterop.EllipsePrimitive
+                {
+                    X = (float)(center.X / rootWidth),
+                    Y = (float)(center.Y / rootHeight),
+                    RadiusX = (float)(source.RadiusX * scaleX / rootWidth),
+                    RadiusY = (float)(source.RadiusY * scaleY / rootHeight),
+                    Thickness = (float)(source.Thickness * thicknessScale / rootHeight),
+                    Color = PackAudioCoreColor(source.Color)
+                };
+            }
+
+            ElyAudioCoreInterop.PushVisualFrame(new ElyAudioCoreInterop.VisualFrame
+            {
+                RootWidthDip = (float)rootWidth,
+                RootHeightDip = (float)rootHeight,
+                BackgroundScale = (float)backgroundScale,
+                BackgroundTranslateXDip = (float)panX,
+                BackgroundTranslateYDip = (float)panY
+            }, _audioCoreBars, barCount, _audioCoreParticles, particleCount, _audioCoreWaves, waveCount);
+        }
+        catch (InvalidOperationException) { }
+    }
+
+    private static uint PackAudioCoreColor(Color color) =>
+        (uint)color.A << 24 | (uint)color.R << 16 | (uint)color.G << 8 | color.B;
+
+    private bool WantsAudioCore => StateStore.Settings.AudioVisualizerRenderer == "audiocore";
+    private bool CanUseAudioCore => !_audioCoreRuntimeFailed && _videoBackend is MpvHwndBackend { IsElyCoreRenderer: true };
+
+    private void RefreshAudioRendererStatus()
+    {
+        if (AudioRendererStatusText == null) return;
+        AudioRendererStatusText.Text = _audioCoreRuntimeFailed
+            ? "AudioCore+ a rencontré des erreurs D3D11 répétées — fallback Classique actif."
+            : WantsAudioCore
+            ? CanUseAudioCore
+                ? "ELYCAST AudioCore+ actif — scène native D3D11, FRUC ignoré pour l’audio."
+                : "AudioCore+ indisponible avec ce backend — fallback Classique (WPF) actif."
+            : "Renderer Classique (WPF) actif.";
+    }
+
+    private void ApplyAudioRendererSelection(bool showFeedback)
+    {
+        if (showFeedback) { _audioCoreRuntimeFailed = false; _audioCoreFailureCount = 0; }
+        var native = WantsAudioCore && CanUseAudioCore;
+        var activated = native && ElyAudioCoreInterop.SetScene(true);
+        if (!activated) ElyAudioCoreInterop.SetScene(false);
+        if (activated)
+        {
+            // A renderer replacement owns a fresh D3D device/scene; force the
+            // current background texture and every setting into that instance.
+            _audioCoreBackgroundKey = "";
+            ApplyAudioVisualizerSettings();
+        }
+        _classicAudioBackgroundBrush ??= AudioVisualizerLayer.Background;
+        AudioVisualizerLayer.Background = activated ? Brushes.Transparent : _classicAudioBackgroundBrush;
+        AudioBackgroundImage.Visibility = activated ? Visibility.Collapsed : Visibility.Visible;
+        AudioBackgroundDimmer.Visibility = activated ? Visibility.Collapsed : Visibility.Visible;
+        // Hidden preserves layout/ActualWidth so the classic surface can remain
+        // the canonical animation simulation without submitting WPF draw calls.
+        AudioSurface.Visibility = activated ? Visibility.Hidden : Visibility.Visible;
+        // Keep the exact WPF centre artwork and decorative rings in both modes;
+        // AudioCore+ replaces only the expensive spectrum/particle surface.
+        AudioOuterRing.Visibility = Visibility.Visible;
+        AudioGlowRing.Visibility = Visibility.Visible;
+        AudioCenterDisc.Visibility = Visibility.Visible;
+        AudioTitleBlock.Visibility = AudioMetaPanel.Visibility == Visibility.Visible
+            ? Visibility.Collapsed : Visibility.Visible;
+        AudioVisualizerLayer.Visibility = _current != null && IsAudioOnlyItem(_current)
+            ? Visibility.Visible : Visibility.Collapsed;
+        RefreshAudioRendererStatus();
+        // Never use VideoOverlay as renderer feedback: it is intentionally
+        // opaque and would cover the native HWND scene while leaving only the
+        // WPF centre artwork visible. Status stays in the settings row/Stats.
+        if (_videoBackend?.HasMedia == true) HideOverlay();
+        if (showFeedback) ShowOsd();
     }
 
     private static ImageSource? LoadAudioBackgroundAsset(string key)
     {
         if (!AudioBackgroundAssets.TryGetValue(key, out var file)) return null;
+        if (AudioBackgroundAssetCache.TryGetValue(key, out var cached)) return cached;
         {
             var image = new BitmapImage();
             image.BeginInit();
@@ -511,6 +804,7 @@ public partial class MainWindow
             image.DecodePixelWidth = 1920;
             image.EndInit();
             image.Freeze();
+            AudioBackgroundAssetCache[key] = image;
             return image;
         }
     }
@@ -614,31 +908,33 @@ public partial class MainWindow
             _audioBeatPulse = Math.Max(_audioBeatPulse, 0.55 + strength * 0.45);
             AudioSurface.Beat(strength);
         }
-        _audioBeatPulse *= Math.Pow(0.04, dt); // ≈ ×0.90 per 33 ms, frame-rate independent.
+        _audioBeatPulse *= Math.Pow(0.04, dt);
 
+        // One simulation owns both renderers. AudioCore+ keeps this element
+        // Hidden (laid out but not submitted) and consumes these exact resolved
+        // vector primitives, so particles and waves cannot drift between paths.
         AudioSurface.Advance(dt, _audioSpectrumSnapshot, _audioBassEnergy, _audioFullEnergy, _audioBeatPulse);
-
         AudioOuterRingRotate.Angle = (AudioOuterRingRotate.Angle + (12 + _audioBassEnergy * 80) * dt) % 360;
         AudioGlowRing.Opacity = 0.35 + _audioBassEnergy * 0.55;
         AudioVisualizerScale.ScaleX = AudioVisualizerScale.ScaleY = 1.0 + _audioFullEnergy * 0.02;
         AudioCenterScale.ScaleX = AudioCenterScale.ScaleY = 1.0 + _audioBeatPulse * 0.085;
 
-        AudioBackgroundScale.ScaleX = AudioBackgroundScale.ScaleY = settings.AudioBackgroundSlowZoom
+        var backgroundScale = settings.AudioBackgroundSlowZoom
             ? 1.045 + Math.Sin(now * 0.095) * 0.018 : 1.045;
         var panX = settings.AudioBackgroundSlowPan ? Math.Sin(now * 0.071) * 9 : 0;
         var panY = settings.AudioBackgroundSlowPan ? Math.Cos(now * 0.057) * 6 : 0;
         if (settings.AudioBackgroundMouseParallax && AudioVisualizerLayer.IsMouseOver)
         {
             var mouse = Mouse.GetPosition(AudioVisualizerLayer);
-            panX += (mouse.X / Math.Max(1, AudioVisualizerLayer.ActualWidth) - 0.5) * -10;
-            panY += (mouse.Y / Math.Max(1, AudioVisualizerLayer.ActualHeight) - 0.5) * -7;
+            var intensity = settings.AudioBackgroundParallaxIntensity;
+            panX += (mouse.X / Math.Max(1, AudioVisualizerLayer.ActualWidth) - 0.5) * -10 * intensity;
+            panY += (mouse.Y / Math.Max(1, AudioVisualizerLayer.ActualHeight) - 0.5) * -7 * intensity;
         }
+        AudioBackgroundScale.ScaleX = AudioBackgroundScale.ScaleY = backgroundScale;
         AudioBackgroundTranslate.X = panX;
         AudioBackgroundTranslate.Y = panY;
 
-        // Gentle: strong shakes exposed the layer edge (light seams at the
-        // bottom); the background no longer moves at all, and the content
-        // barely does.
+        // The background never shakes; the shared content transform does.
         var shake = settings.AudioVisualizerShake ? Math.Max(0, _audioBeatPulse - 0.6) * 5 : 0;
         if (shake > 0.001)
         {
@@ -646,5 +942,26 @@ public partial class MainWindow
             AudioVisualizerShake.Y = (_audioVisualRandom.NextDouble() - 0.5) * shake;
         }
         else AudioVisualizerShake.X = AudioVisualizerShake.Y = 0;
+
+        if (WantsAudioCore && CanUseAudioCore && ElyAudioCoreInterop.Available)
+        {
+            UpdateAudioCoreLayoutMetrics(pushNative: true);
+            ElyAudioCoreInterop.PushAudioFrame(_audioSpectrumSnapshot, (float)_audioBassEnergy,
+                (float)_audioFullEnergy, (float)_audioBeatPulse);
+            PushResolvedAudioCoreFrame(backgroundScale, panX, panY);
+            if (now - _audioCoreLastHealthCheck >= 1)
+            {
+                _audioCoreLastHealthCheck = now;
+                var health = ElyAudioCoreInterop.GetStats();
+                _audioCoreFailureCount = health.LastError < 0 ? _audioCoreFailureCount + 1 : 0;
+                if (_audioCoreFailureCount >= 3)
+                {
+                    _audioCoreRuntimeFailed = true;
+                    ElyAudioCoreInterop.SetScene(false);
+                    ApplyAudioRendererSelection(showFeedback: false);
+                    DebugConsole.Error($"ELYCAST AudioCore+ désactivé après erreurs D3D11 répétées (0x{health.LastError:X8}).");
+                }
+            }
+        }
     }
 }

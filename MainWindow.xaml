@@ -395,7 +395,7 @@
                                         Height="40" Click="ImportLocalFolder_Click"/>
                                 <StackPanel x:Name="AudioLibraryActions">
                                     <ComboBox x:Name="AudioBrowseCombo" Margin="0,8,0,0" Style="{StaticResource FieldCombo}"
-                                              SelectionChanged="AudioBrowse_Changed" SelectedIndex="0">
+                                              SelectionChanged="AudioBrowse_Changed">
                                         <ComboBoxItem Content="Albums" Tag="albums"/>
                                         <ComboBoxItem Content="Artistes" Tag="artists"/>
                                         <ComboBoxItem Content="Genres" Tag="genres"/>
@@ -414,8 +414,10 @@
                                             <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <ToggleButton x:Name="ShuffleToggle" Content="Aléatoire" Margin="0,0,6,0" Checked="Shuffle_Checked" Unchecked="Shuffle_Checked"/>
-                                        <ToggleButton x:Name="RepeatToggle" Grid.Column="1" Content="Répéter" Checked="Repeat_Checked" Unchecked="Repeat_Checked"/>
+                                        <ToggleButton x:Name="ShuffleToggle" Content="Aléatoire" Margin="0,0,6,0"
+                                                      Style="{StaticResource AudioActionToggle}" Checked="Shuffle_Checked" Unchecked="Shuffle_Checked"/>
+                                        <ToggleButton x:Name="RepeatToggle" Grid.Column="1" Content="Répéter"
+                                                      Style="{StaticResource AudioActionToggle}" Checked="Repeat_Checked" Unchecked="Repeat_Checked"/>
                                         <TextBlock x:Name="QueueCountText" Grid.Column="2" Text="File : 0" FontSize="11" Margin="10,0,6,0"
                                                    Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
                                         <Button Grid.Column="3" Content="Vider" Height="28" FontSize="11" Padding="8,0"
@@ -447,6 +449,8 @@
                                         <MenuItem x:Name="ContextAddQueue" Header="Ajouter à la file d’attente" Click="AddToQueue_Click"/>
                                         <MenuItem x:Name="ContextAddPlaylist" Header="Ajouter à une playlist"/>
                                         <MenuItem x:Name="ContextEditMeta" Header="Modifier les métadonnées…" Click="EditMetadata_Click"/>
+                                        <Separator/>
+                                        <MenuItem x:Name="ContextRemoveLibrary" Header="Retirer de la bibliothèque" Click="RemoveTrack_Click"/>
                                     </ContextMenu>
                                 </ListBox.ContextMenu>
                                 <ListBox.ItemTemplate>
@@ -507,6 +511,8 @@
                                         <MenuItem Header="Tout lire" Click="GroupPlay_Click"/>
                                         <MenuItem Header="Lecture aléatoire" Click="GroupShuffle_Click"/>
                                         <MenuItem Header="Ajouter à la file d’attente" Click="GroupQueue_Click"/>
+                                        <Separator/>
+                                        <MenuItem x:Name="ContextRemoveMusicGroup" Header="Retirer de la bibliothèque" Click="RemoveMusicGroup_Click"/>
                                         <Separator x:Name="ContextPlaylistSeparator"/>
                                         <MenuItem x:Name="ContextDeletePlaylist" Header="Supprimer la playlist" Click="DeletePlaylist_Click"/>
                                     </ContextMenu>
@@ -569,7 +575,8 @@
                                      mount only declares the content. -->
                                 <Border x:Name="OverlayMount" Visibility="Collapsed">
                                 <Grid x:Name="OverlayRoot" Background="Transparent"
-                                      MouseMove="Stage_MouseMove" MouseLeave="Stage_MouseLeave">
+                                      MouseMove="Stage_MouseMove" MouseLeave="Stage_MouseLeave"
+                                      PreviewMouseLeftButtonUp="OverlayRoot_MouseLeftButtonUp">
 
                                 <!-- idle / loading -->
                                 <Grid x:Name="VideoOverlay" Background="#FF060309">
@@ -753,7 +760,14 @@
 
                                     <!-- bottom : controls -->
                                     <Border x:Name="OsdBottomChrome" VerticalAlignment="Bottom" Padding="20,28,20,16"
-                                            Background="Transparent">
+                                            >
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                <GradientStop Color="#00000000" Offset="0"/>
+                                                <GradientStop Color="#B8000000" Offset="0.38"/>
+                                                <GradientStop Color="#F0000000" Offset="1"/>
+                                            </LinearGradientBrush>
+                                        </Border.Background>
                                         <Border.RenderTransform>
                                             <TranslateTransform x:Name="OsdBottomOffset"/>
                                         </Border.RenderTransform>
@@ -806,32 +820,54 @@
                                                          Foreground="{DynamicResource AccentABrush}"
                                                          Background="#33FFFFFF" BorderThickness="0"/>
 
-                                            <Grid>
+                                            <Grid x:Name="OsdTransportRow">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
 
-                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <Button x:Name="PlayPauseBtn" Style="{StaticResource IconButton}" Click="PlayPause_Click">
-                                                        <Path x:Name="PlayPauseIcon" Data="M 5,3 L 12,8 L 5,13 Z" Fill="White"
-                                                              Stretch="Uniform" Width="14" Height="14"/>
-                                                    </Button>
-                                                    <Button x:Name="StopBtn" Style="{StaticResource IconButton}" Margin="8,0,0,0" Click="Stop_Click">
+                                                <StackPanel x:Name="OsdLeftTransportControls" Grid.Column="0"
+                                                            Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <Button x:Name="StopBtn" Style="{StaticResource IconButton}" Click="Stop_Click">
                                                         <Rectangle Width="12" Height="12" Fill="White" RadiusX="2" RadiusY="2"/>
                                                     </Button>
                                                     <Button x:Name="SkipBackBtn" Style="{StaticResource IconButton}" Margin="8,0,0,0"
-                                                            Click="SkipBack_Click" ToolTip="Reculer de 30 s (flèche gauche)" Visibility="Collapsed">
-                                                        <TextBlock Text="-30" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                                                            Click="SkipBack_Click" ToolTip="Reculer de 15 s (flèche gauche)" Visibility="Collapsed">
+                                                        <TextBlock Text="-15" FontSize="11" FontWeight="Bold" Foreground="White"/>
                                                     </Button>
                                                     <Button x:Name="SkipFwdBtn" Style="{StaticResource IconButton}" Margin="8,0,0,0"
-                                                            Click="SkipFwd_Click" ToolTip="Avancer de 30 s (flèche droite)" Visibility="Collapsed">
-                                                        <TextBlock Text="+30" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                                                            Click="SkipFwd_Click" ToolTip="Avancer de 15 s (flèche droite)" Visibility="Collapsed">
+                                                        <TextBlock Text="+15" FontSize="11" FontWeight="Bold" Foreground="White"/>
                                                     </Button>
                                                 </StackPanel>
 
-                                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <StackPanel x:Name="OsdCenterTransportControls" Grid.Column="0" Grid.ColumnSpan="3" Panel.ZIndex="2"
+                                                            Orientation="Horizontal" HorizontalAlignment="Center"
+                                                            VerticalAlignment="Center">
+                                                    <Button x:Name="PreviousMediaBtn" Style="{StaticResource IconButton}"
+                                                            Click="PreviousMedia_Click" ToolTip="Élément précédent">
+                                                        <Path Data="M 4,3 L 6,3 L 6,13 L 4,13 Z M 13,3 L 13,13 L 7,8 Z"
+                                                              Fill="White" Stretch="Uniform" Width="16" Height="16"/>
+                                                    </Button>
+                                                    <Button x:Name="PlayPauseBtn" Style="{StaticResource IconButton}" Margin="10,0"
+                                                            Width="52" Height="52" Click="PlayPause_Click" ToolTip="Lecture / pause">
+                                                        <Path x:Name="PlayPauseIcon" Data="M 5,3 L 12,8 L 5,13 Z" Fill="White"
+                                                              Stretch="Uniform" Width="17" Height="17"/>
+                                                    </Button>
+                                                    <Button x:Name="NextMediaBtn" Style="{StaticResource IconButton}"
+                                                            Click="NextMedia_Click" ToolTip="Élément suivant">
+                                                        <Path Data="M 12,3 L 14,3 L 14,13 L 12,13 Z M 5,3 L 5,13 L 11,8 Z"
+                                                              Fill="White" Stretch="Uniform" Width="16" Height="16"/>
+                                                    </Button>
+                                                </StackPanel>
+
+                                                <StackPanel x:Name="OsdRightTransportControls" Grid.Column="2"
+                                                            Orientation="Horizontal" VerticalAlignment="Center">
                                                     <ComboBox x:Name="AudioCombo" Width="145" Height="34" Margin="0,0,12,0"
                                                               Style="{StaticResource FieldCombo}" DisplayMemberPath="Name"
                                                               SelectionChanged="Audio_Changed"
@@ -889,6 +925,19 @@
                                             </Grid>
                                         </StackPanel>
                                     </Border>
+                                </Grid>
+
+                                <!-- Brief transport feedback for direct clicks on the video. -->
+                                <Grid x:Name="CenterTransportFeedback" Width="104" Height="104"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                                      Opacity="0" IsHitTestVisible="False" Panel.ZIndex="40"
+                                      RenderTransformOrigin="0.5,0.5">
+                                    <Grid.RenderTransform><ScaleTransform x:Name="CenterTransportScale" ScaleX="0.82" ScaleY="0.82"/></Grid.RenderTransform>
+                                    <Ellipse Fill="#C9000000" Stroke="#55FFFFFF" StrokeThickness="1">
+                                        <Ellipse.Effect><DropShadowEffect Color="#FF000000" BlurRadius="28" ShadowDepth="0" Opacity="0.95"/></Ellipse.Effect>
+                                    </Ellipse>
+                                    <Path x:Name="CenterTransportIcon" Fill="White" Stretch="Uniform" Width="34" Height="34"
+                                          Data="M 4,2 L 11,2 L 11,18 L 4,18 Z M 15,2 L 22,2 L 22,18 L 15,18 Z"/>
                                 </Grid>
 
                                 <Button x:Name="CloseOverlayBtn" Visibility="Collapsed"
@@ -1047,7 +1096,7 @@
                                                         </Grid.ColumnDefinitions>
                                                         <Grid Width="36" Height="36">
                                                             <Border CornerRadius="9" Background="#33000000">
-                                                                <TextBlock Text="{Binding TrackNumberLabel}" FontWeight="Bold" FontSize="13"
+                                                                <TextBlock Text="{Binding DisplayTrackNumberLabel}" FontWeight="Bold" FontSize="13"
                                                                            Foreground="{DynamicResource AccentSoftBrush}"
                                                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                             </Border>
@@ -1154,6 +1203,21 @@
                                             <StackPanel x:Name="SettingsAudioPlayerPanel" Visibility="Collapsed">
                                                 <TextBlock Text="LECTEUR AUDIO" Margin="0,24,0,6" FontSize="11"
                                                            FontWeight="SemiBold" Foreground="{DynamicResource MutedBrush}"/>
+                                                <Grid Margin="0,8,0,18">
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="260"/></Grid.ColumnDefinitions>
+                                                    <StackPanel>
+                                                        <TextBlock Text="Renderer du visualiseur" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
+                                                        <TextBlock Text="La bascule est immédiate. AudioCore+ nécessite ELYCORE ; le renderer classique reste disponible comme fallback."
+                                                                   FontSize="11" Margin="0,4,18,0" TextWrapping="Wrap" Foreground="{DynamicResource FaintBrush}"/>
+                                                        <TextBlock x:Name="AudioRendererStatusText" FontSize="11" Margin="0,6,18,0"
+                                                                   TextWrapping="Wrap" Foreground="{DynamicResource AccentSoftBrush}"/>
+                                                    </StackPanel>
+                                                    <ComboBox x:Name="AudioRendererCombo" Grid.Column="1" Height="40"
+                                                              Style="{StaticResource FieldCombo}" SelectionChanged="AudioRenderer_Changed">
+                                                        <ComboBoxItem Tag="audiocore" Content="ELYCAST AudioCore+"/>
+                                                        <ComboBoxItem Tag="classic" Content="Classique (WPF)"/>
+                                                    </ComboBox>
+                                                </Grid>
                                                 <TextBlock Text="Fond" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
                                                 <StackPanel Margin="0,10,0,0">
                                                     <RadioButton x:Name="AudioBgSolid" GroupName="audioBackground" Tag="solid"
@@ -1188,6 +1252,16 @@
                                                 <CheckBox x:Name="AudioSlowZoomSwitch" Style="{StaticResource Switch}" Content="Zoom lent" Click="AudioVisualizerSetting_Changed"/>
                                                 <CheckBox x:Name="AudioSlowPanSwitch" Style="{StaticResource Switch}" Content="Déplacement lent" Click="AudioVisualizerSetting_Changed"/>
                                                 <CheckBox x:Name="AudioParallaxSwitch" Style="{StaticResource Switch}" Content="Parallaxe légère suivant la souris" Click="AudioVisualizerSetting_Changed"/>
+                                                <Grid Margin="0,10,0,0">
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="260"/></Grid.ColumnDefinitions>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock Text="Intensité de la parallaxe" Foreground="{DynamicResource TextBrush}"/>
+                                                        <TextBlock x:Name="AudioParallaxIntensityValue" Text="100%" Margin="0,3,0,0" FontSize="11"
+                                                                   Foreground="{DynamicResource FaintBrush}"/>
+                                                    </StackPanel>
+                                                    <Slider x:Name="AudioParallaxIntensitySlider" Grid.Column="1" Minimum="0" Maximum="200"
+                                                            TickFrequency="10" ValueChanged="AudioVisualizerSlider_Changed"/>
+                                                </Grid>
                                                 <CheckBox x:Name="AudioAutoPaletteSwitch" Style="{StaticResource Switch}" Content="Palette automatique ELYCOLOR" Margin="0,10,0,0" Click="AudioVisualizerSetting_Changed"/>
                                                 <CheckBox x:Name="AudioAdaptiveParticlesSwitch" Style="{StaticResource Switch}" Content="Couleurs des particules adaptées au fond" Click="AudioVisualizerSetting_Changed"/>
                                                 <CheckBox x:Name="AudioShakeSwitch" Style="{StaticResource Switch}" Content="Secousse légère sur les basses" Click="AudioVisualizerSetting_Changed"/>
@@ -1856,6 +1930,8 @@
                                                     <ComboBoxItem Tag="Audio" Content="Audio — visualiseur"/><ComboBoxItem Tag="Mixed" Content="Mixte"/>
                                                 </ComboBox>
                                             </Grid>
+                                            <CheckBox x:Name="ElySmartNotificationsSwitch" Style="{StaticResource Switch}" Margin="0,12,0,0"
+                                                      Content="Afficher les notifications ELYSMART" Click="ElySmartNotificationsSwitch_Click"/>
                                             <CheckBox x:Name="ElySmartAutoSwitch" Style="{StaticResource Switch}" Margin="0,12,0,0"
                                                       Content="Optimisation automatique des effets décoratifs uniquement" Click="ElySmartAutoSwitch_Click"/>
                                             <StackPanel Orientation="Horizontal" Margin="0,14,0,0">

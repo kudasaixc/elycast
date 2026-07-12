@@ -68,6 +68,12 @@ public partial class MainWindow
 
     private void ElySmartCancel_Click(object sender, RoutedEventArgs e) => _elySmartBenchmarkCts?.Cancel();
     private void ElySmartAutoSwitch_Click(object sender, RoutedEventArgs e) { StateStore.Settings.ElySmartAutoOptimizeDecorative = ElySmartAutoSwitch.IsChecked == true; StateStore.Save(); }
+    private void ElySmartNotificationsSwitch_Click(object sender, RoutedEventArgs e)
+    {
+        StateStore.Settings.ElySmartNotificationsEnabled = ElySmartNotificationsSwitch.IsChecked == true;
+        if (!StateStore.Settings.ElySmartNotificationsEnabled) _elySmartToast?.Close();
+        StateStore.Save();
+    }
 
     private void ElySmartApply_Click(object sender, RoutedEventArgs e)
     {
@@ -92,7 +98,10 @@ public partial class MainWindow
         {
             ApplyElySmartDecorativeOptimization(issue);
         }
-        else ShowElySmartToast(issue);
+        else if (StateStore.Settings.ElySmartNotificationsEnabled)
+        {
+            ShowElySmartToast(issue);
+        }
     });
 
     private void ShowElySmartToast(HealthIssue issue)

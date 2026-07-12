@@ -50,9 +50,11 @@ public static class AudioMetadataWriter
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    // Multi-value fields (performers, genres) accept "A; B" or "A, B".
-    private static string[] SplitList(string? value) =>
+    // Semicolons are unambiguous in the editor. Commas are preserved so names
+    // such as "Tyler, The Creator" are never corrupted on save.
+    public static string[] SplitList(string? value) =>
         string.IsNullOrWhiteSpace(value)
             ? []
-            : value.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            : value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
 }

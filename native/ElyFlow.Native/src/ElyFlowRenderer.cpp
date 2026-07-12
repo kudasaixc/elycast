@@ -16,6 +16,7 @@
 // side reverts to the classic mpv HWND backend.
 
 #include "ElyFlowNative.h"
+#include "ElyAudioCoreScene.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -320,6 +321,8 @@ namespace
         std::atomic<double> sourceFpsHint{ 0 };
         std::atomic<bool> vsrWanted{ false };
         std::atomic<bool> frucWanted{ false };
+        std::atomic<bool> audioCoreScene{ false };
+        ElyAudioCoreScene audioCore;
         std::atomic<uint32_t> sourceWidthHint{ 0 };
         std::atomic<uint32_t> sourceHeightHint{ 0 };
 
@@ -1064,7 +1067,11 @@ float2 PsChroma(VSOut i) : SV_Target
         if (w == 0 || h == 0) return false;
         const uint32_t sourceWidth = r.sourceWidthHint.load(std::memory_order_relaxed);
         const uint32_t sourceHeight = r.sourceHeightHint.load(std::memory_order_relaxed);
-        const bool upscaleRequested = r.vsrWanted.load(std::memory_order_relaxed) &&
+        // AudioCore+ must render in swapchain coordinates. Feeding it through
+        // the video VSR source-size/aspect-fit path letterboxes the scene and
+        // makes its WPF overlay coordinates impossible to align.
+        const bool upscaleRequested = !r.audioCoreScene.load(std::memory_order_relaxed) &&
+            r.vsrWanted.load(std::memory_order_relaxed) &&
             sourceWidth > 0 && sourceHeight > 0 &&
             (sourceWidth < w || sourceHeight < h) &&
             r.vsrVideoDevice && r.vsrVideoContext;
@@ -1222,7 +1229,8 @@ float2 PsChroma(VSOut i) : SV_Target
             return;
         r.context->CopyResource(backBuffer, tex);
         backBuffer->Release();
-        const HRESULT hr = r.swapChain->Present(0, 0);
+        const UINT syncInterval = r.audioCoreScene.load(std::memory_order_relaxed) && r.audioCore.VSync() ? 1u : 0u;
+        const HRESULT hr = r.swapChain->Present(syncInterval, 0);
         std::lock_guard lock(r.stateMutex);
         if (FAILED(hr))
         {
@@ -1396,16 +1404,35 @@ float2 PsChroma(VSOut i) : SV_Target
         else
             SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
 
+        bool previousAudioScene = false;
+        uint64_t lastAudioFrameSequence = ~uint64_t{};
+        uint32_t lastAudioWidth = 0;
+        uint32_t lastAudioHeight = 0;
         while (!r.quit.load(std::memory_order_relaxed))
         {
-            WaitForSingleObject(r.wakeEvent, 50);
+            const bool audioScene = r.audioCoreScene.load(std::memory_order_relaxed);
+            if (audioScene != previousAudioScene)
+            {
+                r.havePrevious = false;
+                previousAudioScene = audioScene;
+                lastAudioFrameSequence = ~uint64_t{};
+                lastAudioWidth = lastAudioHeight = 0;
+            }
+            // Managed CompositionTarget.Rendering is the cadence authority for
+            // both modes. PushVisualFrame wakes this thread; a long timeout is
+            // only a lifecycle safety net and never manufactures duplicate
+            // frames (notably when VSync is disabled).
+            const DWORD audioWait = audioScene ? 1000u : 50u;
+            WaitForSingleObject(r.wakeEvent, audioWait);
             if (r.quit.load(std::memory_order_relaxed)) break;
 
             const uint64_t flags = r.mpvApi.Update(r.renderContext);
-            if (!(flags & MPV_RENDER_UPDATE_FRAME)) continue;
+            const bool hasMpvFrame = (flags & MPV_RENDER_UPDATE_FRAME) != 0;
+            if (!hasMpvFrame && !audioScene) continue;
 
             auto skipFrame = [&]
             {
+                if (!hasMpvFrame) return;
                 // Still consume the frame so mpv does not stall.
                 int one = 1;
                 mpv_render_param skip[] = { { MPV_RENDER_PARAM_SKIP_RENDERING, &one }, { MPV_RENDER_PARAM_INVALID, nullptr } };
@@ -1432,14 +1459,32 @@ float2 PsChroma(VSOut i) : SV_Target
                 continue;
             }
 
+            if (audioScene)
+            {
+                const uint64_t sequence = r.audioCore.FrameSequence();
+                if (sequence == lastAudioFrameSequence && w == lastAudioWidth && h == lastAudioHeight)
+                {
+                    skipFrame();
+                    continue;
+                }
+                if (!r.audioCore.Render(r.device, r.context, r.renderTarget,
+                    r.renderWidth, r.renderHeight, QpcSeconds()))
+                    r.SetMessage("ELYCAST AudioCore+: compilation/rendu shader D3D11 impossible.");
+                lastAudioFrameSequence = sequence;
+                lastAudioWidth = w;
+                lastAudioHeight = h;
+                skipFrame();
+            }
             // mpv -> GL FBO -> D3D11 renderTarget (same GPU memory).
-            if (!r.api.DXLockObjectsNV(r.interopDevice, 1, &r.interopTexture))
+            else if (!r.api.DXLockObjectsNV(r.interopDevice, 1, &r.interopTexture))
             {
                 // Rendering into an unlocked interop texture is undefined —
                 // that is exactly what showed up as random black frames.
                 skipFrame();
                 continue;
             }
+            else
+            {
             mpv_opengl_fbo fbo{};
             fbo.fbo = static_cast<int>(r.fbo);
             fbo.w = static_cast<int>(r.renderWidth);
@@ -1455,6 +1500,7 @@ float2 PsChroma(VSOut i) : SV_Target
             r.mpvApi.Render(r.renderContext, renderParams);
             glFlush();
             r.api.DXUnlockObjectsNV(r.interopDevice, 1, &r.interopTexture); // synchronises GL -> D3D
+            }
 
             const double now = QpcSeconds();
             double observedDelta = 0;
@@ -1523,7 +1569,7 @@ float2 PsChroma(VSOut i) : SV_Target
             // only built once the target size stayed stable for 250 ms so
             // resize storms and zaps do not stack expensive NvOFFRUCCreate
             // calls (each one froze presentation and read as a black blink).
-            const bool wantFruc = r.frucWanted.load(std::memory_order_relaxed);
+            const bool wantFruc = r.frucWanted.load(std::memory_order_relaxed) && !audioScene;
             if (!wantFruc && frucInit)
             {
                 ElyFlow_Shutdown();
@@ -1780,6 +1826,83 @@ void ElyFlowRenderer_ConfigureFruc(int32_t enable)
     if (!g_renderer) return;
     g_renderer->frucWanted.store(enable != 0, std::memory_order_relaxed);
     if (g_renderer->wakeEvent) SetEvent(g_renderer->wakeEvent);
+}
+
+int32_t ElyAudioCore_SetScene(int32_t enabled)
+{
+    std::lock_guard lock(g_rendererMutex);
+    if (!g_renderer) return ELYFLOW_RENDERER_ALREADY_ACTIVE;
+    g_renderer->audioCoreScene.store(enabled != 0, std::memory_order_relaxed);
+    if (g_renderer->wakeEvent) SetEvent(g_renderer->wakeEvent);
+    return ELYFLOW_RENDERER_OK;
+}
+
+void ElyAudioCore_PushAudioFrame(const double* bands, int32_t count,
+                                 float bass, float energy, float beat)
+{
+    std::lock_guard rendererLock(g_rendererMutex);
+    if (!g_renderer || !bands || count <= 0) return;
+    g_renderer->audioCore.Push(bands, count, bass, energy, beat);
+    if (g_renderer->wakeEvent) SetEvent(g_renderer->wakeEvent);
+}
+
+void ElyAudioCore_PushVisualFrame(const ElyAudioCoreVisualFrameNative* frame,
+                                  const ElyAudioCoreLineNative* bars, int32_t barCount,
+                                  const ElyAudioCoreEllipseNative* particles, int32_t particleCount,
+                                  const ElyAudioCoreEllipseNative* waves, int32_t waveCount)
+{
+    if (!frame || frame->structSize < sizeof(ElyAudioCoreVisualFrameNative)) return;
+    std::lock_guard rendererLock(g_rendererMutex);
+    if (!g_renderer) return;
+    g_renderer->audioCore.PushVisualFrame(*frame, bars, barCount, particles, particleCount, waves, waveCount);
+    if (g_renderer->wakeEvent) SetEvent(g_renderer->wakeEvent);
+}
+
+void ElyAudioCore_Beat(float strength)
+{
+    std::lock_guard lock(g_rendererMutex);
+    if (g_renderer) g_renderer->audioCore.Beat(strength);
+}
+
+void ElyAudioCore_SetPalette(const uint32_t* colors, int32_t count)
+{
+    std::lock_guard lock(g_rendererMutex);
+    if (g_renderer) g_renderer->audioCore.SetPalette(colors, count);
+}
+
+void ElyAudioCore_SetSettings(const ElyAudioCoreSettingsNative* settings)
+{
+    if (!settings || settings->structSize < sizeof(ElyAudioCoreSettingsNative)) return;
+    std::lock_guard lock(g_rendererMutex);
+    if (g_renderer) g_renderer->audioCore.SetSettings(*settings);
+}
+
+void ElyAudioCore_SetBackground(const uint8_t* bgra, uint32_t width, uint32_t height, uint32_t stride)
+{
+    std::lock_guard lock(g_rendererMutex);
+    if (g_renderer) g_renderer->audioCore.SetBackground(bgra, width, height, stride);
+}
+
+void ElyAudioCore_SetPointer(float x, float y)
+{
+    std::lock_guard lock(g_rendererMutex);
+    if (g_renderer) g_renderer->audioCore.SetPointer(x, y);
+}
+
+void ElyAudioCore_SetLayout(float centerX, float centerY, float innerRadius, float unitScale)
+{
+    std::lock_guard lock(g_rendererMutex);
+    if (g_renderer) g_renderer->audioCore.SetLayout(centerX, centerY, innerRadius, unitScale);
+}
+
+int32_t ElyAudioCore_GetStats(ElyAudioCoreStatsNative* stats)
+{
+    if (!stats || stats->structSize < sizeof(ElyAudioCoreStatsNative)) return ELYFLOW_RENDERER_INVALID_ARGUMENT;
+    std::lock_guard lock(g_rendererMutex);
+    if (!g_renderer) return ELYFLOW_RENDERER_ALREADY_ACTIVE;
+    *stats = g_renderer->audioCore.Stats();
+    stats->active = g_renderer->audioCoreScene.load() ? 1 : 0;
+    return ELYFLOW_RENDERER_OK;
 }
 
 void ElyFlowRenderer_Destroy()

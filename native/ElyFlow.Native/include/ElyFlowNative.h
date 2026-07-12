@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include "ElyAudioCoreNative.h"
 
 #ifdef _WIN32
     #ifdef ELYFLOW_NATIVE_EXPORTS
@@ -180,7 +181,7 @@ struct ElyFlowRendererState
     char message[512];
 };
 
-constexpr uint32_t ELYFLOW_RENDERER_ABI_VERSION = 5;
+constexpr uint32_t ELYFLOW_RENDERER_ABI_VERSION = 10;
 ELYFLOW_API uint32_t ElyFlowRenderer_GetAbiVersion();
 // Checks D3D11 + WGL_NV_DX_interop2 availability without mpv (cheap, safe).
 ELYFLOW_API int32_t ElyFlowRenderer_Preflight(char* message, int32_t messageSize);
@@ -196,6 +197,23 @@ ELYFLOW_API void ElyFlowRenderer_ConfigureVsr(int32_t enable, uint32_t sourceWid
 ELYFLOW_API void ElyFlowRenderer_ConfigureFruc(int32_t enable);
 ELYFLOW_API int32_t ElyFlowRenderer_GetState(ElyFlowRendererState* state);
 ELYFLOW_API void ElyFlowRenderer_Destroy();
+
+// ELYCAST AudioCore+ scene. Audio analysis remains managed; these calls only
+// switch the ELYCORE source and publish the latest thread-safe render snapshot.
+ELYFLOW_API int32_t ElyAudioCore_SetScene(int32_t enabled);
+ELYFLOW_API void ElyAudioCore_PushAudioFrame(const double* bands, int32_t count,
+                                             float bass, float energy, float beat);
+ELYFLOW_API void ElyAudioCore_PushVisualFrame(const ElyAudioCoreVisualFrameNative* frame,
+                                              const ElyAudioCoreLineNative* bars, int32_t barCount,
+                                              const ElyAudioCoreEllipseNative* particles, int32_t particleCount,
+                                              const ElyAudioCoreEllipseNative* waves, int32_t waveCount);
+ELYFLOW_API void ElyAudioCore_Beat(float strength);
+ELYFLOW_API void ElyAudioCore_SetPalette(const uint32_t* colors, int32_t count);
+ELYFLOW_API void ElyAudioCore_SetSettings(const ElyAudioCoreSettingsNative* settings);
+ELYFLOW_API void ElyAudioCore_SetBackground(const uint8_t* bgra, uint32_t width, uint32_t height, uint32_t stride);
+ELYFLOW_API void ElyAudioCore_SetPointer(float x, float y);
+ELYFLOW_API void ElyAudioCore_SetLayout(float centerX, float centerY, float innerRadius, float unitScale);
+ELYFLOW_API int32_t ElyAudioCore_GetStats(ElyAudioCoreStatsNative* stats);
 
 // Windows System Media Transport Controls (SMTC) bridge. The native ABI keeps
 // WinRT projection dependencies out of the managed WPF application.

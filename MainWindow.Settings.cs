@@ -22,6 +22,8 @@ public partial class MainWindow
     {
         _initializing = true;
         var s = StateStore.Settings;
+        SelectComboItemByTag(AudioBrowseCombo, s.AudioBrowseMode);
+        SelectComboItemByTag(AudioRendererCombo, s.AudioVisualizerRenderer);
         AccentSwatches.ItemsSource = ThemeManager.Presets;
         AccentHexBox.Text = s.AccentColor;
         AudioBgSolid.IsChecked = s.AudioBackgroundMode == "solid";
@@ -33,6 +35,9 @@ public partial class MainWindow
         AudioSlowZoomSwitch.IsChecked = s.AudioBackgroundSlowZoom;
         AudioSlowPanSwitch.IsChecked = s.AudioBackgroundSlowPan;
         AudioParallaxSwitch.IsChecked = s.AudioBackgroundMouseParallax;
+        AudioParallaxIntensitySlider.Value = s.AudioBackgroundParallaxIntensity * 100;
+        AudioParallaxIntensitySlider.IsEnabled = s.AudioBackgroundMouseParallax;
+        AudioParallaxIntensityValue.Text = $"{s.AudioBackgroundParallaxIntensity * 100:0}%";
         AudioAutoPaletteSwitch.IsChecked = s.AudioPaletteAutomatic;
         AudioAdaptiveParticlesSwitch.IsChecked = s.AudioParticleAdaptiveColors;
         AudioShakeSwitch.IsChecked = s.AudioVisualizerShake;
@@ -42,6 +47,7 @@ public partial class MainWindow
         AudioParticleDistanceSlider.Value = s.AudioParticleDistance * 100;
         AudioBackgroundCombo.IsEnabled = true;
         ElySmartAutoSwitch.IsChecked = s.ElySmartAutoOptimizeDecorative;
+        ElySmartNotificationsSwitch.IsChecked = s.ElySmartNotificationsEnabled;
         SelectComboItemByTag(ElySmartProfileCombo, s.ElySmartWorkload);
         StatsSwitch.IsChecked = s.ShowStats;
         ReconnectSwitch.IsChecked = s.AutoReconnect;
@@ -82,6 +88,7 @@ public partial class MainWindow
         ShowSettingsCategory("appearance");
         _initializing = false;
         ApplyAudioVisualizerSettings();
+        RefreshAudioRendererStatus();
     }
 
     private void Setting_Changed(object sender, RoutedEventArgs e)
@@ -100,6 +107,14 @@ public partial class MainWindow
     private void AudioVisualizerSetting_Changed(object sender, RoutedEventArgs e) => SaveAudioVisualizerSettings();
     private void AudioVisualizerSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) => SaveAudioVisualizerSettings();
 
+    private void AudioRenderer_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_initializing || AudioRendererCombo?.SelectedItem is not ComboBoxItem { Tag: string renderer }) return;
+        StateStore.Settings.AudioVisualizerRenderer = renderer;
+        StateStore.Save();
+        ApplyAudioRendererSelection(showFeedback: true);
+    }
+
     private void SaveAudioVisualizerSettings()
     {
         if (_initializing || AudioBgSolid == null) return;
@@ -112,6 +127,9 @@ public partial class MainWindow
         s.AudioBackgroundSlowZoom = AudioSlowZoomSwitch.IsChecked == true;
         s.AudioBackgroundSlowPan = AudioSlowPanSwitch.IsChecked == true;
         s.AudioBackgroundMouseParallax = AudioParallaxSwitch.IsChecked == true;
+        s.AudioBackgroundParallaxIntensity = AudioParallaxIntensitySlider.Value / 100.0;
+        AudioParallaxIntensitySlider.IsEnabled = s.AudioBackgroundMouseParallax;
+        AudioParallaxIntensityValue.Text = $"{AudioParallaxIntensitySlider.Value:0}%";
         s.AudioPaletteAutomatic = AudioAutoPaletteSwitch.IsChecked == true;
         s.AudioParticleAdaptiveColors = AudioAdaptiveParticlesSwitch.IsChecked == true;
         s.AudioVisualizerShake = AudioShakeSwitch.IsChecked == true;

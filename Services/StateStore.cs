@@ -19,6 +19,7 @@ public static class StateStore
     private const string ProtectedHeader = "ElyCastState:v1:";
 
     public static AppState Current { get; private set; } = new();
+    public static bool SuppressSaves { get; set; }
 
     public static void Load()
     {
@@ -44,6 +45,7 @@ public static class StateStore
 
     public static void Save()
     {
+        if (SuppressSaves) return;
         try
         {
             Directory.CreateDirectory(Dir);
@@ -113,9 +115,15 @@ public static class StateStore
         s.AudioBackgroundImage = s.AudioBackgroundImage is "mountains" or "sunset" or "night-sky" or "paris" or "new-york" ? s.AudioBackgroundImage : "sunset";
         s.AudioBackgroundBlur = double.IsFinite(s.AudioBackgroundBlur) ? Math.Clamp(s.AudioBackgroundBlur, 0, 48) : 45.6;
         s.AudioBackgroundDim = double.IsFinite(s.AudioBackgroundDim) ? Math.Clamp(s.AudioBackgroundDim, 0.15, 0.85) : 0.85;
+        s.AudioBackgroundParallaxIntensity = double.IsFinite(s.AudioBackgroundParallaxIntensity)
+            ? Math.Clamp(s.AudioBackgroundParallaxIntensity, 0, 2) : 1.0;
         s.AudioVisualizerTargetFps = Math.Clamp(s.AudioVisualizerTargetFps, 30, 360);
         s.AudioParticleCount = Math.Clamp(s.AudioParticleCount, 24, 192);
         s.AudioParticleDistance = double.IsFinite(s.AudioParticleDistance) ? Math.Clamp(s.AudioParticleDistance, 0.55, 1.65) : 1.0;
+        s.AudioVisualizerRenderer = s.AudioVisualizerRenderer is "classic" or "audiocore"
+            ? s.AudioVisualizerRenderer : "classic";
+        s.AudioBrowseMode = s.AudioBrowseMode is "albums" or "artists" or "genres" or "playlists" or "tracks"
+            ? s.AudioBrowseMode : "albums";
         s.ElySmartWorkload = s.ElySmartWorkload is "Iptv" or "Films" or "Series" or "Anime" or "Audio" or "Mixed" ? s.ElySmartWorkload : "Mixed";
         s.ElySmartIgnoredHealthIssues ??= new List<string>();
         s.ElySmartIgnoredHealthIssues.RemoveAll(value => !Enum.TryParse<ElySmart.HealthIssueKind>(value, out _));
