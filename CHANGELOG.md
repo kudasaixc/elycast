@@ -4,6 +4,22 @@ Toutes les modifications notables d'ElyCast sont consignées ici. Le format suit
 [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le versionnage
 [SemVer](https://semver.org/lang/fr/).
 
+## [1.3.0-canary] — 2026-07-12
+
+### Ajouté
+- **Importer des fichiers** : en plus de l'import de dossier, un nouveau bouton
+  « Importer des fichiers » (côtés Musique et Vidéo) ouvre l'explorateur en
+  sélection multiple, avec un filtre adapté au type de média de la section.
+- **Glisser-déposer** : on peut désormais déposer un ou plusieurs sons/vidéos —
+  et même des dossiers — directement dans la liste de gauche. Chaque fichier est
+  routé automatiquement vers la bonne bibliothèque selon son extension, si bien
+  qu'un même dépôt peut mêler musique et vidéo. Les fichiers non reconnus sont
+  ignorés avec un message plutôt qu'une erreur.
+
+### Interne
+- Mutualisation du moteur d'import parallèle entre dossier et fichiers
+  (`LocalLibraryService.BuildItems`, `ImportFilesAsync`).
+
 ## [1.3.0] — 2026-07-12
 
 ### Ajouté

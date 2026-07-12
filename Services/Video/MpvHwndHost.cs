@@ -21,6 +21,7 @@ public sealed class MpvHwndHost : HwndHost
     private const uint WM_ERASEBKGND = 0x0014;
     private const uint WM_MOUSEMOVE = 0x0200;
     private const uint WM_LBUTTONDOWN = 0x0201;
+    private const uint WM_LBUTTONUP = 0x0202;
     private const uint WM_RBUTTONDOWN = 0x0204;
     private const uint WM_MBUTTONDOWN = 0x0207;
     private const uint WM_MOUSEWHEEL = 0x020A;
@@ -45,6 +46,10 @@ public sealed class MpvHwndHost : HwndHost
     /// </summary>
     public event Action? PointerActivity;
     public event Action? PointerLeft;
+    // Raised on a left-click landing on the native surface. When AudioCore+ presents
+    // over the WPF overlay, the swapchain HWND wins the z-order and swallows the click,
+    // so the overlay's click-to-pause never fires; this relays it back.
+    public event Action? PointerClicked;
 
     protected override HandleRef BuildWindowCore(HandleRef hwndParent)
     {
@@ -133,6 +138,10 @@ public sealed class MpvHwndHost : HwndHost
             case WM_MBUTTONDOWN:
             case WM_MOUSEWHEEL:
                 PointerActivity?.Invoke();
+                break;
+            case WM_LBUTTONUP:
+                PointerActivity?.Invoke();
+                PointerClicked?.Invoke();
                 break;
             case WM_MOUSELEAVE:
                 _trackingMouse = false;

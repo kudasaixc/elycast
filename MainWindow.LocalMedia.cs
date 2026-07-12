@@ -16,6 +16,7 @@ public partial class MainWindow
     private List<MusicGroup> _musicGroups = new();
     private MusicGroup? _openMusicGroup;
     private MusicGroup? _menuTargetGroup;
+    private System.Windows.Data.ListCollectionView? _musicTrackView;
     // Tracks the list playback should advance through (the group the current
     // song was launched from). Null = the whole flat library.
     private List<PlayItem>? _audioPlayContext;
@@ -50,39 +51,132 @@ public partial class MainWindow
             Multiselect = false
         };
         if (dialog.ShowDialog(this) != true) return;
+        await ImportSingleKindAsync(progress => _localLibrary.ImportFolderAsync(dialog.FolderName, audio, progress), audio);
+    }
 
-        LocalImportButton.IsEnabled = false;
-        LocalImportButton.Content = "Analyse en cours…";
+    private async void ImportLocalFiles_Click(object sender, RoutedEventArgs e)
+    {
+        var audio = _section == Section.LocalAudio;
+        var dialog = new OpenFileDialog
+        {
+            Title = audio ? "Importer des fichiers de musique" : "Importer des fichiers vidéo",
+            Multiselect = true,
+            Filter = audio ? LocalLibraryService.AudioFileFilter : LocalLibraryService.VideoFileFilter
+        };
+        if (dialog.ShowDialog(this) != true) return;
+        await ImportSingleKindAsync(progress => _localLibrary.ImportFilesAsync(dialog.FileNames, audio, progress), audio);
+    }
+
+    // Throttled UI updates: the parallel import fires one report per file, but
+    // we only refresh the button label a few times per second.
+    private IProgress<int> MakeImportProgress()
+    {
+        var lastTick = 0L;
+        return new Progress<int>(count =>
+        {
+            var now = Environment.TickCount64;
+            if (now - lastTick < 120) return;
+            lastTick = now;
+            LocalImportButton.Content = $"Analyse… {count} fichier(s)";
+        });
+    }
+
+    private void SetImportBusy(bool busy)
+    {
+        LocalImportButton.IsEnabled = !busy;
+        LocalImportFilesButton.IsEnabled = !busy;
+        LocalImportButton.Content = busy ? "Analyse en cours…" : "Importer un dossier";
+    }
+
+    private int ApplyImportedItems(IReadOnlyList<PlayItem> imported, bool audio)
+    {
+        var target = audio ? _localAudioItems : _localVideoItems;
+        var before = target.Count;
+        LocalLibraryService.MergeInto(target, imported);
+        MarkFavorites(target);
+        return target.Count - before;
+    }
+
+    private async Task ImportSingleKindAsync(Func<IProgress<int>, Task<IReadOnlyList<PlayItem>>> import, bool audio)
+    {
+        SetImportBusy(true);
         try
         {
-            // Throttled UI updates: the parallel import fires one report per file,
-            // but we only refresh the button label a few times per second.
-            var lastTick = 0L;
-            var progress = new Progress<int>(count =>
-            {
-                var now = Environment.TickCount64;
-                if (now - lastTick < 120) return;
-                lastTick = now;
-                LocalImportButton.Content = $"Analyse… {count} fichier(s)";
-            });
-            var imported = await _localLibrary.ImportFolderAsync(dialog.FolderName, audio, progress);
-            var target = audio ? _localAudioItems : _localVideoItems;
-            var before = target.Count;
-            LocalLibraryService.MergeInto(target, imported);
-            MarkFavorites(target);
+            var imported = await import(MakeImportProgress());
+            var added = ApplyImportedItems(imported, audio);
             SaveLocalLibrary();
             ShowSection(audio ? Section.LocalAudio : Section.LocalVideo);
-            ShowOverlay($"{target.Count - before} fichier(s) importé(s)", spinning: false);
+            ShowOverlay($"{added} fichier(s) importé(s)", spinning: false);
         }
         catch (Exception ex)
         {
-            DebugConsole.Exception("Import du dossier local impossible", ex);
-            ShowOverlay("Impossible d’importer ce dossier", spinning: false);
+            DebugConsole.Exception("Import local impossible", ex);
+            ShowOverlay("Impossible d’importer ces éléments", spinning: false);
         }
         finally
         {
-            LocalImportButton.IsEnabled = true;
-            LocalImportButton.Content = "Importer un dossier";
+            SetImportBusy(false);
+        }
+    }
+
+    // ============ DRAG & DROP ============
+    private void LocalList_DragOver(object sender, DragEventArgs e)
+    {
+        var accepted = _connected && _section is Section.LocalAudio or Section.LocalVideo
+            && e.Data.GetDataPresent(DataFormats.FileDrop);
+        e.Effects = accepted ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private async void LocalList_Drop(object sender, DragEventArgs e)
+    {
+        if (!_connected || _section is not (Section.LocalAudio or Section.LocalVideo)) return;
+        if (e.Data.GetData(DataFormats.FileDrop) is not string[] dropped) return;
+        e.Handled = true;
+
+        // Expand any dropped folders, then route each file to the right library
+        // by extension so a single drop can carry both music and video.
+        var files = new List<string>();
+        foreach (var path in dropped)
+        {
+            if (Directory.Exists(path))
+                files.AddRange(Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories));
+            else if (File.Exists(path))
+                files.Add(path);
+        }
+        var audioFiles = files.Where(LocalLibraryService.IsAudio).ToList();
+        var videoFiles = files.Where(LocalLibraryService.IsVideo).ToList();
+        if (audioFiles.Count == 0 && videoFiles.Count == 0)
+        {
+            ShowOverlay("Aucun fichier audio ou vidéo reconnu", spinning: false);
+            return;
+        }
+
+        SetImportBusy(true);
+        try
+        {
+            var progress = MakeImportProgress();
+            var added = 0;
+            if (audioFiles.Count > 0)
+                added += ApplyImportedItems(await _localLibrary.ImportFilesAsync(audioFiles, true, progress), true);
+            if (videoFiles.Count > 0)
+                added += ApplyImportedItems(await _localLibrary.ImportFilesAsync(videoFiles, false, progress), false);
+            SaveLocalLibrary();
+
+            // Stay in the current section if it received something; otherwise
+            // switch to whichever kind was actually dropped.
+            var showAudio = _section == Section.LocalAudio ? audioFiles.Count > 0 : videoFiles.Count == 0;
+            ShowSection(showAudio ? Section.LocalAudio : Section.LocalVideo);
+            ShowOverlay($"{added} fichier(s) importé(s)", spinning: false);
+        }
+        catch (Exception ex)
+        {
+            DebugConsole.Exception("Import par glisser-déposer impossible", ex);
+            ShowOverlay("Impossible d’importer ces éléments", spinning: false);
+        }
+        finally
+        {
+            SetImportBusy(false);
         }
     }
 
@@ -166,8 +260,9 @@ public partial class MainWindow
         for (var i = 0; i < group.Tracks.Count; i++)
             group.Tracks[i].DisplayTrackNumberLabel = group.Kind == MusicGroupKind.Playlist
                 ? (i + 1).ToString() : group.Tracks[i].TrackNumberLabel;
-        MusicTrackList.ItemsSource = null;
-        MusicTrackList.ItemsSource = group.Tracks;
+        MusicTrackSearch.Text = "";
+        _musicTrackView = new System.Windows.Data.ListCollectionView(group.Tracks) { Filter = MusicTrackFilter };
+        MusicTrackList.ItemsSource = _musicTrackView;
 
         MusicPanel.Visibility = Visibility.Visible;
         CloseOverlayBtn.Visibility = Visibility.Visible;
@@ -175,6 +270,18 @@ public partial class MainWindow
         VideoStage.Cursor = Cursors.Arrow;
         FadeIn(MusicPanel);
     }
+
+    private bool MusicTrackFilter(object obj)
+    {
+        var query = MusicTrackSearch.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(query)) return true;
+        if (obj is not PlayItem track) return false;
+        return track.Name.Contains(query, StringComparison.OrdinalIgnoreCase)
+            || (track.Artist?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (track.Album?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
+    private void MusicTrackSearch_TextChanged(object sender, TextChangedEventArgs e) => _musicTrackView?.Refresh();
 
     private void CloseMusic_Click(object sender, RoutedEventArgs e) => CloseMusicPanel();
 

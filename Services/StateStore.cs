@@ -117,8 +117,17 @@ public static class StateStore
         s.AudioBackgroundDim = double.IsFinite(s.AudioBackgroundDim) ? Math.Clamp(s.AudioBackgroundDim, 0.15, 0.85) : 0.85;
         s.AudioBackgroundParallaxIntensity = double.IsFinite(s.AudioBackgroundParallaxIntensity)
             ? Math.Clamp(s.AudioBackgroundParallaxIntensity, 0, 2) : 1.0;
-        s.AudioVisualizerTargetFps = Math.Clamp(s.AudioVisualizerTargetFps, 30, 360);
-        s.AudioParticleCount = Math.Clamp(s.AudioParticleCount, 24, 192);
+        // 0 = illimité (aucun plafond de cadence côté renderer natif).
+        s.AudioVisualizerTargetFps = s.AudioVisualizerTargetFps <= 0
+            ? 0 : Math.Clamp(s.AudioVisualizerTargetFps, 30, 480);
+        // One-time bump of the former 96 default to the new 192 default; runs once
+        // so a user who deliberately picks 96 later is left alone.
+        if (!s.AudioParticleCountMigratedV2)
+        {
+            if (s.AudioParticleCount == 96) s.AudioParticleCount = 192;
+            s.AudioParticleCountMigratedV2 = true;
+        }
+        s.AudioParticleCount = Math.Clamp(s.AudioParticleCount, 24, 384);
         s.AudioParticleDistance = double.IsFinite(s.AudioParticleDistance) ? Math.Clamp(s.AudioParticleDistance, 0.55, 1.65) : 1.0;
         s.AudioVisualizerRenderer = s.AudioVisualizerRenderer is "classic" or "audiocore"
             ? s.AudioVisualizerRenderer : "classic";

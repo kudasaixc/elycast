@@ -788,7 +788,8 @@ ElyAudioCoreStatsNative ElyAudioCoreScene::Stats() const
 int ElyAudioCoreScene::TargetFps() const
 {
     std::lock_guard lock(mutex_);
-    return std::clamp(settings_.targetFps, 30, 360);
+    // 0 (or below) means unlimited: the render loop paces itself with no cap.
+    return settings_.targetFps <= 0 ? 0 : std::clamp(settings_.targetFps, 30, 480);
 }
 
 bool ElyAudioCoreScene::VSync() const

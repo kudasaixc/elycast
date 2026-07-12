@@ -393,6 +393,9 @@
                                         Visibility="Collapsed">
                                 <Button x:Name="LocalImportButton" Content="Importer un dossier" Style="{StaticResource GhostButton}"
                                         Height="40" Click="ImportLocalFolder_Click"/>
+                                <Button x:Name="LocalImportFilesButton" Content="Importer des fichiers" Style="{StaticResource GhostButton}"
+                                        Height="40" Margin="0,8,0,0" Click="ImportLocalFiles_Click"
+                                        ToolTip="Sélectionner un ou plusieurs fichiers"/>
                                 <StackPanel x:Name="AudioLibraryActions">
                                     <ComboBox x:Name="AudioBrowseCombo" Margin="0,8,0,0" Style="{StaticResource FieldCombo}"
                                               SelectionChanged="AudioBrowse_Changed">
@@ -443,6 +446,7 @@
                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
                                      VirtualizingStackPanel.IsVirtualizing="True"
                                      VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                     AllowDrop="True" DragOver="LocalList_DragOver" Drop="LocalList_Drop"
                                      PreviewMouseRightButtonDown="ItemList_RightClick"
                                      MouseDoubleClick="ItemList_DoubleClick">
                                 <ListBox.ContextMenu>
@@ -508,6 +512,7 @@
                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
                                      VirtualizingStackPanel.IsVirtualizing="True"
                                      VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                     AllowDrop="True" DragOver="LocalList_DragOver" Drop="LocalList_Drop"
                                      PreviewMouseRightButtonDown="ItemList_RightClick"
                                      PreviewMouseLeftButtonUp="MusicGroupList_Click">
                                 <ListBox.ContextMenu>
@@ -1008,6 +1013,7 @@
                                     <Grid Margin="28,24">
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="*"/>
                                         </Grid.RowDefinitions>
 
@@ -1068,8 +1074,13 @@
                                             </StackPanel>
                                         </Grid>
 
+                                        <!-- filter tracks inside the opened group -->
+                                        <TextBox x:Name="MusicTrackSearch" Grid.Row="1" Margin="0,0,0,12"
+                                                 Style="{StaticResource SearchBox}" Tag="Rechercher dans ce contenu…"
+                                                 TextChanged="MusicTrackSearch_TextChanged"/>
+
                                         <!-- tracks -->
-                                        <ListBox x:Name="MusicTrackList" Grid.Row="1" Style="{StaticResource ChannelListBox}"
+                                        <ListBox x:Name="MusicTrackList" Grid.Row="2" Style="{StaticResource ChannelListBox}"
                                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
                                                  VirtualizingStackPanel.IsVirtualizing="True"
                                                  VirtualizingStackPanel.VirtualizationMode="Recycling"
@@ -1279,7 +1290,7 @@
                                                     </ComboBox>
                                                 </Grid>
                                                 <TextBlock Text="Nombre de particules" Margin="0,18,0,5" Foreground="{DynamicResource TextBrush}"/>
-                                                <Slider x:Name="AudioParticleCountSlider" Minimum="24" Maximum="192" TickFrequency="12" IsSnapToTickEnabled="True" ValueChanged="AudioVisualizerSlider_Changed"/>
+                                                <Slider x:Name="AudioParticleCountSlider" Minimum="24" Maximum="384" TickFrequency="12" IsSnapToTickEnabled="True" ValueChanged="AudioVisualizerSlider_Changed"/>
                                                 <TextBlock Text="Distance des particules" Margin="0,14,0,5" Foreground="{DynamicResource TextBrush}"/>
                                                 <Slider x:Name="AudioParticleDistanceSlider" Minimum="55" Maximum="165" ValueChanged="AudioVisualizerSlider_Changed"/>
                                             </StackPanel>

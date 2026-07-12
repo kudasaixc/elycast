@@ -1423,16 +1423,22 @@ float2 PsChroma(VSOut i) : SV_Target
             // the configured target FPS. Video mode stays event-driven.
             if (audioScene)
             {
-                audioInterval = 1.0 / std::clamp(r.audioCore.TargetFps(), 30, 360);
-                const double nowSeconds = QpcSeconds();
-                if (audioNextPresent <= 0.0) audioNextPresent = nowSeconds;
-                const double remaining = audioNextPresent - nowSeconds;
-                if (remaining > 0.0011)
+                const int targetFps = r.audioCore.TargetFps();
+                // targetFps == 0 -> unlimited: never wait, present as fast as the
+                // GPU allows (still gated by VSync when the user keeps it on).
+                audioInterval = targetFps > 0 ? 1.0 / targetFps : 0.0;
+                if (audioInterval > 0.0)
                 {
-                    // Sleep the bulk of the interval; a fresh push wakes us early
-                    // and we simply re-evaluate the deadline on the next lap.
-                    WaitForSingleObject(r.wakeEvent, static_cast<DWORD>(remaining * 1000.0));
-                    continue;
+                    const double nowSeconds = QpcSeconds();
+                    if (audioNextPresent <= 0.0) audioNextPresent = nowSeconds;
+                    const double remaining = audioNextPresent - nowSeconds;
+                    if (remaining > 0.0011)
+                    {
+                        // Sleep the bulk of the interval; a fresh push wakes us
+                        // early and we re-evaluate the deadline on the next lap.
+                        WaitForSingleObject(r.wakeEvent, static_cast<DWORD>(remaining * 1000.0));
+                        continue;
+                    }
                 }
             }
             else

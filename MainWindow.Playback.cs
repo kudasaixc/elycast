@@ -534,7 +534,7 @@ public partial class MainWindow
             $"FFT réel   : {_audioEngine.ActualAnalysisRateHz:0.0} Hz\n" +
             $"Renderer   : {(audioCore.Active != 0 ? "ELYCAST AudioCore+" : "Classique (WPF)")}\n" +
             $"FPS visuel : {(visualFps > 0 ? visualFps.ToString("0.0", CultureInfo.InvariantCulture) : "mesure…")} " +
-            $"(cible {StateStore.Settings.AudioVisualizerTargetFps}, VSync {(StateStore.Settings.AudioVisualizerVSync ? "ON" : "OFF")})\n" +
+            $"(cible {(StateStore.Settings.AudioVisualizerTargetFps <= 0 ? "illimitée" : StateStore.Settings.AudioVisualizerTargetFps.ToString(CultureInfo.InvariantCulture))}, VSync {(StateStore.Settings.AudioVisualizerVSync ? "ON" : "OFF")})\n" +
             renderLine +
             $"Basses     : {Gauge(_audioBassEnergy)}\n" +
             $"Énergie    : {Gauge(_audioFullEnergy)}\n" +

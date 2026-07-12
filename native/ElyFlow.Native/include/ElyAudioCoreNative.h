@@ -3,7 +3,7 @@
 #include <cstdint>
 
 constexpr int ELY_AUDIO_CORE_BAR_COUNT = 112;
-constexpr int ELY_AUDIO_CORE_MAX_PARTICLES = 192;
+constexpr int ELY_AUDIO_CORE_MAX_PARTICLES = 384;
 constexpr int ELY_AUDIO_CORE_MAX_WAVES = 6;
 
 struct ElyAudioCoreSettingsNative

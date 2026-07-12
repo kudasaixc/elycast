@@ -137,8 +137,27 @@ public partial class MainWindow
         s.AudioVisualizerTargetFps = int.TryParse(TagOf(AudioFpsCombo, "60"), out var fps) ? fps : 60;
         s.AudioParticleCount = (int)AudioParticleCountSlider.Value;
         s.AudioParticleDistance = AudioParticleDistanceSlider.Value / 100.0;
-        StateStore.Save();
+        // Apply live (cheap: pushes config to the native scene), but DON'T write to
+        // disk on every tick — StateStore.Save() encrypts (DPAPI) and does an atomic
+        // file write, which stalls the UI thread while dragging a slider and makes the
+        // thumb stutter/jump. Coalesce the persist to fire once the drag settles.
         ApplyAudioVisualizerSettings();
+        QueueAudioSettingsSave();
+    }
+
+    private readonly DispatcherTimer _audioSettingsSaveTimer =
+        new() { Interval = TimeSpan.FromMilliseconds(400) };
+    private bool _audioSaveHooked;
+
+    private void QueueAudioSettingsSave()
+    {
+        if (!_audioSaveHooked)
+        {
+            _audioSettingsSaveTimer.Tick += (_, _) => { _audioSettingsSaveTimer.Stop(); StateStore.Save(); };
+            _audioSaveHooked = true;
+        }
+        _audioSettingsSaveTimer.Stop();
+        _audioSettingsSaveTimer.Start();
     }
 
     private void UpscalerSetting_Changed(object sender, SelectionChangedEventArgs e)

@@ -9,7 +9,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Elysium_Cast_IPTV</RootNamespace>
     <AssemblyName>ElyCast</AssemblyName>
-    <Version>1.3.0</Version>
+    <Version>1.3.0-canary</Version>
     <FileVersion>1.3.0.0</FileVersion>
     <AssemblyVersion>1.3.0.0</AssemblyVersion>
     <AssemblyTitle>ElyCast</AssemblyTitle>

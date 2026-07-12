@@ -29,7 +29,9 @@ public class Settings
     public bool AudioParticleAdaptiveColors { get; set; } = true;
     public int AudioVisualizerTargetFps { get; set; } = 60;
     public bool AudioVisualizerVSync { get; set; } = true;
-    public int AudioParticleCount { get; set; } = 96;
+    public int AudioParticleCount { get; set; } = 192;
+    // One-shot flag: migrate configs still on the former default (96) up to 192.
+    public bool AudioParticleCountMigratedV2 { get; set; }
     public double AudioParticleDistance { get; set; } = 1.0;
     public bool AudioVisualizerShake { get; set; } = true;
     public string AudioVisualizerRenderer { get; set; } = "classic"; // "classic" | "audiocore"

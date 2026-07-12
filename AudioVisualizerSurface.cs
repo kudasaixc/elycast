@@ -18,7 +18,7 @@ public sealed class AudioVisualizerSurface : FrameworkElement
 {
     public const int BarCount = 112;
     private const double InnerRadius = 198;
-    public const int MaxParticleCount = 192;
+    public const int MaxParticleCount = 384;
     public const int MaxShockwaveCount = 6;
     private const int HueSteps = 32;
     private const int AlphaSteps = 8;

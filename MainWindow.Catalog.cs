@@ -18,6 +18,8 @@ public partial class MainWindow
     private ImageSource? _audioEmbeddedCover;
     private Brush? _classicAudioBackgroundBrush;
     private string _audioCoreBackgroundKey = "";
+    private Color[]? _audioAdaptivePalette;
+    private string? _audioAdaptivePaletteKey;
     private float _audioCoreCenterX = .5f, _audioCoreCenterY = .5f, _audioCoreInnerRadius = .18f, _audioCoreUnitScale = .001f;
     private double _audioLastRenderedSeconds;
     private double _audioFpsWindowStartSeconds;
@@ -490,6 +492,9 @@ public partial class MainWindow
             CompositionTarget.Rendering -= OnAudioVisualFrame;
             _audioRenderHooked = false;
         }
+        // AudioCore+ draws into ELYCORE's shared swapchain; unhooking the WPF
+        // frame pump alone leaves the native scene painting over the next video.
+        if (ElyAudioCoreInterop.Available) ElyAudioCoreInterop.SetScene(false);
         AudioVisualizerLayer.Visibility = Visibility.Collapsed;
         _audioVisualStopwatch.Reset();
         _audioLastTickSeconds = 0;
@@ -596,13 +601,27 @@ public partial class MainWindow
         AudioSurface.ActiveParticleCount = s.AudioParticleCount;
         AudioSurface.ParticleDistance = s.AudioParticleDistance;
 
-        Color[]? palette = source is BitmapSource bitmap && s.AudioPaletteAutomatic && s.AudioParticleAdaptiveColors
-            ? ExtractDominantPalette(bitmap) : null;
-        AudioSurface.SetPalette(palette);
         var backgroundKey = source == null ? "none"
             : ReferenceEquals(source, _audioEmbeddedCover)
                 ? $"cover:{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(source)}"
                 : $"asset:{s.AudioBackgroundImage}";
+
+        // The adaptive palette depends only on the background image, not on the
+        // slider being dragged — so memoise it by background key instead of running
+        // the (expensive) dominant-colour extraction on every settings change.
+        Color[]? palette = null;
+        if (source is BitmapSource bitmap && s.AudioPaletteAutomatic && s.AudioParticleAdaptiveColors)
+        {
+            if (_audioAdaptivePalette == null || !string.Equals(backgroundKey, _audioAdaptivePaletteKey, StringComparison.Ordinal))
+            {
+                _audioAdaptivePalette = ExtractDominantPalette(bitmap);
+                _audioAdaptivePaletteKey = backgroundKey;
+            }
+            palette = _audioAdaptivePalette;
+        }
+        else _audioAdaptivePaletteKey = null;
+        AudioSurface.SetPalette(palette);
+
         var backgroundChanged = !string.Equals(backgroundKey, _audioCoreBackgroundKey, StringComparison.Ordinal);
         if (backgroundChanged) _audioCoreBackgroundKey = backgroundKey;
         ConfigureAudioCore(palette, source as BitmapSource, updateBackground: backgroundChanged);

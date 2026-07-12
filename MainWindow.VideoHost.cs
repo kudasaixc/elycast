@@ -244,6 +244,7 @@ public partial class MainWindow
             // entering the picture reveals the OSD on the very first movement.
             nativeHost.PointerActivity += OnVideoSurfacePointerActivity;
             nativeHost.PointerLeft += OnVideoSurfacePointerLeft;
+            nativeHost.PointerClicked += OnNativeSurfaceClicked;
         }
         backend.Volume = (int)VolumeSlider.Value;
 

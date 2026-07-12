@@ -65,7 +65,12 @@ public partial class MainWindow : Window
 
     private readonly DispatcherTimer _statsTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer _epgTimer = new() { Interval = TimeSpan.FromSeconds(15) };
-    private readonly DispatcherTimer _progressTimer = new() { Interval = TimeSpan.FromMilliseconds(500) };
+    // Render priority (not the default Background): the AudioCore+ visualizer floods
+    // the UI thread with CompositionTarget.Rendering work at Render priority, which
+    // would otherwise starve a Background-priority timer and freeze the seek bar for
+    // seconds at a time. 250 ms keeps the position readout feeling real-time.
+    private readonly DispatcherTimer _progressTimer =
+        new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(250) };
     private readonly DispatcherTimer _osdTimer = new() { Interval = TimeSpan.FromSeconds(2.8) };
     private readonly DispatcherTimer _elySoundApplyTimer = new() { Interval = TimeSpan.FromMilliseconds(140) };
     // Audio visualizer: analysis runs on a background thread (AudioVisualEngine),
@@ -661,6 +666,38 @@ public partial class MainWindow : Window
             var point = VideoStage.PointFromScreen(new Point(cursor.X, cursor.Y));
             return point.X >= 0 && point.Y >= 0 &&
                    point.X < VideoStage.ActualWidth && point.Y < VideoStage.ActualHeight;
+        }
+        catch { return false; }
+    }
+
+    // Click-to-pause when the native surface (AudioCore+ / video swapchain) captured
+    // the click instead of the WPF overlay. Mirrors OverlayRoot_MouseLeftButtonUp but
+    // works in VideoStage coordinates since there is no WPF hit here.
+    private void OnNativeSurfaceClicked()
+    {
+        if (_videoBackend?.HasMedia != true || IsPanelOpen()) return;
+        if (_osdVisible && IsCursorOverOsdControls()) return;
+        try
+        {
+            if (!GetCursorPos(out var cursor)) return;
+            var p = VideoStage.PointFromScreen(new Point(cursor.X, cursor.Y));
+            if (p.X < VideoStage.ActualWidth * 0.2 || p.X > VideoStage.ActualWidth * 0.8
+                || p.Y < VideoStage.ActualHeight * 0.15 || p.Y > VideoStage.ActualHeight * 0.78) return;
+        }
+        catch { return; }
+
+        var wasPlaying = _videoBackend.IsPlaying;
+        PlayPause_Click(this, new RoutedEventArgs());
+        ShowCenterTransportFeedback(showPause: wasPlaying);
+    }
+
+    private bool IsCursorOverOsdControls()
+    {
+        try
+        {
+            if (!GetCursorPos(out var cursor)) return false;
+            var p = OsdBottomChrome.PointFromScreen(new Point(cursor.X, cursor.Y));
+            return p.X >= 0 && p.Y >= 0 && p.X < OsdBottomChrome.ActualWidth && p.Y < OsdBottomChrome.ActualHeight;
         }
         catch { return false; }
     }

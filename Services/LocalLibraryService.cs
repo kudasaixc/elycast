@@ -15,36 +15,61 @@ public sealed class LocalLibraryService
     public static bool IsAudio(string path) => AudioExtensions.Contains(Path.GetExtension(path));
     public static bool IsVideo(string path) => VideoExtensions.Contains(Path.GetExtension(path));
 
+    // OpenFileDialog filters built from the recognised extension sets.
+    public static string AudioFileFilter => BuildFilter("Fichiers audio", AudioExtensions);
+    public static string VideoFileFilter => BuildFilter("Fichiers vidéo", VideoExtensions);
+
+    private static string BuildFilter(string label, IEnumerable<string> extensions)
+    {
+        var patterns = string.Join(";", extensions.Select(ext => "*" + ext));
+        return $"{label}|{patterns}|Tous les fichiers|*.*";
+    }
+
     public Task<IReadOnlyList<PlayItem>> ImportFolderAsync(
         string folder, bool audio, IProgress<int>? progress = null, CancellationToken ct = default) =>
         Task.Run<IReadOnlyList<PlayItem>>(() =>
         {
             Func<string, bool> predicate = audio ? IsAudio : IsVideo;
-
-            // Enumeration is materialised first so we can parallelise the expensive
-            // part (tag parsing = many small reads + decode, one file at a time
-            // otherwise). Independent per-file work → PLINQ scales it across cores
-            // and hides I/O latency; ordering is imposed at the end anyway.
             var files = Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
                 .Where(predicate).ToList();
-
-            var done = 0;
-            var query = files.AsParallel().WithCancellation(ct)
-                .WithDegreeOfParallelism(Math.Min(Environment.ProcessorCount, 8))
-                .Select(path =>
-                {
-                    var item = audio ? CreateAudioItem(path) : PlayItem.FromLocalFile(path);
-                    if (progress != null) progress.Report(Interlocked.Increment(ref done));
-                    return item;
-                });
-
-            var result = query.ToList();
-            return audio
-                ? result.OrderBy(i => i.AlbumArtist ?? i.Artist ?? "Artiste inconnu", StringComparer.CurrentCultureIgnoreCase)
-                    .ThenBy(i => i.Album ?? "Album inconnu", StringComparer.CurrentCultureIgnoreCase)
-                    .ThenBy(i => i.DiscNumber).ThenBy(i => i.TrackNumber).ThenBy(i => i.Name).ToList()
-                : result.OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            return BuildItems(files, audio, progress, ct);
         }, ct);
+
+    /// <summary>Imports an explicit set of file paths (file picker or drag-and-drop).</summary>
+    public Task<IReadOnlyList<PlayItem>> ImportFilesAsync(
+        IEnumerable<string> paths, bool audio, IProgress<int>? progress = null, CancellationToken ct = default) =>
+        Task.Run<IReadOnlyList<PlayItem>>(() =>
+        {
+            Func<string, bool> predicate = audio ? IsAudio : IsVideo;
+            var files = paths.Where(p => predicate(p) && File.Exists(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            return BuildItems(files, audio, progress, ct);
+        }, ct);
+
+    // Enumeration is materialised first so we can parallelise the expensive part
+    // (tag parsing = many small reads + decode, one file at a time otherwise).
+    // Independent per-file work → PLINQ scales it across cores and hides I/O
+    // latency; ordering is imposed at the end anyway.
+    private static IReadOnlyList<PlayItem> BuildItems(
+        List<string> files, bool audio, IProgress<int>? progress, CancellationToken ct)
+    {
+        var done = 0;
+        var query = files.AsParallel().WithCancellation(ct)
+            .WithDegreeOfParallelism(Math.Min(Environment.ProcessorCount, 8))
+            .Select(path =>
+            {
+                var item = audio ? CreateAudioItem(path) : PlayItem.FromLocalFile(path);
+                if (progress != null) progress.Report(Interlocked.Increment(ref done));
+                return item;
+            });
+
+        var result = query.ToList();
+        return audio
+            ? result.OrderBy(i => i.AlbumArtist ?? i.Artist ?? "Artiste inconnu", StringComparer.CurrentCultureIgnoreCase)
+                .ThenBy(i => i.Album ?? "Album inconnu", StringComparer.CurrentCultureIgnoreCase)
+                .ThenBy(i => i.DiscNumber).ThenBy(i => i.TrackNumber).ThenBy(i => i.Name).ToList()
+            : result.OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+    }
 
     public static PlayItem EnrichAudioItem(PlayItem item) => CreateAudioItem(item.DirectUrl ?? item.Id);
 
