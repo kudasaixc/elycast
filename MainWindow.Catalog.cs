@@ -28,6 +28,7 @@ public partial class MainWindow
     private bool _audioCoreRuntimeFailed;
     private int _audioCoreFailureCount;
     private double _audioCoreLastHealthCheck;
+    private double _audioParallaxX, _audioParallaxY;
     private readonly AudioVisualizerSurface.LinePrimitive[] _audioResolvedBars = new AudioVisualizerSurface.LinePrimitive[AudioVisualizerSurface.BarCount];
     private readonly AudioVisualizerSurface.EllipsePrimitive[] _audioResolvedParticles = new AudioVisualizerSurface.EllipsePrimitive[AudioVisualizerSurface.MaxParticleCount];
     private readonly AudioVisualizerSurface.EllipsePrimitive[] _audioResolvedWaves = new AudioVisualizerSurface.EllipsePrimitive[AudioVisualizerSurface.MaxShockwaveCount];
@@ -923,13 +924,36 @@ public partial class MainWindow
             ? 1.045 + Math.Sin(now * 0.095) * 0.018 : 1.045;
         var panX = settings.AudioBackgroundSlowPan ? Math.Sin(now * 0.071) * 9 : 0;
         var panY = settings.AudioBackgroundSlowPan ? Math.Cos(now * 0.057) * 6 : 0;
-        if (settings.AudioBackgroundMouseParallax && AudioVisualizerLayer.IsMouseOver)
+        // Parallax target. IsMouseOver is unreliable here: in AudioCore+ the
+        // native ELYCORE swapchain sits over the WPF layer and steals hit-tests,
+        // so it flickered false and the offset snapped back (the jolts). Read the
+        // cursor via Win32 + PointFromScreen (works under a native child window)
+        // and smooth toward the target so entering/leaving is fluid in both
+        // renderers instead of resetting abruptly.
+        double targetParallaxX = 0, targetParallaxY = 0;
+        if (settings.AudioBackgroundMouseParallax
+            && AudioVisualizerLayer.ActualWidth > 1 && AudioVisualizerLayer.ActualHeight > 1
+            && GetCursorPos(out var cursor))
         {
-            var mouse = Mouse.GetPosition(AudioVisualizerLayer);
-            var intensity = settings.AudioBackgroundParallaxIntensity;
-            panX += (mouse.X / Math.Max(1, AudioVisualizerLayer.ActualWidth) - 0.5) * -10 * intensity;
-            panY += (mouse.Y / Math.Max(1, AudioVisualizerLayer.ActualHeight) - 0.5) * -7 * intensity;
+            try
+            {
+                var local = AudioVisualizerLayer.PointFromScreen(new Point(cursor.X, cursor.Y));
+                if (local.X >= 0 && local.Y >= 0
+                    && local.X < AudioVisualizerLayer.ActualWidth && local.Y < AudioVisualizerLayer.ActualHeight)
+                {
+                    var intensity = settings.AudioBackgroundParallaxIntensity;
+                    targetParallaxX = (local.X / AudioVisualizerLayer.ActualWidth - 0.5) * -10 * intensity;
+                    targetParallaxY = (local.Y / AudioVisualizerLayer.ActualHeight - 0.5) * -7 * intensity;
+                }
+            }
+            catch (InvalidOperationException) { }
         }
+        // Critically-damped-ish smoothing, frame-rate independent (~60 ms to settle).
+        var parallaxLerp = 1 - Math.Pow(0.0000001, dt);
+        _audioParallaxX += (targetParallaxX - _audioParallaxX) * parallaxLerp;
+        _audioParallaxY += (targetParallaxY - _audioParallaxY) * parallaxLerp;
+        panX += _audioParallaxX;
+        panY += _audioParallaxY;
         AudioBackgroundScale.ScaleX = AudioBackgroundScale.ScaleY = backgroundScale;
         AudioBackgroundTranslate.X = panX;
         AudioBackgroundTranslate.Y = panY;
