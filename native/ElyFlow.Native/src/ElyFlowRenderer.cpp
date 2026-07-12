@@ -1405,9 +1405,8 @@ float2 PsChroma(VSOut i) : SV_Target
             SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
 
         bool previousAudioScene = false;
-        uint64_t lastAudioFrameSequence = ~uint64_t{};
-        uint32_t lastAudioWidth = 0;
-        uint32_t lastAudioHeight = 0;
+        double audioNextPresent = 0.0;
+        double audioInterval = 1.0 / 240.0;
         while (!r.quit.load(std::memory_order_relaxed))
         {
             const bool audioScene = r.audioCoreScene.load(std::memory_order_relaxed);
@@ -1415,15 +1414,31 @@ float2 PsChroma(VSOut i) : SV_Target
             {
                 r.havePrevious = false;
                 previousAudioScene = audioScene;
-                lastAudioFrameSequence = ~uint64_t{};
-                lastAudioWidth = lastAudioHeight = 0;
+                audioNextPresent = 0.0;
             }
-            // Managed CompositionTarget.Rendering is the cadence authority for
-            // both modes. PushVisualFrame wakes this thread; a long timeout is
-            // only a lifecycle safety net and never manufactures duplicate
-            // frames (notably when VSync is disabled).
-            const DWORD audioWait = audioScene ? 1000u : 50u;
-            WaitForSingleObject(r.wakeEvent, audioWait);
+            // AudioCore+ owns its own high-resolution cadence so it is not
+            // capped by WPF's CompositionTarget.Rendering (= monitor refresh).
+            // The UI thread only publishes fresh geometry via PushVisualFrame
+            // (which signals wakeEvent); this thread paces presentation up to
+            // the configured target FPS. Video mode stays event-driven.
+            if (audioScene)
+            {
+                audioInterval = 1.0 / std::clamp(r.audioCore.TargetFps(), 30, 360);
+                const double nowSeconds = QpcSeconds();
+                if (audioNextPresent <= 0.0) audioNextPresent = nowSeconds;
+                const double remaining = audioNextPresent - nowSeconds;
+                if (remaining > 0.0011)
+                {
+                    // Sleep the bulk of the interval; a fresh push wakes us early
+                    // and we simply re-evaluate the deadline on the next lap.
+                    WaitForSingleObject(r.wakeEvent, static_cast<DWORD>(remaining * 1000.0));
+                    continue;
+                }
+            }
+            else
+            {
+                WaitForSingleObject(r.wakeEvent, 50);
+            }
             if (r.quit.load(std::memory_order_relaxed)) break;
 
             const uint64_t flags = r.mpvApi.Update(r.renderContext);
@@ -1461,18 +1476,14 @@ float2 PsChroma(VSOut i) : SV_Target
 
             if (audioScene)
             {
-                const uint64_t sequence = r.audioCore.FrameSequence();
-                if (sequence == lastAudioFrameSequence && w == lastAudioWidth && h == lastAudioHeight)
-                {
-                    skipFrame();
-                    continue;
-                }
                 if (!r.audioCore.Render(r.device, r.context, r.renderTarget,
                     r.renderWidth, r.renderHeight, QpcSeconds()))
                     r.SetMessage("ELYCAST AudioCore+: compilation/rendu shader D3D11 impossible.");
-                lastAudioFrameSequence = sequence;
-                lastAudioWidth = w;
-                lastAudioHeight = h;
+                // Advance the cadence deadline; if we fell behind (GPU hitch or a
+                // slow interval), resync to now so we never spiral into catch-up.
+                audioNextPresent += audioInterval;
+                const double afterRender = QpcSeconds();
+                if (audioNextPresent < afterRender) audioNextPresent = afterRender;
                 skipFrame();
             }
             // mpv -> GL FBO -> D3D11 renderTarget (same GPU memory).
@@ -1899,7 +1910,15 @@ int32_t ElyAudioCore_GetStats(ElyAudioCoreStatsNative* stats)
 {
     if (!stats || stats->structSize < sizeof(ElyAudioCoreStatsNative)) return ELYFLOW_RENDERER_INVALID_ARGUMENT;
     std::lock_guard lock(g_rendererMutex);
-    if (!g_renderer) return ELYFLOW_RENDERER_ALREADY_ACTIVE;
+    if (!g_renderer)
+    {
+        // No renderer bound yet: report an inactive-but-healthy snapshot rather
+        // than a misleading "already active" code the managed health check
+        // would mistake for a D3D11 failure.
+        const uint32_t size = stats->structSize;
+        *stats = ElyAudioCoreStatsNative{ size, 0, 0.0, 0.0, 0, 0 };
+        return ELYFLOW_RENDERER_OK;
+    }
     *stats = g_renderer->audioCore.Stats();
     stats->active = g_renderer->audioCoreScene.load() ? 1 : 0;
     return ELYFLOW_RENDERER_OK;

@@ -75,6 +75,22 @@ private:
     std::array<ElyAudioCoreLineNative, ELY_AUDIO_CORE_BAR_COUNT> bars_{};
     std::array<ElyAudioCoreEllipseNative, ELY_AUDIO_CORE_MAX_PARTICLES> particles_{};
     std::array<ElyAudioCoreEllipseNative, ELY_AUDIO_CORE_MAX_WAVES> waves_{};
+    // Render-thread-only snapshots. Render() copies the pushed state into these
+    // under a short lock, then performs all GPU work unlocked so PushVisualFrame
+    // (UI thread) never blocks on the swapchain.
+    std::array<ElyAudioCoreLineNative, ELY_AUDIO_CORE_BAR_COUNT> renderBars_{};
+    std::array<ElyAudioCoreEllipseNative, ELY_AUDIO_CORE_MAX_PARTICLES> renderParticles_{};
+    std::array<ElyAudioCoreEllipseNative, ELY_AUDIO_CORE_MAX_WAVES> renderWaves_{};
+    ElyAudioCoreVisualFrameNative renderFrame_{};
+    ElyAudioCoreSettingsNative renderSettings_{};
+    int renderBarCount_ = 0;
+    int renderParticleCount_ = 0;
+    int renderWaveCount_ = 0;
+    std::vector<uint8_t> uploadPixels_;
+    bool hasUpload_ = false;
+    uint32_t uploadWidth_ = 0, uploadHeight_ = 0, uploadStride_ = 0;
+    uint64_t uploadRevision_ = 0;
+    uint32_t textureWidth_ = 0, textureHeight_ = 0;
     std::array<PrimitiveVertex,
         (ELY_AUDIO_CORE_BAR_COUNT + ELY_AUDIO_CORE_MAX_PARTICLES + ELY_AUDIO_CORE_MAX_WAVES) * 6> stagingVertices_{};
     int barCount_ = 0;

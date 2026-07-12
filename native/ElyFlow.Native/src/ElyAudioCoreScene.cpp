@@ -17,7 +17,6 @@ namespace
     static_assert(sizeof(ElyAudioCoreStatsNative) == 40);
 
     constexpr float BackgroundCacheScale = 0.45f;
-    constexpr float BackgroundMarginDip = 54.0f;
 
     constexpr const char* Shader = R"(
 cbuffer BackgroundScene : register(b0)
@@ -42,16 +41,21 @@ FullscreenOut FullscreenVS(uint id : SV_VertexID)
 
 float4 BackgroundSourcePS(FullscreenOut input) : SV_TARGET
 {
+    // The cache maps 1:1 to the OverlayRoot and holds the image exactly as the
+    // WPF <Image Stretch="UniformToFill"/> lays it out at scale 1. The slow
+    // zoom (>=1.045) and pan applied in BackgroundCompositePS then match WPF's
+    // ScaleTransform/TranslateTransform, and the base zoom already hides the
+    // few pixels of bleed a pan can reveal — no extra margin (which used to
+    // over-zoom the background by ~10% and break the parallax mapping).
     float2 root = max(rootCache.xy, 1.0.xx);
-    float2 elementSize = root + 108.0.xx;
-    float2 elementUv = (input.uv * root + 54.0.xx) / elementSize;
     float sourceAspect = max(targetSource.z, 1.0) / max(targetSource.w, 1.0);
-    float elementAspect = elementSize.x / elementSize.y;
-    if (elementAspect > sourceAspect)
-        elementUv.y = (elementUv.y - 0.5) * (sourceAspect / elementAspect) + 0.5;
+    float rootAspect = root.x / root.y;
+    float2 uv = input.uv;
+    if (rootAspect > sourceAspect)
+        uv.y = (uv.y - 0.5) * (sourceAspect / rootAspect) + 0.5;
     else
-        elementUv.x = (elementUv.x - 0.5) * (elementAspect / sourceAspect) + 0.5;
-    return sceneTexture.Sample(linearSampler, elementUv);
+        uv.x = (uv.x - 0.5) * (rootAspect / sourceAspect) + 0.5;
+    return sceneTexture.Sample(linearSampler, uv);
 }
 
 float4 GaussianBlurPS(FullscreenOut input) : SV_TARGET
@@ -258,6 +262,8 @@ void ElyAudioCoreScene::ReleaseDeviceResources()
     Release(fullscreenVs_);
     primitiveVertexCapacity_ = 0;
     uploadedBackgroundRevision_ = ~uint64_t{};
+    textureWidth_ = textureHeight_ = 0;
+    hasUpload_ = false;
     owner_ = nullptr;
 }
 
@@ -354,26 +360,32 @@ bool ElyAudioCoreScene::EnsureResources(ID3D11Device* device)
 
 bool ElyAudioCoreScene::EnsureBackgroundTexture(ID3D11Device* device)
 {
-    if (uploadedBackgroundRevision_ == backgroundRevision_) return true;
+    // Render-thread only: consumes the snapshot taken under lock in Render().
+    if (!hasUpload_) return true;
+    hasUpload_ = false;
     Release(backgroundSource_);
     ReleaseBackgroundCache();
-    uploadedBackgroundRevision_ = backgroundRevision_;
-    if (pendingBackground_.empty() || backgroundWidth_ == 0 || backgroundHeight_ == 0) return true;
+    uploadedBackgroundRevision_ = uploadRevision_;
+    textureWidth_ = uploadWidth_;
+    textureHeight_ = uploadHeight_;
+    if (uploadPixels_.empty() || uploadWidth_ == 0 || uploadHeight_ == 0) return true;
 
     D3D11_TEXTURE2D_DESC description{};
-    description.Width = backgroundWidth_;
-    description.Height = backgroundHeight_;
+    description.Width = uploadWidth_;
+    description.Height = uploadHeight_;
     description.MipLevels = 1;
     description.ArraySize = 1;
     description.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
     description.SampleDesc.Count = 1;
     description.Usage = D3D11_USAGE_IMMUTABLE;
     description.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-    const D3D11_SUBRESOURCE_DATA initial{ pendingBackground_.data(), backgroundStride_, 0 };
+    const D3D11_SUBRESOURCE_DATA initial{ uploadPixels_.data(), uploadStride_, 0 };
     ID3D11Texture2D* texture = nullptr;
     HRESULT result = device->CreateTexture2D(&description, &initial, &texture);
     if (SUCCEEDED(result)) result = device->CreateShaderResourceView(texture, nullptr, &backgroundSource_);
     Release(texture);
+    uploadPixels_.clear();
+    uploadPixels_.shrink_to_fit();
     lastError_ = static_cast<int32_t>(result);
     return SUCCEEDED(result);
 }
@@ -423,7 +435,7 @@ bool ElyAudioCoreScene::EnsureBackgroundCache(ID3D11Device* device, ID3D11Device
         std::abs(settings.blur - cachedBlur_) > 0.001f ||
         std::abs(frame.rootWidthDip - cachedRootWidthDip_) > 0.01f ||
         std::abs(frame.rootHeightDip - cachedRootHeightDip_) > 0.01f ||
-        cachedBackgroundRevision_ != backgroundRevision_;
+        cachedBackgroundRevision_ != uploadedBackgroundRevision_;
     if (!dirty) return true;
 
     if (sizeChanged)
@@ -462,8 +474,8 @@ bool ElyAudioCoreScene::EnsureBackgroundCache(ID3D11Device* device, ID3D11Device
     BackgroundConstants constants{};
     constants.targetSource[0] = static_cast<float>(targetWidth);
     constants.targetSource[1] = static_cast<float>(targetHeight);
-    constants.targetSource[2] = static_cast<float>(backgroundWidth_);
-    constants.targetSource[3] = static_cast<float>(backgroundHeight_);
+    constants.targetSource[2] = static_cast<float>(textureWidth_);
+    constants.targetSource[3] = static_cast<float>(textureHeight_);
     constants.rootCache[0] = std::max(frame.rootWidthDip, 1.0f);
     constants.rootCache[1] = std::max(frame.rootHeightDip, 1.0f);
     constants.rootCache[2] = static_cast<float>(cacheWidth_);
@@ -487,7 +499,7 @@ bool ElyAudioCoreScene::EnsureBackgroundCache(ID3D11Device* device, ID3D11Device
     cachedBlur_ = settings.blur;
     cachedRootWidthDip_ = frame.rootWidthDip;
     cachedRootHeightDip_ = frame.rootHeightDip;
-    cachedBackgroundRevision_ = backgroundRevision_;
+    cachedBackgroundRevision_ = uploadedBackgroundRevision_;
     return true;
 }
 
@@ -511,9 +523,34 @@ bool ElyAudioCoreScene::Render(ID3D11Device* device, ID3D11DeviceContext* contex
 {
     (void)seconds;
     const double begin = Now();
-    std::lock_guard lock(mutex_);
+
+    // Copy the pushed state under a short lock, then do every GPU call unlocked
+    // so PushVisualFrame (UI thread) never waits on the swapchain. Device-side
+    // resources below are touched only on this render thread (Reset() runs after
+    // the render thread is joined), so they need no lock.
+    {
+        std::lock_guard lock(mutex_);
+        renderFrame_ = visualFrame_;
+        renderSettings_ = settings_;
+        renderBarCount_ = barCount_;
+        renderParticleCount_ = particleCount_;
+        renderWaveCount_ = waveCount_;
+        if (renderBarCount_ > 0) std::copy_n(bars_.begin(), renderBarCount_, renderBars_.begin());
+        if (renderParticleCount_ > 0) std::copy_n(particles_.begin(), renderParticleCount_, renderParticles_.begin());
+        if (renderWaveCount_ > 0) std::copy_n(waves_.begin(), renderWaveCount_, renderWaves_.begin());
+        if (uploadedBackgroundRevision_ != backgroundRevision_ && !hasUpload_)
+        {
+            hasUpload_ = true;
+            uploadRevision_ = backgroundRevision_;
+            uploadWidth_ = backgroundWidth_;
+            uploadHeight_ = backgroundHeight_;
+            uploadStride_ = backgroundStride_;
+            uploadPixels_ = pendingBackground_;
+        }
+    }
+
     if (!EnsureResources(device) || !EnsureBackgroundTexture(device) ||
-        !EnsureBackgroundCache(device, context, width, height, visualFrame_, settings_))
+        !EnsureBackgroundCache(device, context, width, height, renderFrame_, renderSettings_))
         return false;
 
     ID3D11RenderTargetView* targetView = nullptr;
@@ -527,16 +564,16 @@ bool ElyAudioCoreScene::Render(ID3D11Device* device, ID3D11DeviceContext* contex
     BackgroundConstants background{};
     background.targetSource[0] = static_cast<float>(width);
     background.targetSource[1] = static_cast<float>(height);
-    background.targetSource[2] = static_cast<float>(backgroundWidth_);
-    background.targetSource[3] = static_cast<float>(backgroundHeight_);
-    background.rootCache[0] = std::max(visualFrame_.rootWidthDip, 1.0f);
-    background.rootCache[1] = std::max(visualFrame_.rootHeightDip, 1.0f);
+    background.targetSource[2] = static_cast<float>(textureWidth_);
+    background.targetSource[3] = static_cast<float>(textureHeight_);
+    background.rootCache[0] = std::max(renderFrame_.rootWidthDip, 1.0f);
+    background.rootCache[1] = std::max(renderFrame_.rootHeightDip, 1.0f);
     background.rootCache[2] = static_cast<float>(cacheWidth_);
     background.rootCache[3] = static_cast<float>(cacheHeight_);
-    background.transform[0] = visualFrame_.backgroundScale;
-    background.transform[1] = visualFrame_.backgroundTranslateXDip;
-    background.transform[2] = visualFrame_.backgroundTranslateYDip;
-    background.transform[3] = settings_.dim;
+    background.transform[0] = renderFrame_.backgroundScale;
+    background.transform[1] = renderFrame_.backgroundTranslateXDip;
+    background.transform[2] = renderFrame_.backgroundTranslateYDip;
+    background.transform[3] = renderSettings_.dim;
     background.blurInfo[3] = backgroundBlurSrv_ ? 1.0f : 0.0f;
     if (!DrawFullscreen(context, targetView, backgroundCompositePs_, backgroundBlurSrv_, width, height, background))
     {
@@ -569,9 +606,9 @@ bool ElyAudioCoreScene::Render(ID3D11Device* device, ID3D11DeviceContext* contex
     };
 
     // WPF draw order is significant because every primitive uses source-over.
-    for (int index = 0; index < particleCount_; ++index)
+    for (int index = 0; index < renderParticleCount_; ++index)
     {
-        const auto& particle = particles_[index];
+        const auto& particle = renderParticles_[index];
         const float x = particle.x * width;
         const float y = particle.y * height;
         const float radiusX = particle.radiusX * width;
@@ -579,9 +616,9 @@ bool ElyAudioCoreScene::Render(ID3D11Device* device, ID3D11DeviceContext* contex
         appendQuad(x - radiusX - 1, y - radiusY - 1, x + radiusX + 1, y + radiusY + 1,
             x, y, 0, 0, radiusX, radiusY, 0, 1, particle.color);
     }
-    for (int index = 0; index < waveCount_; ++index)
+    for (int index = 0; index < renderWaveCount_; ++index)
     {
-        const auto& wave = waves_[index];
+        const auto& wave = renderWaves_[index];
         const float x = wave.x * width;
         const float y = wave.y * height;
         const float radiusX = wave.radiusX * width;
@@ -592,9 +629,9 @@ bool ElyAudioCoreScene::Render(ID3D11Device* device, ID3D11DeviceContext* contex
             x + radiusX + padding, y + radiusY + padding,
             x, y, 0, 0, radiusX, radiusY, thickness, 2, wave.color);
     }
-    for (int index = 0; index < barCount_; ++index)
+    for (int index = 0; index < renderBarCount_; ++index)
     {
-        const auto& bar = bars_[index];
+        const auto& bar = renderBars_[index];
         const float x0 = bar.x0 * width;
         const float y0 = bar.y0 * height;
         const float x1 = bar.x1 * width;
