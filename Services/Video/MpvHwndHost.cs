@@ -66,7 +66,7 @@ public sealed class MpvHwndHost : HwndHost
             hwndParent.Handle, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
 
         if (Hwnd == IntPtr.Zero)
-            throw new InvalidOperationException("CreateWindowEx a échoué (code " + Marshal.GetLastWin32Error() + ").");
+            throw new InvalidOperationException("CreateWindowEx failed (code " + Marshal.GetLastWin32Error() + ").");
 
         Hosts[Hwnd] = new WeakReference<MpvHwndHost>(this);
         HandleReady?.Invoke(Hwnd);
@@ -91,7 +91,7 @@ public sealed class MpvHwndHost : HwndHost
             };
             if (RegisterClassEx(ref windowClass) == 0 &&
                 Marshal.GetLastWin32Error() != ErrorClassAlreadyExists)
-                throw new InvalidOperationException("RegisterClassEx a échoué (code " +
+                throw new InvalidOperationException("RegisterClassEx failed (code " +
                                                     Marshal.GetLastWin32Error() + ").");
             _classRegistered = true;
         }

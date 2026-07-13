@@ -147,7 +147,7 @@ public sealed class MagpieUpscalerService
         using var http = new HttpClient();
         http.DefaultRequestHeaders.UserAgent.ParseAdd("ElyCast-IPTV");
 
-        progress?.Report("Recherche de la dernière release Magpie…");
+        progress?.Report("Looking for the latest Magpie release...");
         using var releaseStream = await http.GetStreamAsync(RepoApi);
         using var doc = await JsonDocument.ParseAsync(releaseStream);
         var asset = doc.RootElement.GetProperty("assets").EnumerateArray()
@@ -161,15 +161,15 @@ public sealed class MagpieUpscalerService
             .FirstOrDefault()?.Asset ?? default;
 
         if (asset.ValueKind == JsonValueKind.Undefined)
-            throw new InvalidOperationException($"Aucune archive Magpie compatible {RuntimeInformation.OSArchitecture} trouvée dans la dernière release.");
+            throw new InvalidOperationException($"No Magpie archive compatible with {RuntimeInformation.OSArchitecture} was found in the latest release.");
 
         var name = asset.GetProperty("name").GetString() ?? "Magpie.zip";
         var url = asset.GetProperty("browser_download_url").GetString()
-            ?? throw new InvalidOperationException("URL de téléchargement Magpie introuvable.");
+            ?? throw new InvalidOperationException("Magpie download URL not found.");
         var zipPath = Path.Combine(Path.GetTempPath(), Path.GetFileName(name));
         var target = Path.Combine(InstallRoot, Path.GetFileNameWithoutExtension(name));
 
-        progress?.Report("Téléchargement de Magpie…");
+        progress?.Report("Downloading Magpie...");
         await using (var remote = await http.GetStreamAsync(url))
         await using (var local = File.Create(zipPath))
             await remote.CopyToAsync(local);
@@ -179,11 +179,11 @@ public sealed class MagpieUpscalerService
         ZipFile.ExtractToDirectory(zipPath, target, overwriteFiles: true);
 
         var exe = Directory.GetFiles(target, "Magpie.exe", SearchOption.AllDirectories).FirstOrDefault()
-            ?? throw new InvalidOperationException("Magpie.exe introuvable après extraction.");
+            ?? throw new InvalidOperationException("Magpie.exe was not found after extraction.");
 
         StateStore.Settings.MagpiePath = exe;
         StateStore.Save();
-        progress?.Report("Magpie installé.");
+        progress?.Report("Magpie installed.");
         return exe;
     }
 

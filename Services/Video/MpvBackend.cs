@@ -16,7 +16,7 @@ public sealed class MpvBackend : IVideoBackend
 
     public MpvBackend(string? nativeDllPath = null)
     {
-        DebugConsole.Step("mpv: création du backend…");
+        DebugConsole.Step("mpv: creating backend...");
 
         if (!string.IsNullOrWhiteSpace(nativeDllPath))
         {
@@ -33,7 +33,7 @@ public sealed class MpvBackend : IVideoBackend
             // First real P/Invoke into libmpv (mpv_create + mpv_initialize). If
             // the native DLL is missing, has the wrong architecture or is broken,
             // this is where it blows up.
-            DebugConsole.Step("mpv: chargement de libmpv + mpv_create (new MPVMediaPlayer)…");
+            DebugConsole.Step("mpv: loading libmpv + mpv_create (new MPVMediaPlayer)...");
             _player = new MPVMediaPlayer();
             if (!string.IsNullOrWhiteSpace(nativeDllPath)) SetDllDirectory(null);
 
@@ -42,20 +42,20 @@ public sealed class MpvBackend : IVideoBackend
             Try("msg-level=warn", () => _player.SetProperty("msg-level", "warn"));
             Try("terminal=no", () => _player.SetProperty("terminal", "no"));
 
-            DebugConsole.Step("mpv: création de la surface vidéo (LoggingVideoView)…");
+            DebugConsole.Step("mpv: creating video surface (LoggingVideoView)...");
             _view = new LoggingVideoView { MediaPlayer = _player };
 
-            DebugConsole.Step("mpv: configuration GPU (vo/hwdec/scalers)…");
+            DebugConsole.Step("mpv: configuring GPU (vo/hwdec/scalers)...");
             ConfigureGpuDefaults();
 
-            DebugConsole.Success("mpv: backend créé.");
+            DebugConsole.Success("mpv: backend created.");
         }
         catch (Exception ex)
         {
-            DebugConsole.Exception("mpv: échec de création du backend", ex);
+            DebugConsole.Exception("mpv: failed to create backend", ex);
             // Tear down any partially-created native handle before bubbling up so
             // the factory can fall back to VLC without leaking the mpv client.
-            try { _player?.Dispose(); } catch (Exception inner) { DebugConsole.Exception("mpv: échec du nettoyage partiel", inner); }
+            try { _player?.Dispose(); } catch (Exception inner) { DebugConsole.Exception("mpv: partial cleanup failed", inner); }
             throw;
         }
     }
@@ -127,26 +127,26 @@ public sealed class MpvBackend : IVideoBackend
     {
         try
         {
-            DebugConsole.Step("mpv: lecture demandée.");
+            DebugConsole.Step("mpv: playback requested.");
 
-            DebugConsole.Step("mpv: (re)configuration GPU avant lecture…");
+            DebugConsole.Step("mpv: (re)configuring GPU before playback...");
             ConfigureGpuDefaults();
 
-            DebugConsole.Step("mpv: ouverture du média (loadfile)…");
+            DebugConsole.Step("mpv: opening media (loadfile)...");
             _player.ExecuteCommand(["loadfile", url, "replace"]);
 
-            DebugConsole.Step("mpv: démarrage de la lecture (pause=false)…");
+            DebugConsole.Step("mpv: starting playback (pause=false)...");
             _player.SetProperty("pause", false);
 
             Volume = _volume;
             _hasMedia = true;
 
-            DebugConsole.Success("mpv: lecture initialisée.");
+            DebugConsole.Success("mpv: playback initialized.");
             Playing?.Invoke();
         }
         catch (Exception ex)
         {
-            DebugConsole.Exception("mpv: échec de lecture", ex);
+            DebugConsole.Exception("mpv: playback failed", ex);
             Failed?.Invoke(ex.Message);
         }
     }
@@ -223,7 +223,7 @@ public sealed class MpvBackend : IVideoBackend
             var title = GetString($"track-list/{i}/title");
             var lang = GetString($"track-list/{i}/lang");
             var name = string.Join(" ", new[] { title, string.IsNullOrWhiteSpace(lang) ? null : $"({lang})" }.Where(x => !string.IsNullOrWhiteSpace(x)));
-            tracks.Add(new VideoTrack(id, string.IsNullOrWhiteSpace(name) ? $"Piste {id}" : name));
+            tracks.Add(new VideoTrack(id, string.IsNullOrWhiteSpace(name) ? LocalizationService.Format("Track {0}", id) : name));
         }
         return tracks;
     }
@@ -242,9 +242,9 @@ public sealed class MpvBackend : IVideoBackend
 
     public void Dispose()
     {
-        DebugConsole.Step("mpv: disposition du backend…");
+        DebugConsole.Step("mpv: disposing the backend...");
         try { Stop(PlaybackEndReason.Teardown); }
-        catch (Exception ex) { DebugConsole.Exception("mpv: échec de l'arrêt pendant Dispose", ex); }
+        catch (Exception ex) { DebugConsole.Exception("mpv: failed to stop during Dispose", ex); }
 
         // NOTE: we intentionally do NOT set _view.MediaPlayer = null here. In the
         // beta LibMPVSharp.WPF the property-changed handler dereferences the new
@@ -254,11 +254,11 @@ public sealed class MpvBackend : IVideoBackend
         // is destroyed.
         try
         {
-            DebugConsole.Step("mpv: libération du client libmpv (mpv_destroy)…");
+            DebugConsole.Step("mpv: releasing libmpv client (mpv_destroy)...");
             _player.Dispose();
-            DebugConsole.Success("mpv: backend disposé.");
+            DebugConsole.Success("mpv: backend disposed.");
         }
-        catch (Exception ex) { DebugConsole.Exception("mpv: échec de la libération de libmpv", ex); }
+        catch (Exception ex) { DebugConsole.Exception("mpv: failed to release libmpv", ex); }
     }
 
     private void ConfigureGpuDefaults()
@@ -269,7 +269,7 @@ public sealed class MpvBackend : IVideoBackend
         // context and crash on the first rendered frame, and the heavy "gpu-hq"
         // shader chain (EWA scalers + interpolation) overloads it on some drivers.
         //
-        // Stability first (PRIORITÉ 0): software decode + a minimal, safe render
+        // Stability first (PRIORITY 0): software decode + a minimal, safe render
         // config. The advanced upscaling can be re-enabled incrementally once the
         // render pipeline is proven stable on this machine.
         Try("hwdec=no", () => _player.SetProperty("hwdec", "no"));
@@ -294,7 +294,7 @@ public sealed class MpvBackend : IVideoBackend
             var title = GetString($"track-list/{i}/title");
             var lang = GetString($"track-list/{i}/lang");
             var name = string.Join(" ", new[] { title, string.IsNullOrWhiteSpace(lang) ? null : $"({lang})" }.Where(x => !string.IsNullOrWhiteSpace(x)));
-            tracks.Add(new VideoTrack(id, string.IsNullOrWhiteSpace(name) ? $"Piste {id}" : name));
+            tracks.Add(new VideoTrack(id, string.IsNullOrWhiteSpace(name) ? LocalizationService.Format("Track {0}", id) : name));
         }
         return tracks;
     }
@@ -331,7 +331,7 @@ public sealed class MpvBackend : IVideoBackend
     private static void Try(string step, Action action)
     {
         try { action(); }
-        catch (Exception ex) { DebugConsole.Warn($"mpv: étape ignorée ({step}) : {ex.Message}"); }
+        catch (Exception ex) { DebugConsole.Warn($"mpv: skipped step ({step}): {ex.Message}"); }
     }
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]

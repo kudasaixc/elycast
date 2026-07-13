@@ -49,7 +49,7 @@ public static class CoverArtCache
         }
         catch (Exception ex)
         {
-            DebugConsole.Warn("Pochette illisible (" + Path.GetFileName(path) + ") : " + ex.Message);
+            DebugConsole.Warn("Artwork unreadable (" + Path.GetFileName(path) + "): " + ex.Message);
             return null;
         }
     }
@@ -70,7 +70,7 @@ public static class CoverArtCache
         }
         catch (Exception ex)
         {
-            DebugConsole.Warn("Décodage de pochette impossible : " + ex.Message);
+            DebugConsole.Warn("Artwork decoding failed: " + ex.Message);
             return null;
         }
     }

@@ -33,12 +33,12 @@ internal sealed class ElySoundController
             _requested = ElySoundRequest.Bypass;
             _dirty = false;
             if (!_installed)
-                return new(false, false, true, "bypass neutre (aucun graphe installé)", "");
+                return new(false, false, true, "neutral bypass (no graph installed)", "");
             var bypass = ElySoundGraph.ResolveBypass(_installedChannels == 2);
             foreach (var update in bypass.RuntimeUpdates)
                 if (!SendRuntime(update))
-                    return FailSafeBypass($"commande de bypass {update.Target}.{update.Command} refusée", bypass.Description);
-            return new(false, false, true, "bypass neutre par commandes runtime", bypass.Description);
+                    return FailSafeBypass($"bypass command {update.Target}.{update.Command} rejected", bypass.Description);
+            return new(false, false, true, "neutral bypass through runtime commands", bypass.Description);
         }
 
         _requested = new ElySoundRequest(true, profile, virtualSurround);
@@ -50,14 +50,14 @@ internal sealed class ElySoundController
     public ElySoundApplyResult TryApplyWhenAudioReady()
     {
         if (!_requested.Enabled)
-            return new(false, false, false, "ELYSOUND+ désactivé", "");
+            return new(false, false, false, "ELYSOUND+ disabled", "");
 
         if (!_dirty && _installed)
-            return new(true, false, true, "déjà à jour", "");
+            return new(true, false, true, "already up to date", "");
 
         var channels = ReadChannelCount();
         if (channels <= 0)
-            return new(false, true, false, "paramètres audio pas encore disponibles", "");
+            return new(false, true, false, "audio parameters not available yet", "");
 
         if (_installed && !_get("af").Contains("@" + MpvLabel, StringComparison.Ordinal))
         {
@@ -76,7 +76,7 @@ internal sealed class ElySoundController
             // DSP error can never stop the principal media pipeline.
             var graph = ElySoundGraph.BuildTopology(stereo, values);
             if (!_command(["af", "add", $"@{MpvLabel}:lavfi=[{graph}]"]))
-                return FailSafeBypass("graphe libavfilter refusé", graph);
+                return FailSafeBypass("libavfilter graph rejected", graph);
 
             _installed = true;
             _installedChannels = channels;
@@ -91,16 +91,16 @@ internal sealed class ElySoundController
                 {
                     _dirty = false;
                     return new(true, false, false,
-                        "graphe final actif; instances runtime publiées au prochain bloc audio",
+                        "final graph active; runtime instances published on the next audio block",
                         values.Description);
                 }
-                return FailSafeBypass($"commande {update.Target}.{update.Command} refusée", values.Description);
+                return FailSafeBypass($"command {update.Target}.{update.Command} rejected", values.Description);
             }
         }
 
         _dirty = false;
         return new(true, false, true,
-            stereo ? "graphe actif, commandes runtime" : "graphe actif, largeur désactivée (source non stéréo)",
+            stereo ? "graph active, runtime commands" : "graph active, width disabled (non-stereo source)",
             values.Description);
     }
 
@@ -111,7 +111,7 @@ internal sealed class ElySoundController
         // after the new audio-params become authoritative.
         if (!_requested.Enabled && _installed)
         {
-            RemoveOnlyElySound("nouveau média en bypass");
+            RemoveOnlyElySound("new media in bypass");
             return;
         }
         // Keep the last authoritative layout. The next ready audio parameters
@@ -131,7 +131,7 @@ internal sealed class ElySoundController
         _installed = false;
         _installedChannels = 0;
         _dirty = false;
-        return new(false, false, false, reason + " — bypass neutre conservé", graph);
+        return new(false, false, false, reason + "; neutral bypass retained", graph);
     }
 
     private ElySoundApplyResult RemoveOnlyElySound(string reason)
@@ -178,8 +178,8 @@ public static class ElySoundCatalog
         new() { Id = "cinema", Name = "ELYSOUND+ Cinema", Preamp = 0, Bass = 3, LowMid = -1, Mid = 1, Presence = 2, Treble = 1, Clarity = 1, Width = 24, Compressor = 20, LimiterCeilingDb = -2.3 },
         new() { Id = "music", Name = "ELYSOUND+ Music", Preamp = -1, Bass = 2, LowMid = 1, Mid = 0, Presence = 1, Treble = 1, Clarity = 1, Width = 12, Compressor = 6, LimiterCeilingDb = -2.3 },
         new() { Id = "anime", Name = "ELYSOUND+ Anime", Preamp = -1, Bass = 3, LowMid = -1, Mid = 2, Presence = 3, Treble = 2, Clarity = 2, Width = 16, Compressor = 12, LimiterCeilingDb = -2.3 },
-        new() { Id = "voice", Name = "ELYSOUND+ Voix", Preamp = -1, Bass = -4, LowMid = -2, Mid = 5, Presence = 5, Treble = 0, Clarity = 2, Width = 0, Compressor = 18, LimiterCeilingDb = -2.3 },
-        new() { Id = "night", Name = "ELYSOUND+ Nuit", Preamp = 0, Bass = -6, LowMid = -2, Mid = 4, Presence = 4, Treble = -2, Clarity = -1, Width = 0, Compressor = 45, LimiterCeilingDb = -2.3 },
+        new() { Id = "voice", Name = "ELYSOUND+ Voice", Preamp = -1, Bass = -4, LowMid = -2, Mid = 5, Presence = 5, Treble = 0, Clarity = 2, Width = 0, Compressor = 18, LimiterCeilingDb = -2.3 },
+        new() { Id = "night", Name = "ELYSOUND+ Night", Preamp = 0, Bass = -6, LowMid = -2, Mid = 4, Presence = 4, Treble = -2, Clarity = -1, Width = 0, Compressor = 45, LimiterCeilingDb = -2.3 },
         new() { Id = "bass", Name = "ELYSOUND+ Bass Boost", Preamp = 0, Bass = 7, LowMid = -1, Mid = 0, Presence = 1, Treble = 1, Clarity = 1, Width = 14, Compressor = 14, LimiterCeilingDb = -2.3 },
         new() { Id = "horror", Name = "ELYSOUND+ Horror", Preamp = -1, Bass = 4, LowMid = 1, Mid = -1, Presence = 2, Treble = 2, Clarity = 2, Width = 28, Compressor = 8, LimiterCeilingDb = -2.3 },
         new() { Id = "sport", Name = "ELYSOUND+ Sport", Preamp = -1, Bass = 1, LowMid = -2, Mid = 4, Presence = 3, Treble = 1, Clarity = 1, Width = 14, Compressor = 20, LimiterCeilingDb = -2.3 }

@@ -1,4 +1,4 @@
-﻿<Application x:Class="Elysium_Cast_IPTV.App"
+<Application x:Class="Elysium_Cast_IPTV.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:Elysium_Cast_IPTV">
@@ -17,7 +17,7 @@
             <Color x:Key="AccentGlow">#FF9D4EDD</Color>
 
             <!-- Every brush below except CardBrush/FieldBrush is regenerated at
-                 runtime by ThemeManager from the accent colour — consumers must
+                 runtime by ThemeManager from the accent colour - consumers must
                  reference them with DynamicResource. -->
             <SolidColorBrush x:Key="TextBrush" Color="#FFF2EEFF"/>
             <SolidColorBrush x:Key="MutedBrush" Color="#FF8B82A8"/>

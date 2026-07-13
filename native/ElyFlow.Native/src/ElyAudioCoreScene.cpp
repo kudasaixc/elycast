@@ -45,7 +45,7 @@ float4 BackgroundSourcePS(FullscreenOut input) : SV_TARGET
     // WPF <Image Stretch="UniformToFill"/> lays it out at scale 1. The slow
     // zoom (>=1.045) and pan applied in BackgroundCompositePS then match WPF's
     // ScaleTransform/TranslateTransform, and the base zoom already hides the
-    // few pixels of bleed a pan can reveal — no extra margin (which used to
+    // few pixels of bleed a pan can reveal - no extra margin (which used to
     // over-zoom the background by ~10% and break the parallax mapping).
     float2 root = max(rootCache.xy, 1.0.xx);
     float sourceAspect = max(targetSource.z, 1.0) / max(targetSource.w, 1.0);

@@ -48,7 +48,7 @@ public static class AudioMetadataReader
         }
         catch (Exception ex)
         {
-            DebugConsole.Warn("Métadonnées audio illisibles : " + ex.Message);
+            DebugConsole.Warn("Audio metadata could not be read: " + ex.Message);
             return new AudioMetadata(fallbackTitle, null, null, null, null, false);
         }
     }

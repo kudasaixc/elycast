@@ -10,7 +10,7 @@ namespace Elysium_Cast_IPTV;
 public partial class MainWindow
 {
 
-    // ============ UPSCALING (mpv interne) ============
+    // ============ UPSCALING (internal mpv) ============
     private bool _syncingUpscale;
     private bool _syncingElyColor;
     private bool _syncingElySound;
@@ -31,7 +31,7 @@ public partial class MainWindow
         ApplyUpscalingToBackend();
     }
 
-    // OSD quick selector (under the seek bar) — drives the same method setting.
+    // OSD quick selector (under the seek bar) - drives the same method setting.
     private void OsdUpscale_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (_initializing || _syncingUpscale) return;
@@ -53,21 +53,21 @@ public partial class MainWindow
     // Master list of every upscaling mode (id + display label).
     private static readonly (string Id, string Label)[] UpscaleCatalog =
     {
-        ("none", "Aucun"),
-        ("anime4k-hq", "Anime4K — Qualité"),
-        ("anime4k-fast", "Anime4K — Rapide"),
-        ("anime4k-denoise", "Anime4K — Débruitage"),
-        ("anime4k-deblur", "Anime4K — Déflou"),
+        ("none", "None"),
+        ("anime4k-hq", "Anime4K: Quality"),
+        ("anime4k-fast", "Anime4K: Fast"),
+        ("anime4k-denoise", "Anime4K: Denoise"),
+        ("anime4k-deblur", "Anime4K: Deblur"),
         ("fsrcnnx", "FSRCNNX"),
         ("fsrcnnx-hq", "FSRCNNX HQ"),
         ("fsr", "AMD FSR + CAS"),
         ("nvscaler", "NVIDIA Image Scaling"),
-        ("ewa_lanczossharp", "EWA Lanczos (net)"),
+        ("ewa_lanczossharp", "EWA Lanczos (sharp)"),
         ("lanczos", "Lanczos"),
         ("spline36", "Spline36"),
         ("mitchell", "Mitchell"),
         ("catmull_rom", "Catmull-Rom"),
-        ("bilinear", "Bilinéaire"),
+        ("bilinear", "Bilinear"),
     };
 
     // Fills the OSD quick-selector with only the modes the user enabled in settings.
@@ -78,14 +78,14 @@ public partial class MainWindow
         var enabled = StateStore.Settings.OsdUpscaleModes ?? new();
         foreach (var (id, label) in UpscaleCatalog)
             if (enabled.Contains(id))
-                OsdUpscaleCombo.Items.Add(new ComboBoxItem { Tag = id, Content = label });
+                OsdUpscaleCombo.Items.Add(new ComboBoxItem { Tag = id, Content = LocalizationService.T(label) });
         SelectComboItemByTag(OsdUpscaleCombo, StateStore.Settings.UpscaleMethod);
         _syncingUpscale = false;
         RefreshOsdUpscaleRow();
     }
 
     // The OSD quick picker only makes sense while a stream is playing AND the user
-    // has enabled at least one mode in settings — never on the idle screen.
+    // has enabled at least one mode in settings - never on the idle screen.
     private void RefreshOsdUpscaleRow()
     {
         bool hasModes = OsdUpscaleCombo.Items.Count > 0;
@@ -102,7 +102,7 @@ public partial class MainWindow
         {
             var cb = new CheckBox
             {
-                Content = label,
+                Content = LocalizationService.T(label),
                 Tag = id,
                 IsChecked = enabled.Contains(id),
                 Margin = new Thickness(0, 0, 18, 8),
@@ -128,8 +128,8 @@ public partial class MainWindow
 
     private readonly ShaderInstaller _shaderInstaller = new();
 
-    // The GLSL chains (FSR, NVScaler, FSRCNNX, Anime4K + leurs compagnons CAS /
-    // NVSharpen) are downloaded on demand before being applied — otherwise the
+    // The GLSL chains (FSR, NVScaler, FSRCNNX, Anime4K + their CAS / NVSharpen
+    // NVSharpen) are downloaded on demand before being applied - otherwise the
     // backend would silently skip missing files and the mode would do nothing.
     private async void ApplyUpscalingToBackend()
     {
@@ -141,12 +141,12 @@ public partial class MainWindow
         {
             try
             {
-                DebugConsole.Step($"Upscaling: préparation des shaders ({string.Join(", ", missing)})…");
+                DebugConsole.Step($"Upscaling: preparing shaders ({string.Join(", ", missing)})...");
                 await _shaderInstaller.EnsureAsync(s.UpscaleMethod, s.UpscaleSharpen);
             }
             catch (Exception ex)
             {
-                DebugConsole.Warn("Upscaling: shaders indisponibles (" + ex.Message + ") — repli sur le scaler mpv.");
+                DebugConsole.Warn("Upscaling: shaders unavailable (" + ex.Message + "); falling back to the mpv scaler.");
             }
         }
 
@@ -154,7 +154,7 @@ public partial class MainWindow
         if (_videoBackend is MpvHwndBackend mpv)
         {
             mpv.ApplyUpscaling(s.UpscaleTargetHeight, s.UpscaleMethod, s.UpscaleSharpen);
-            DebugConsole.Info($"Upscaling -> cible={(s.UpscaleTargetHeight == 0 ? "native" : s.UpscaleTargetHeight + "p")}, méthode={s.UpscaleMethod}, netteté={s.UpscaleSharpen}");
+            DebugConsole.Info($"Upscaling: target={(s.UpscaleTargetHeight == 0 ? "native" : s.UpscaleTargetHeight + "p")}, method={s.UpscaleMethod}, sharpness={s.UpscaleSharpen}");
         }
     }
 }

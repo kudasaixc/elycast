@@ -14,7 +14,7 @@ namespace Elysium_Cast_IPTV.Services.Video;
 /// window therefore looked completely untouched. Each method now pairs its
 /// upscaler with an adaptive sharpener gated to "display ≤ source" (the agyild
 /// CAS / NVSharpen ports, relaxed from their stock exactly-1:1 gate), so the
-/// mode always has a visible effect — like a game running DLSS at 100% render
+/// mode always has a visible effect - like a game running DLSS at 100% render
 /// scale. The sharpen setting tunes the companions' strength, since mpv's own
 /// --sharpen option is a no-op on vo=gpu-next.
 /// </summary>
@@ -129,7 +129,7 @@ public static class ShaderCatalog
     /// Generates the tuned variant of a pristine sharpener: writes the strength
     /// #define, and relaxes the stock "exactly 1:1" //!WHEN gate of CAS /
     /// NVSharpen to "not upscaling" (RPN: ratio 1.0 &gt; NOT) so they also run
-    /// when the video is displayed smaller than the source — the common IPTV
+    /// when the video is displayed smaller than the source - the common IPTV
     /// case. Above 1:1 the upscaler passes of the chain take over.
     /// </summary>
     public static string GenerateTuned(string baseFile, string pristineText, string sharpen)

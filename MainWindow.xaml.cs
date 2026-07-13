@@ -112,7 +112,7 @@ public partial class MainWindow : Window
     private bool _shuttingDown;
     private bool _osdVisible;
 
-    private const string AllCategories = "Toutes les catégories";
+    private const string AllCategories = "All categories";
 
     private sealed record SubtitleOption(int Id, string Name, string Key, bool IsAuto = false)
     {
@@ -128,6 +128,7 @@ public partial class MainWindow : Window
     {
         _initializing = true;
         InitializeComponent();
+        LocalizationService.Attach(this);
         _mediaTransport = new WindowsMediaTransportService(
             play: () => Dispatcher.BeginInvoke(() => ResumeFromSystemControls()),
             pause: () => Dispatcher.BeginInvoke(() => PauseFromSystemControls()),
@@ -166,7 +167,7 @@ public partial class MainWindow : Window
 
         // Keep the airspace overlay (owned window) glued to the video area as the
         // window moves or resizes. An owned window follows the main window
-        // anywhere — including partially off-screen — minimises/restores with it
+        // anywhere - including partially off-screen - minimises/restores with it
         // and never floats above other applications, so no activation juggling
         // is needed.
         LocationChanged += (_, _) => ReanchorOverlay();
@@ -184,7 +185,7 @@ public partial class MainWindow : Window
     {
         var s = StateStore.Settings;
         if (!string.IsNullOrWhiteSpace(s.UserDisplayName))
-            WelcomeTitle.Text = $"Bienvenue {s.UserDisplayName} 👋";
+            WelcomeTitle.Text = LocalizationService.Format("Welcome {0} 👋", s.UserDisplayName);
 
         switch (s.PreferredConnection)
         {
@@ -209,7 +210,7 @@ public partial class MainWindow : Window
                 return;
             }
 
-            DebugConsole.Info("Connexion automatique avec le profil « " + profile.Name + " »…");
+            DebugConsole.Info(LocalizationService.Format("Connecting automatically with profile “{0}”...", profile.Name));
             if (profile.Kind == ProfileKind.Xtream)
             {
                 SwitchTab(false);
@@ -229,7 +230,7 @@ public partial class MainWindow : Window
     /// <summary>Local-only mode: straight to the local library, no IPTV login.</summary>
     private void EnterLocalOnlyMode()
     {
-        DebugConsole.Info("Mode local uniquement : ouverture directe de la bibliothèque.");
+        DebugConsole.Info("Local-only mode: opening the library directly.");
         _connected = true;
         _state = StateStore.ForProfile("local-only");
         MarkFavorites(_localAudioItems);
@@ -238,7 +239,7 @@ public partial class MainWindow : Window
         NavLocalAudio.IsChecked = true;
         _suppressNav = false;
         ShowSection(Section.LocalAudio);
-        ShowOverlay("Ajoute des fichiers locaux puis lance la lecture", spinning: false);
+        ShowOverlay("Add local files, then start playback", spinning: false);
         GoToPlayer();
     }
 
@@ -250,7 +251,7 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(path)) return;
         if (!File.Exists(path))
         {
-            DebugConsole.Warn("Diagnostic playback: fichier introuvable.");
+            DebugConsole.Warn("Diagnostic playback: file not found.");
             return;
         }
 
@@ -264,7 +265,7 @@ public partial class MainWindow : Window
         {
             timer.Stop();
             if (_videoBackend == null) return;
-            DebugConsole.Info("Diagnostic playback -> fichier local.");
+            DebugConsole.Info("Diagnostic playback: local file.");
             var item = PlayItem.FromLocalFile(path);
             Play(item, persistHistory: false);
             StartDiagnosticElySoundSweepIfRequested();
@@ -341,7 +342,7 @@ public partial class MainWindow : Window
             var beforeSeek = _videoBackend.PositionMs;
             _videoBackend.SeekRelative(1000);
             await Task.Delay(300);
-            DebugConsole.Info($"Diagnostic lecture pause/reprise/seek: avant={beforeSeek} ms, après={_videoBackend.PositionMs} ms");
+            DebugConsole.Info($"Playback pause/resume/seek diagnostic: before={beforeSeek} ms, after={_videoBackend.PositionMs} ms");
         }
     }
 
@@ -353,7 +354,7 @@ public partial class MainWindow : Window
             if (!ReferenceEquals(_videoBackend, expectedBackend)) return;
             var stats = expectedBackend.GetStats();
             DebugConsole.Info(string.Create(CultureInfo.InvariantCulture,
-                $"Diagnostic renderer — source={stats.SourceWidth}x{stats.SourceHeight}, sortie={stats.OutputWidth}x{stats.OutputHeight}, FPS={stats.Fps:0.###}, présentées={stats.DisplayedFrames}, perdues={stats.DroppedFrames}, pipeline={stats.Shaders}"));
+                $"Renderer diagnostic: source={stats.SourceWidth}x{stats.SourceHeight}, output={stats.OutputWidth}x{stats.OutputHeight}, FPS={stats.Fps:0.###}, displayed={stats.DisplayedFrames}, dropped={stats.DroppedFrames}, pipeline={stats.Shaders}"));
         });
     }
 
@@ -425,8 +426,8 @@ public partial class MainWindow : Window
     {
         var dlg = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Choisir une playlist M3U",
-            Filter = "Playlists M3U (*.m3u;*.m3u8)|*.m3u;*.m3u8|Tous les fichiers (*.*)|*.*"
+            Title = LocalizationService.T("Choose an M3U playlist"),
+            Filter = LocalizationService.T("M3U playlists (*.m3u;*.m3u8)|*.m3u;*.m3u8|All files (*.*)|*.*")
         };
         if (dlg.ShowDialog() == true) M3uPathBox.Text = dlg.FileName;
     }
@@ -457,20 +458,20 @@ public partial class MainWindow : Window
             if (_m3uMode)
             {
                 var path = M3uPathBox.Text.Trim();
-                if (string.IsNullOrWhiteSpace(path)) { StatusText.Text = "Indique un fichier ou une URL M3U."; SetConnecting(false); return; }
+                if (string.IsNullOrWhiteSpace(path)) { StatusText.Text = LocalizationService.T("Enter an M3U file or URL."); SetConnecting(false); return; }
                 (_, channels) = await _iptv.LoadM3uAsync(path, ct);
             }
             else
             {
                 var url = UrlBox.Text.Trim(); var user = UserBox.Text.Trim(); var pass = PassBox.Password;
                 if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(pass))
-                { StatusText.Text = "Merci de remplir l'URL, l'utilisateur et le mot de passe."; SetConnecting(false); return; }
+                { StatusText.Text = LocalizationService.T("Enter the URL, username, and password."); SetConnecting(false); return; }
                 (_, channels) = await _iptv.ConnectAsync(url, user, pass, ct);
             }
 
             ct.ThrowIfCancellationRequested();
 
-            if (channels.Count == 0) { StatusText.Text = "Connexion réussie mais aucune chaîne trouvée."; SetConnecting(false); return; }
+            if (channels.Count == 0) { StatusText.Text = LocalizationService.T("Connection succeeded, but no channels were found."); SetConnecting(false); return; }
 
             _state = StateStore.ForProfile(_iptv.ProfileKey);
             _liveItems = channels.Select(PlayItem.FromChannel).ToList();
@@ -486,12 +487,12 @@ public partial class MainWindow : Window
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            DebugConsole.Info("Connexion annulée.");
+            DebugConsole.Info("Connection canceled.");
         }
         catch (Exception ex)
         {
-            StatusText.Text = "Échec de la connexion : " + ex.Message;
-            DebugConsole.Error("Connexion : " + ex.Message);
+            StatusText.Text = LocalizationService.T("Connection failed: ") + ex.Message;
+            DebugConsole.Error("Connection: " + ex.Message);
         }
         finally
         {
@@ -507,7 +508,7 @@ public partial class MainWindow : Window
     private void SetConnecting(bool busy)
     {
         ConnectBtn.IsEnabled = !busy;
-        ConnectLabel.Text = busy ? "Connexion…" : "Se connecter";
+        ConnectLabel.Text = LocalizationService.T(busy ? "Connecting..." : "Sign in");
         LoginIcon.Visibility = busy ? Visibility.Collapsed : Visibility.Visible;
         LoginSpinner.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         if (busy) StartSpin(LoginSpinner); else StopSpin(LoginSpinner);
@@ -552,8 +553,8 @@ public partial class MainWindow : Window
         _connected = false;
         _current = null;
         _overlayWindow?.Hide();
-        ShowOverlay("Sélectionne une chaîne pour lancer la lecture", spinning: false);
-        TopTitle.Text = "Aucune lecture"; TopSubtitle.Text = "En attente…";
+        ShowOverlay("Select a channel to start playback", spinning: false);
+        TopTitle.Text = LocalizationService.T("Nothing playing"); TopSubtitle.Text = LocalizationService.T("Waiting...");
         SeekArea.Visibility = Visibility.Collapsed;
         SkipBackBtn.Visibility = Visibility.Collapsed;
         SkipFwdBtn.Visibility = Visibility.Collapsed;
@@ -849,7 +850,7 @@ public partial class MainWindow : Window
     private void ShowOverlay(string text, bool spinning)
     {
         VideoOverlay.Visibility = Visibility.Visible;
-        OverlayText.Text = text;
+        OverlayText.Text = LocalizationService.T(text);
         BigSpinner.Visibility = spinning ? Visibility.Visible : Visibility.Collapsed;
         IdlePlay.Visibility = spinning ? Visibility.Collapsed : Visibility.Visible;
         if (spinning) StartSpin(BigSpinner); else StopSpin(BigSpinner);
@@ -897,22 +898,22 @@ public partial class MainWindow : Window
         // Let the owned overlay window close with us instead of cancelling.
         _shuttingDown = true;
         try { _audioEngine.Dispose(); }
-        catch (Exception ex) { DebugConsole.Exception("Fermeture : arrêt de l'analyse audio", ex); }
+        catch (Exception ex) { DebugConsole.Exception("Shutdown: stopping audio analysis", ex); }
         try { _mediaTransport.Dispose(); } catch { }
         try { DisposeElySmart(); } catch { }
         FlushPendingElySound();
         base.OnClosing(e);
-        try { StateStore.Save(); } catch (Exception ex) { DebugConsole.Exception("Fermeture: échec de l'enregistrement de l'état", ex); }
+        try { StateStore.Save(); } catch (Exception ex) { DebugConsole.Exception("Shutdown: failed to save state", ex); }
 
         var backend = _videoBackend;
         _videoBackend = null;
         if (backend != null)
         {
-            try { DetachBackendEvents(backend); } catch (Exception ex) { DebugConsole.Exception("Fermeture: échec du détachement des événements", ex); }
-            try { DebugConsole.Step("Fermeture: arrêt de la lecture…"); backend.Stop(PlaybackEndReason.Teardown); }
-            catch (Exception ex) { DebugConsole.Exception("Fermeture: échec de l'arrêt", ex); }
-            try { DebugConsole.Step("Fermeture: disposition du backend…"); backend.Dispose(); }
-            catch (Exception ex) { DebugConsole.Exception("Fermeture: échec de la disposition", ex); }
+            try { DetachBackendEvents(backend); } catch (Exception ex) { DebugConsole.Exception("Shutdown: failed to detach events", ex); }
+            try { DebugConsole.Step("Shutdown: stopping playback..."); backend.Stop(PlaybackEndReason.Teardown); }
+            catch (Exception ex) { DebugConsole.Exception("Shutdown: failed to stop playback", ex); }
+            try { DebugConsole.Step("Closing: disposing the backend..."); backend.Dispose(); }
+            catch (Exception ex) { DebugConsole.Exception("Shutdown: failed to dispose backend", ex); }
         }
     }
 }

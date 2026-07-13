@@ -36,8 +36,8 @@ public partial class MainWindow
             OsdElySoundCombo.Items.Clear();
             foreach (var profile in AllElySoundProfiles())
             {
-                ElySoundPresetCombo.Items.Add(new ComboBoxItem { Tag = profile.Id, Content = profile.Name });
-                OsdElySoundCombo.Items.Add(new ComboBoxItem { Tag = profile.Id, Content = profile.Name });
+                ElySoundPresetCombo.Items.Add(new ComboBoxItem { Tag = profile.Id, Content = LocalizationService.T(profile.Name) });
+                OsdElySoundCombo.Items.Add(new ComboBoxItem { Tag = profile.Id, Content = LocalizationService.T(profile.Name) });
             }
 
             SelectComboItemByTag(ElySoundPresetCombo, StateStore.Settings.ElySoundPresetId);
@@ -193,13 +193,13 @@ public partial class MainWindow
         var enabled = StateStore.Settings.ElySoundEnabled;
         var result = dsp.ApplyElySound(profile, enabled, StateStore.Settings.ElySoundVirtualSurround);
         if (result.Pending)
-            DebugConsole.Info("ELYSOUND+ -> en attente des paramètres audio de la piste.");
+            DebugConsole.Info("ELYSOUND+: waiting for the track's audio parameters.");
         else if (result.Applied)
-            DebugConsole.Info("ELYSOUND+ -> " + profile.Name + " | " + result.Message + " | " + result.Graph);
+            DebugConsole.Info("ELYSOUND+ -> " + LocalizationService.T(profile.Name) + " | " + LocalizationService.T(result.Message) + " | " + result.Graph);
         else if (enabled)
-            DebugConsole.Warn("ELYSOUND+ -> " + result.Message);
+            DebugConsole.Warn("ELYSOUND+ -> " + LocalizationService.T(result.Message));
         else
-            DebugConsole.Info("ELYSOUND+ -> off (seul @elysound a été retiré)");
+            DebugConsole.Info("ELYSOUND+ off (only @elysound was removed)");
     }
 
     private void RefreshOsdElySoundRow()

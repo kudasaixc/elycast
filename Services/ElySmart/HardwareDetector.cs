@@ -9,7 +9,7 @@ namespace Elysium_Cast_IPTV.Services.ElySmart;
 
 public sealed class HardwareSnapshot
 {
-    public string Cpu { get; set; } = "Inconnu";
+    public string Cpu { get; set; } = "Unknown";
     public int Cores { get; set; }
     public int Threads { get; set; }
     public uint CpuMaxMhz { get; set; }
@@ -59,8 +59,8 @@ public sealed class HardwareDetector
         Query("SELECT ConfiguredClockSpeed FROM Win32_PhysicalMemory", o => result.RamMhz = Math.Max(result.RamMhz, UInt(o, "ConfiguredClockSpeed")));
         Query("SELECT Name,DriverVersion,AdapterRAM,CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate FROM Win32_VideoController", o =>
         {
-            var name = Text(o, "Name", "GPU inconnu"); var upper = name.ToUpperInvariant();
-            var vendor = upper.Contains("NVIDIA") ? "NVIDIA" : upper.Contains("AMD") || upper.Contains("RADEON") ? "AMD" : upper.Contains("INTEL") ? "Intel" : "Inconnu";
+            var name = Text(o, "Name", "Unknown GPU"); var upper = name.ToUpperInvariant();
+            var vendor = upper.Contains("NVIDIA") ? "NVIDIA" : upper.Contains("AMD") || upper.Contains("RADEON") ? "AMD" : upper.Contains("INTEL") ? "Intel" : "Unknown";
             result.Gpus.Add(new(name, vendor, Text(o, "DriverVersion", ""), AdapterRamGb(o), NvidiaArchitecture(name),
                 true, OperatingSystem.IsWindowsVersionAtLeast(10), DetectLibrary("vulkan-1.dll"), DetectLibrary("opengl32.dll"),
                 vendor == "NVIDIA" && DetectLibrary("nvcuda.dll"), upper.Contains("RTX"), vendor == "Intel", vendor == "AMD"));
@@ -87,6 +87,6 @@ public sealed class HardwareDetector
     private static long Long(ManagementObject o, string n) => long.TryParse(o[n]?.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var v) ? v : 0;
     private static double AdapterRamGb(ManagementObject o) => Math.Max(0, Long(o, "AdapterRAM") / 1073741824d);
     private static bool DetectLibrary(string name) => File.Exists(Path.Combine(Environment.SystemDirectory, name));
-    private static string ClassifyStorage(string text, string iface) => text.Contains("NVMe", StringComparison.OrdinalIgnoreCase) ? "NVMe" : text.Contains("SSD", StringComparison.OrdinalIgnoreCase) ? "SSD" : iface.Contains("USB", StringComparison.OrdinalIgnoreCase) ? "USB" : "HDD/indéterminé";
-    private static string NvidiaArchitecture(string n) => n.Contains("RTX 50", StringComparison.OrdinalIgnoreCase) ? "Blackwell" : n.Contains("RTX 40", StringComparison.OrdinalIgnoreCase) ? "Ada" : n.Contains("RTX 30", StringComparison.OrdinalIgnoreCase) ? "Ampere" : n.Contains("RTX 20", StringComparison.OrdinalIgnoreCase) ? "Turing" : "Non déterminée";
+    private static string ClassifyStorage(string text, string iface) => text.Contains("NVMe", StringComparison.OrdinalIgnoreCase) ? "NVMe" : text.Contains("SSD", StringComparison.OrdinalIgnoreCase) ? "SSD" : iface.Contains("USB", StringComparison.OrdinalIgnoreCase) ? "USB" : "HDD/unknown";
+    private static string NvidiaArchitecture(string n) => n.Contains("RTX 50", StringComparison.OrdinalIgnoreCase) ? "Blackwell" : n.Contains("RTX 40", StringComparison.OrdinalIgnoreCase) ? "Ada" : n.Contains("RTX 30", StringComparison.OrdinalIgnoreCase) ? "Ampere" : n.Contains("RTX 20", StringComparison.OrdinalIgnoreCase) ? "Turing" : "Unknown";
 }

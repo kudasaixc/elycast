@@ -67,7 +67,7 @@ public static class DebugConsole
         {
             var dir = Path.GetDirectoryName(LogPath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            File.WriteAllText(LogPath, $"=== ElyCast log — {DateTime.Now:yyyy-MM-dd HH:mm:ss} ==={Environment.NewLine}");
+            File.WriteAllText(LogPath, $"=== ElyCast log - {DateTime.Now:yyyy-MM-dd HH:mm:ss} ==={Environment.NewLine}");
         }
         catch { /* ignore */ }
 
@@ -81,7 +81,7 @@ public static class DebugConsole
             Console.SetOut(stdout);
             Console.SetIn(new StreamReader(Console.OpenStandardInput()));
             try { Console.OutputEncoding = Encoding.UTF8; } catch { /* ignore */ }
-            try { Console.Title = "ElyCast — Debug Console"; } catch { }
+            try { Console.Title = "ElyCast - Debug Console"; } catch { }
             try { Console.CursorVisible = false; } catch { }
             try { Console.SetWindowSize(Math.Min(110, Console.LargestWindowWidth),
                                         Math.Min(36, Console.LargestWindowHeight)); } catch { }
@@ -112,12 +112,12 @@ public static class DebugConsole
 
         var tasks = new[]
         {
-            "Initialisation du runtime WPF",
-            "Préparation des backends vidéo",
-            "Préparation du cache vidéo",
-            "Lecture des profils utilisateur",
-            "Application du thème (pitch black + accent)",
-            "Démarrage de l'interface"
+            LocalizationService.T("Initializing WPF runtime"),
+            LocalizationService.T("Preparing video backends"),
+            LocalizationService.T("Preparing video cache"),
+            LocalizationService.T("Reading user profiles"),
+            LocalizationService.T("Applying theme (pitch black + accent)"),
+            LocalizationService.T("Starting interface")
         };
 
         int bannerHeight = Banner.Length + 1;
@@ -148,8 +148,8 @@ public static class DebugConsole
         Console.ForegroundColor = AccentColor;
         foreach (var line in Banner) Console.WriteLine(line);
         Console.ResetColor();
-        Success("Système prêt. L'interface est lancée.");
-        Info("Tape 'help' pour la liste des commandes disponibles.");
+        Success("System ready. The interface is running.");
+        Info("Type 'help' to list available commands.");
         WritePrompt();
     }
 
@@ -292,6 +292,7 @@ public static class DebugConsole
     /// </summary>
     public static void Exception(string context, Exception ex)
     {
+        context = LocalizationService.T(context);
         AppendToFile($"{DateTime.Now:HH:mm:ss} [EXC ] {context}{Environment.NewLine}{ex}");
         lock (_lock)
         {
@@ -325,6 +326,7 @@ public static class DebugConsole
 
     private static void Write(string level, string msg, ConsoleColor color)
     {
+        msg = LocalizationService.T(msg);
         AppendToFile($"{DateTime.Now:HH:mm:ss} [{level}] {msg}");
         lock (_lock)
         {
@@ -381,7 +383,7 @@ public static class DebugConsole
 
                 if (!found)
                 {
-                    Warn($"Commande inconnue : '{cmd}'. Tape 'help'.");
+                    Warn($"Unknown command: '{cmd}'. Type 'help'.");
                     continue;
                 }
 
@@ -393,7 +395,7 @@ public static class DebugConsole
                         lock (_lock)
                         {
                             Console.ForegroundColor = ConsoleColor.Gray;
-                            Console.WriteLine(result);
+                            Console.WriteLine(LocalizationService.T(result));
                             Console.ResetColor();
                             WritePrompt();
                         }
@@ -402,7 +404,7 @@ public static class DebugConsole
                 }
                 catch (Exception ex)
                 {
-                    Error("Erreur commande : " + ex.Message);
+                    Error("Command error: " + ex.Message);
                 }
             }
         }) { IsBackground = true, Name = "ElyConsole" };
@@ -411,25 +413,25 @@ public static class DebugConsole
 
     private static void RegisterBuiltins()
     {
-        RegisterCommand("help", "Affiche cette aide", _ =>
+        RegisterCommand("help", "Show this help", _ =>
         {
             var sb = new StringBuilder();
             sb.AppendLine();
-            sb.AppendLine("  Commandes disponibles :");
+            sb.AppendLine(LocalizationService.T("  Available commands:"));
             lock (_lock)
                 foreach (var kv in _commands.OrderBy(k => k.Key))
-                    sb.AppendLine($"    {kv.Key,-14} {kv.Value.desc}");
+                    sb.AppendLine($"    {kv.Key,-14} {LocalizationService.T(kv.Value.desc)}");
             return sb.ToString();
         });
-        RegisterCommand("clear", "Efface la console", _ => { Console.Clear(); return null; });
-        RegisterCommand("banner", "Réaffiche la bannière ElyCast", _ =>
+        RegisterCommand("clear", "Clear the console", _ => { Console.Clear(); return null; });
+        RegisterCommand("banner", "Show the ElyCast banner again", _ =>
         {
             Console.ForegroundColor = AccentColor;
             foreach (var l in Banner) Console.WriteLine(l);
             Console.ResetColor();
             return null;
         });
-        RegisterCommand("cube", "Rejoue l'animation du cube 3D (3s)", _ =>
+        RegisterCommand("cube", "Replay the 3D cube animation (3s)", _ =>
         {
             Console.Clear();
             var sw = Stopwatch.StartNew();
@@ -449,19 +451,19 @@ public static class DebugConsole
             }
             return null;
         });
-        RegisterCommand("version", "Affiche la version", _ => "ElyCast v1.1 — WPF / IVideoBackend / mpv+VLC");
-        RegisterCommand("time", "Heure courante", _ => DateTime.Now.ToString("F"));
+        RegisterCommand("version", "Show version", _ => "ElyCast v1.1 - WPF / IVideoBackend / mpv+VLC");
+        RegisterCommand("time", "Current time", _ => DateTime.Now.ToString("F"));
         RegisterCommand("console", "console hide | show | front", args =>
         {
             var mode = args.FirstOrDefault()?.ToLowerInvariant() ?? "front";
             switch (mode)
             {
-                case "hide": SetVisible(false); return "Console masquée.";
-                case "show": case "front": SetVisible(true); return "Console affichée.";
-                default: return "Usage : console hide | show | front";
+                case "hide": SetVisible(false); return "Console hidden.";
+                case "show": case "front": SetVisible(true); return "Console shown.";
+                default: return "Usage: console hide | show | front";
             }
         });
-        RegisterCommand("exit", "Ferme complètement ElyCast", _ =>
+        RegisterCommand("exit", "Exit ElyCast", _ =>
         {
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                 System.Windows.Application.Current.Shutdown());

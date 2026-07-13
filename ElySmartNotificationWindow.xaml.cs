@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media.Animation;
+using Elysium_Cast_IPTV.Services;
 using Elysium_Cast_IPTV.Services.ElySmart;
 
 namespace Elysium_Cast_IPTV;
@@ -15,9 +16,10 @@ public partial class ElySmartNotificationWindow : Window
     {
         Issue = issue;
         InitializeComponent();
-        TitleText.Text = issue.Title;
-        DetailText.Text = issue.Detail;
-        ActionText.Text = issue.SuggestedAction;
+        LocalizationService.Attach(this);
+        TitleText.Text = LocalizationService.T(issue.Title);
+        DetailText.Text = LocalizationService.T(issue.Detail);
+        ActionText.Text = LocalizationService.T(issue.SuggestedAction);
         Loaded += OnLoaded;
     }
 

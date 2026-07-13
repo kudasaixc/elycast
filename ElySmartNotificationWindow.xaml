@@ -21,23 +21,23 @@
                     <TextBlock Text="ELYSMART" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentBBrush}"/>
                     <TextBlock x:Name="TitleText" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap"/>
                 </StackPanel>
-                <Button Grid.Column="2" Content="×" Width="30" Height="30" FontSize="18" Style="{StaticResource GhostButton}" Click="Ignore_Click" ToolTip="Fermer"/>
+                <Button Grid.Column="2" Content="×" Width="30" Height="30" FontSize="18" Style="{StaticResource GhostButton}" Click="Ignore_Click" ToolTip="Close"/>
             </Grid>
             <TextBlock x:Name="DetailText" Grid.Row="1" Margin="0,15,0,0" FontSize="12" LineHeight="18"
                        Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap"/>
             <Border Grid.Row="2" Margin="0,12,0,0" Padding="12,9" CornerRadius="10" Background="{DynamicResource HoverFaintBrush}">
                 <StackPanel>
-                    <TextBlock Text="RECOMMANDATION" FontSize="9" FontWeight="Bold" Foreground="{DynamicResource AccentBBrush}"/>
+                    <TextBlock Text="RECOMMENDATION" FontSize="9" FontWeight="Bold" Foreground="{DynamicResource AccentBBrush}"/>
                     <TextBlock x:Name="ActionText" Margin="0,4,0,0" FontSize="12" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap"/>
                 </StackPanel>
             </Border>
             <Grid Grid.Row="3" Margin="0,15,0,0">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <Button Grid.Column="0" Content="Toujours ignorer" HorizontalAlignment="Left" Padding="10,0" Height="38"
+                <Button Grid.Column="0" Content="Always ignore" HorizontalAlignment="Left" Padding="10,0" Height="38"
                         Style="{StaticResource GhostButton}" Click="AlwaysIgnore_Click"/>
-                <Button Grid.Column="1" Content="Ignorer" Width="82" Height="38" Margin="8,0,0,0"
+                <Button Grid.Column="1" Content="Ignore" Width="82" Height="38" Margin="8,0,0,0"
                         Style="{StaticResource GhostButton}" Click="Ignore_Click"/>
-                <Button Grid.Column="2" Content="Optimiser" Width="104" Height="38" Margin="8,0,0,0"
+                <Button Grid.Column="2" Content="Optimize" Width="104" Height="38" Margin="8,0,0,0"
                         Style="{StaticResource PrimaryButton}" Click="Optimize_Click"/>
             </Grid>
         </Grid>

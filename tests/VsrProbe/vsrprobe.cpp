@@ -1,4 +1,4 @@
-// VsrProbe — standalone matrix test of NVIDIA RTX Video Super Resolution
+// VsrProbe - standalone matrix test of NVIDIA RTX Video Super Resolution
 // through the D3D11 VideoProcessor. Each configuration runs on a FRESH device
 // (a driver crash kills the device, never the probe), performs N Blts on an
 // NV12 input uploaded from the CPU, then reports:
@@ -125,7 +125,7 @@ static bool RunConfig(const Config& c, Result& out)
     td.BindFlags = c.inputBind;
     // High-frequency luma content (checkerboard + diagonals over a gradient):
     // a super-resolution kernel visibly reshapes edges, a bilinear scaler
-    // does not — smooth gradients alone would hide the difference.
+    // does not - smooth gradients alone would hide the difference.
     std::vector<uint8_t> nv12(static_cast<size_t>(allocW) * allocH * 3 / 2);
     for (uint32_t y = 0; y < allocH; ++y)
         for (uint32_t x = 0; x < allocW; ++x)
@@ -220,7 +220,7 @@ static bool RunConfig(const Config& c, Result& out)
     }
     ctx->Flush();
 
-    // Resolve timing (bounded wait — a dead device never returns S_OK).
+    // Resolve timing (bounded wait - a dead device never returns S_OK).
     D3D11_QUERY_DATA_TIMESTAMP_DISJOINT dj{};
     for (int spin = 0; spin < 400; ++spin)
     {
@@ -241,7 +241,7 @@ static bool RunConfig(const Config& c, Result& out)
         vp, 0, &NvidiaPpeInterfaceGuid, sizeof(out.queryAfter), &out.queryAfter);
     out.removedReason = device->GetDeviceRemovedReason();
 
-    // Pixel readback of the final output — ground truth of what the VP wrote.
+    // Pixel readback of the final output - ground truth of what the VP wrote.
     {
         D3D11_TEXTURE2D_DESC sd = od;
         sd.Usage = D3D11_USAGE_STAGING;
@@ -301,10 +301,10 @@ static void PrintResult(const Config& c, const Result& res, bool completed)
 
 // Continuous 30 fps VSR Blt loop, optionally presenting the result through a
 // visible swapchain on the SAME device. Purpose: identify what the NVIDIA
-// Control Panel "Super Resolution — État" indicator actually tracks
+    // Control Panel "Super Resolution - Status" indicator actually tracks
 // (VP session alone vs VP session whose device presents).
 // `dual` replicates ELYCORE's exact structure: a second VideoProcessor
-// (RGBA->NV12 conversion, no extension) blitting right before the VSR one —
+// (RGBA->NV12 conversion, no extension) blitting right before the VSR one -
 // candidate explanation for the NVCP indicator showing "Inactif" while the
 // VSR VP provably processes.
 static int WatchMode(bool present, int seconds, bool dual = false,
@@ -322,7 +322,7 @@ static int WatchMode(bool present, int seconds, bool dual = false,
         typedef int (WINAPI* PFNCUDEVICEGET)(int*, int);
         typedef int (WINAPI* PFNCUCTXCREATE)(void**, unsigned, int);
         HMODULE cuda = LoadLibraryA("nvcuda.dll");
-        if (!cuda) { printf("nvcuda.dll introuvable\n"); return 1; }
+        if (!cuda) { printf("nvcuda.dll not found\n"); return 1; }
         auto cuInit = reinterpret_cast<PFNCUINIT>(GetProcAddress(cuda, "cuInit"));
         auto cuDeviceGet = reinterpret_cast<PFNCUDEVICEGET>(GetProcAddress(cuda, "cuDeviceGet"));
         auto cuCtxCreate = reinterpret_cast<PFNCUCTXCREATE>(GetProcAddress(cuda, "cuCtxCreate_v2"));
@@ -376,7 +376,7 @@ static int WatchMode(bool present, int seconds, bool dual = false,
     if (FAILED(device->CreateTexture2D(&td, &init, &input))) return 1;
 
     // renderChain: the NV12 input is rewritten every frame through the
-    // GRAPHICS pipeline (render target clears on the luma/chroma planes) —
+    // GRAPHICS pipeline (render target clears on the luma/chroma planes) -
     // what a shader-based RGB->NV12 conversion would look like to the driver.
     ID3D11RenderTargetView* lumaRtv = nullptr;
     ID3D11RenderTargetView* chromaRtv = nullptr;
@@ -467,7 +467,7 @@ static int WatchMode(bool present, int seconds, bool dual = false,
         if (FAILED(device->CreateTexture2D(&rgba, &pinit, &convSrc))) return 1;
         if (chain)
         {
-            // The conversion writes straight into the VSR's input texture —
+            // The conversion writes straight into the VSR's input texture -
             // ELYCORE's exact VP -> VP chaining.
             convDst = input;
             convDst->AddRef();
@@ -506,7 +506,7 @@ static int WatchMode(bool present, int seconds, bool dual = false,
     // D3D11: an OpenGL/WGL context (mpv interop) rendering every frame, and a
     // D3D9Ex device (WPF) presenting every frame. If either alone flips NVCP
     // to "Inactif", the indicator is blinded by that API's presence in the
-    // process — not by anything our VSR chain does.
+    // process - not by anything our VSR chain does.
     HWND glWnd = nullptr; HDC glDc = nullptr; HGLRC glRc = nullptr;
     if (withGl)
     {
@@ -556,7 +556,7 @@ static int WatchMode(bool present, int seconds, bool dual = false,
 
     // Optional "rival" video session: a SECOND D3D11 device in the same
     // process running a plain VideoProcessor (NV12->RGBA, no extension) every
-    // frame — simulating mpv's D3D11VA decode/VP session inside ELYCAST. If
+    // frame - simulating mpv's D3D11VA decode/VP session inside ELYCAST. If
     // this alone flips NVCP to "Inactif", the indicator reflects the other
     // (non-VSR) video session in the process, not ours.
     ID3D11Device* rDevice = nullptr;
@@ -624,7 +624,7 @@ static int WatchMode(bool present, int seconds, bool dual = false,
         wc.hInstance = GetModuleHandleW(nullptr);
         wc.lpszClassName = L"VsrProbeWatch";
         RegisterClassW(&wc);
-        hwnd = CreateWindowExW(0, wc.lpszClassName, L"VsrProbe — VSR live", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+        hwnd = CreateWindowExW(0, wc.lpszClassName, L"VsrProbe - VSR live", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             60, 60, 640, 360, nullptr, nullptr, wc.hInstance, nullptr);
         IDXGIDevice* dxgiDev = nullptr; IDXGIAdapter* adapter = nullptr; IDXGIFactory2* factory = nullptr;
         device->QueryInterface(IID_PPV_ARGS(&dxgiDev));
@@ -723,7 +723,7 @@ static int WatchMode(bool present, int seconds, bool dual = false,
             fflush(stdout);
         }
     }
-    printf("watch mode termine.\n");
+    printf("watch mode complete.\n");
     return 0;
 }
 
@@ -781,7 +781,7 @@ static int WatchCross(int seconds, bool interop, bool openA = true,
         auto dxRegister = reinterpret_cast<PFNWGLDXREGISTEROBJECTNVPROC>(wglGetProcAddress("wglDXRegisterObjectNV"));
         dxLock = reinterpret_cast<PFNWGLDXLOCKOBJECTSNVPROC>(wglGetProcAddress("wglDXLockObjectsNV"));
         dxUnlock = reinterpret_cast<PFNWGLDXUNLOCKOBJECTSNVPROC>(wglGetProcAddress("wglDXUnlockObjectsNV"));
-        if (!dxOpen || !dxRegister || !dxLock || !dxUnlock) { printf("WGL_NV_DX_interop indisponible\n"); return 1; }
+        if (!dxOpen || !dxRegister || !dxLock || !dxUnlock) { printf("WGL_NV_DX_interop unavailable\n"); return 1; }
         interopDev = dxOpen(devA);
         if (!interopDev) { printf("wglDXOpenDeviceNV KO\n"); return 1; }
         D3D11_TEXTURE2D_DESC it{};
@@ -797,7 +797,7 @@ static int WatchCross(int seconds, bool interop, bool openA = true,
         const GLenum WGL_ACCESS_READ_WRITE_NV = 0x0001;
         interopObj = dxRegister(interopDev, interopTex, glTex, GL_TEXTURE_2D, WGL_ACCESS_READ_WRITE_NV);
         if (!interopObj) { printf("wglDXRegisterObjectNV KO\n"); return 1; }
-        printf("interop WGL actif sur le device A (%s)\n",
+        printf("WGL interop active on device A (%s)\n",
             reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
     }
 
@@ -900,7 +900,7 @@ static int WatchCross(int seconds, bool interop, bool openA = true,
     IDXGISwapChain1* swap = nullptr;
     if (presentA)
     {
-        hwnd = CreateWindowExW(0, wc.lpszClassName, L"VsrProbe — cross-device", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+        hwnd = CreateWindowExW(0, wc.lpszClassName, L"VsrProbe - cross-device", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             60, 60, 640, 360, nullptr, nullptr, wc.hInstance, nullptr);
         IDXGIDevice* dxgiDev = nullptr; IDXGIAdapter* adapter = nullptr; IDXGIFactory2* factory = nullptr;
         devA->QueryInterface(IID_PPV_ARGS(&dxgiDev));
@@ -973,7 +973,7 @@ static int WatchCross(int seconds, bool interop, bool openA = true,
             fflush(stdout);
         }
     }
-    printf("cross mode termine.\n");
+    printf("cross mode complete.\n");
     return 0;
 }
 
@@ -1016,10 +1016,10 @@ int main(int argc, char** argv)
     if (argc >= 2 && strcmp(argv[1], "--watch-renderchain") == 0)
         return WatchMode(false, argc >= 3 ? atoi(argv[2]) : 30, false, false, false, false, false, false, false, false, true);
 
-    printf("VsrProbe — NVIDIA RTX VSR D3D11 VideoProcessor matrix\n\n");
+    printf("VsrProbe - NVIDIA RTX VSR D3D11 VideoProcessor matrix\n\n");
 
     // ---- A/B pixel proof: identical input, extension OFF vs ON. ----
-    printf("== Preuve par les pixels (extension OFF vs ON, entree identique) ==\n");
+    printf("== Pixel proof (extension OFF vs ON, identical input) ==\n");
     const Config pairs[][2] = {
         { { "A 640x360->1280x720 ext=OFF",   640,  360, 1280,  720, 0, DXGI_FORMAT_R8G8B8A8_UNORM, false, false, true, 30, false },
           { "A 640x360->1280x720 ext=ON",    640,  360, 1280,  720, 0, DXGI_FORMAT_R8G8B8A8_UNORM, false, false, true, 30, true  } },
@@ -1040,15 +1040,15 @@ int main(int argc, char** argv)
             size_t differing = 0; int maxDelta = 0;
             ComparePixels(off.pixels, on.pixels, differing, maxDelta);
             const double pct = off.pixels.empty() ? 0 : differing * 100.0 / off.pixels.size();
-            printf("  -> DIFF: %zu octets differents (%.2f%%), delta max par canal = %d %s\n\n",
+            printf("  -> DIFF: %zu differing bytes (%.2f%%), maximum per-channel delta = %d %s\n\n",
                 differing, pct, maxDelta,
-                differing == 0 ? "==> SORTIES IDENTIQUES : VSR ne traite PAS" :
-                maxDelta > 4 ? "==> SORTIES DIFFERENTES : le kernel VSR traite reellement" :
-                               "==> difference marginale (bruit d'arrondi ?)");
+                differing == 0 ? "==> IDENTICAL OUTPUTS: VSR is NOT processing" :
+                maxDelta > 4 ? "==> DIFFERENT OUTPUTS: the VSR kernel is actively processing" :
+                               "==> marginal difference (rounding noise?)");
         }
     }
 
-    printf("== Matrice de stabilite ==\n");
+    printf("== Stability matrix ==\n");
     const Config configs[] = {
         // name                              srcW  srcH  dstW  dstH  inputBind                     outFormat                     letterbox align16 cs1  fps
         { "base 640x360->1280x720 RT",        640,  360, 1280,  720, D3D11_BIND_RENDER_TARGET,     DXGI_FORMAT_R8G8B8A8_UNORM,   false,    false,  true, 30 },

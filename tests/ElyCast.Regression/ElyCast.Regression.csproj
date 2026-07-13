@@ -8,5 +8,6 @@
   <ItemGroup>
     <Compile Include="..\..\Services\Video\PlaybackTerminationPolicy.cs" Link="PlaybackTerminationPolicy.cs" />
     <Compile Include="..\..\Services\Audio\ElySoundController.cs" Link="ElySoundController.cs" />
+    <Compile Include="..\..\Services\LocalizationCatalog.cs" Link="LocalizationCatalog.cs" />
   </ItemGroup>
 </Project>

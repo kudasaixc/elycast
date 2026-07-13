@@ -50,7 +50,7 @@ public class IptvService
         if (!candidate.Contains("://", StringComparison.Ordinal)) candidate = "http://" + candidate;
         if (!Uri.TryCreate(candidate, UriKind.Absolute, out var server) ||
             server.Scheme is not ("http" or "https"))
-            throw new ArgumentException("L'URL Xtream doit être une URL HTTP ou HTTPS valide.", nameof(url));
+            throw new ArgumentException("The Xtream URL must be a valid HTTP or HTTPS URL.", nameof(url));
 
         BaseUrl = server.GetLeftPart(UriPartial.Path).TrimEnd('/');
         Username = username.Trim();
@@ -58,14 +58,14 @@ public class IptvService
         IsXtream = true;
         ProfileKey = $"{BaseUrl}|{Username}";
 
-        DebugConsole.Info($"Connexion Xtream -> {BaseUrl}");
+        DebugConsole.Info($"Xtream connection -> {BaseUrl}");
 
         // get_live_categories is the route that groups channels by country/theme.
         var categories = await GetAsync<List<Category>>("get_live_categories", ct) ?? new();
-        DebugConsole.Success($"{categories.Count} catégories récupérées.");
+        DebugConsole.Success($"{categories.Count} categories retrieved.");
 
         var channels = await GetAsync<List<Channel>>("get_live_streams", ct) ?? new();
-        DebugConsole.Success($"{channels.Count} chaînes récupérées.");
+        DebugConsole.Success($"{channels.Count} channels retrieved.");
 
         // resolve category id -> name
         var map = categories.ToDictionary(c => c.CategoryId, c => c.CategoryName);
@@ -117,7 +117,7 @@ public class IptvService
         var vods = await GetAsync<List<VodStream>>("get_vod_streams", ct) ?? new();
         foreach (var v in vods)
             v.CategoryName = v.CategoryId != null && map.TryGetValue(v.CategoryId, out var n) ? n : "Autres";
-        DebugConsole.Success($"{vods.Count} films récupérés.");
+        DebugConsole.Success($"{vods.Count} movies retrieved.");
         return vods;
     }
 
@@ -129,7 +129,7 @@ public class IptvService
         var series = await GetAsync<List<SeriesItem>>("get_series", ct) ?? new();
         foreach (var s in series)
             s.CategoryName = s.CategoryId != null && map.TryGetValue(s.CategoryId, out var n) ? n : "Autres";
-        DebugConsole.Success($"{series.Count} séries récupérées.");
+        DebugConsole.Success($"{series.Count} series retrieved.");
         return series;
     }
 
@@ -170,7 +170,7 @@ public class IptvService
         }
         catch (Exception ex)
         {
-            DebugConsole.Warn("EPG indisponible : " + ex.Message);
+            DebugConsole.Warn("EPG unavailable: " + ex.Message);
             return new();
         }
     }
@@ -195,7 +195,7 @@ public class IptvService
     public async Task<(List<Category> categories, List<Channel> channels)> LoadM3uAsync(
         string pathOrUrl, CancellationToken ct = default)
     {
-        DebugConsole.Info($"Chargement M3U -> {pathOrUrl}");
+        DebugConsole.Info($"Loading M3U -> {pathOrUrl}");
         IsXtream = false;
         ProfileKey = "m3u|" + pathOrUrl.Trim();
         string content;
@@ -211,7 +211,7 @@ public class IptvService
             .Select((name, i) => new Category { CategoryId = name, CategoryName = name })
             .ToList();
 
-        DebugConsole.Success($"{channels.Count} chaînes M3U sur {categories.Count} catégories.");
+        DebugConsole.Success($"{channels.Count} M3U channels across {categories.Count} categories.");
         return (categories, channels);
     }
 

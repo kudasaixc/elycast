@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using Elysium_Cast_IPTV.Services;
 using Elysium_Cast_IPTV.Services.ElySmart;
 
 namespace Elysium_Cast_IPTV;
@@ -17,7 +18,7 @@ public sealed class ElySmartDiagnosticSurface : FrameworkElement
         Draw(dc, _samples.Select(s => s.ProcessCpu), 100, Color.FromRgb(34, 211, 238));
         Draw(dc, _samples.Select(s => s.SystemRamPercent), 100, Color.FromRgb(168, 85, 247));
         Draw(dc, _samples.Select(s => s.VisualizerFps), Math.Max(60, _samples.DefaultIfEmpty().Max(s => s?.VisualizerFps ?? 0)), Color.FromRgb(251, 146, 60));
-        var text = new FormattedText("CPU   RAM   FPS visualiseur", System.Globalization.CultureInfo.CurrentCulture,
+        var text = new FormattedText(LocalizationService.T("CPU   RAM   visualizer FPS"), System.Globalization.CultureInfo.CurrentCulture,
             FlowDirection.LeftToRight, new Typeface("Segoe UI"), 11, Brushes.White, VisualTreeHelper.GetDpi(this).PixelsPerDip);
         dc.DrawText(text, new Point(8, 7));
 

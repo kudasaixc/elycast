@@ -8,6 +8,7 @@ public class Settings
     public string UserDisplayName { get; set; } = "";
     public string PreferredConnection { get; set; } = "xtream";
     public List<string> ContentInterests { get; set; } = new(); // "sport" | "anime" | "cinema" | "tv" | "music" | "docs"
+    public string Language { get; set; } = "en"; // "en" | "fr"; English is the default.
     // Name of a saved Profile to connect automatically at startup (set by the
     // onboarding wizard when the user enters his credentials there). Empty =
     // land on the login screen. Deleting the profile disables it.

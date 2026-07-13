@@ -8,7 +8,7 @@ namespace Elysium_Cast_IPTV.Services;
 /// application resources at runtime: accent brushes, tinted background
 /// gradient, card/field strokes, hover/selection/popup tints, muted/faint
 /// text and the login glow. Consumers reference these keys with
-/// DynamicResource, so a change propagates instantly — no restart needed.
+/// DynamicResource, so a change propagates instantly - no restart needed.
 /// </summary>
 public static class ThemeManager
 {
@@ -83,8 +83,7 @@ public static class ThemeManager
         res["PopupBrush"] = new SolidColorBrush(Mix(Colors.Black, c, 0.11));
         res["GlowColor"] = Mix(Colors.Black, c, 0.16);
 
-        // App background: near-black with a whisper of accent (noir-violâtre,
-        // noir-rougeâtre… selon l'accent), fading to pure black.
+        // App background: near-black with a whisper of accent, fading to pure black.
         var bg = new LinearGradientBrush
         {
             StartPoint = new System.Windows.Point(0, 0),

@@ -20,6 +20,7 @@ public partial class OnboardingWindow : Window
     private int _step;
     private string _connection = "xtream";
     private string _accentHex = StateStore.Settings.AccentColor;
+    private string _language = LocalizationService.Normalize(StateStore.Settings.Language);
     private HardwareSnapshot? _hardware;
     private BenchmarkReport? _elySmartReport;
     private CancellationTokenSource? _elySmartCts;
@@ -32,7 +33,12 @@ public partial class OnboardingWindow : Window
     public OnboardingWindow()
     {
         InitializeComponent();
+        LocalizationService.Attach(this);
         NameBox.Text = StateStore.Settings.UserDisplayName;
+        foreach (var item in OnboardingLanguageCombo.Items.OfType<ComboBoxItem>())
+            if (string.Equals(item.Tag as string, _language, StringComparison.Ordinal))
+                OnboardingLanguageCombo.SelectedItem = item;
+        OnboardingLanguageCombo.SelectionChanged += OnboardingLanguage_Changed;
         AccentList.ItemsSource = ThemeManager.Presets
             .Select(hex => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)))
             .ToList();
@@ -40,6 +46,14 @@ public partial class OnboardingWindow : Window
         EngineCombo.SelectionChanged += (_, _) => UpdateEngineToggles();
         KeyDown += (_, e) => { if (e.Key == Key.Escape) Skip_Click(this, new RoutedEventArgs()); };
         ShowStep(0);
+    }
+
+    private void OnboardingLanguage_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (OnboardingLanguageCombo.SelectedItem is not ComboBoxItem { Tag: string language }) return;
+        _language = LocalizationService.Normalize(language);
+        LocalizationService.SetLanguage(_language);
+        ShowStep(_step);
     }
 
     private void Window_Drag(object sender, MouseButtonEventArgs e)
@@ -67,12 +81,12 @@ public partial class OnboardingWindow : Window
         BackBtn.Visibility = _step > 0 ? Visibility.Visible : Visibility.Hidden;
         if (_step == Steps.Length - 1)
         {
-            NextBtn.Content = "Terminer";
+            NextBtn.Content = "Finish";
             NextBtn.IsEnabled = _installDone;
         }
         else
         {
-            NextBtn.Content = "Continuer";
+            NextBtn.Content = "Continue";
             NextBtn.IsEnabled = true;
         }
 
@@ -98,7 +112,7 @@ public partial class OnboardingWindow : Window
     private void Skip_Click(object sender, RoutedEventArgs e)
     {
         _elySmartCts?.Cancel();
-        DebugConsole.Info("Onboarding : assistant passé, configuration par défaut conservée.");
+        DebugConsole.Info("Onboarding wizard skipped; default configuration retained.");
         Persist(applyEngine: false);
         DialogResult = true;
         Close();
@@ -107,7 +121,7 @@ public partial class OnboardingWindow : Window
     private void Finish()
     {
         Persist(applyEngine: true);
-        DebugConsole.Success("Onboarding terminé — configuration appliquée.");
+        DebugConsole.Success("Onboarding complete; configuration applied.");
         DialogResult = true;
         Close();
     }
@@ -131,8 +145,8 @@ public partial class OnboardingWindow : Window
     {
         var dlg = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Choisir une playlist M3U",
-            Filter = "Playlists M3U (*.m3u;*.m3u8)|*.m3u;*.m3u8|Tous les fichiers (*.*)|*.*"
+            Title = LocalizationService.T("Choose an M3U playlist"),
+            Filter = LocalizationService.T("M3U playlists (*.m3u;*.m3u8)|*.m3u;*.m3u8|All files (*.*)|*.*")
         };
         if (dlg.ShowDialog(this) == true) ObM3uBox.Text = dlg.FileName;
     }
@@ -140,7 +154,7 @@ public partial class OnboardingWindow : Window
     private async void ObTestConnection_Click(object sender, RoutedEventArgs e)
     {
         ObTestBtn.IsEnabled = false;
-        ObTestStatus.Text = "Connexion en cours…";
+        ObTestStatus.Text = LocalizationService.T("Connecting...");
         try
         {
             var iptv = new IptvService();
@@ -148,7 +162,7 @@ public partial class OnboardingWindow : Window
             if (_connection == "m3u")
             {
                 var path = ObM3uBox.Text.Trim();
-                if (string.IsNullOrWhiteSpace(path)) { ObTestStatus.Text = "Indique un fichier ou une URL M3U."; return; }
+                if (string.IsNullOrWhiteSpace(path)) { ObTestStatus.Text = LocalizationService.T("Enter an M3U file or URL."); return; }
                 channels = (await iptv.LoadM3uAsync(path)).Item2.Count;
             }
             else
@@ -157,16 +171,16 @@ public partial class OnboardingWindow : Window
                 var user = ObUserBox.Text.Trim();
                 var pass = ObPassBox.Password;
                 if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(pass))
-                { ObTestStatus.Text = "Remplis l'URL, l'utilisateur et le mot de passe."; return; }
+                { ObTestStatus.Text = LocalizationService.T("Enter the URL, username, and password."); return; }
                 channels = (await iptv.ConnectAsync(url, user, pass)).Item2.Count;
             }
-            ObTestStatus.Text = $"✓ Connexion réussie — {channels} chaînes détectées.";
-            DebugConsole.Success($"Onboarding : test de connexion OK ({channels} chaînes).");
+            ObTestStatus.Text = LocalizationService.Format("✓ Connection successful: {0} channels found.", channels);
+            DebugConsole.Success(LocalizationService.Format("Onboarding connection test passed ({0} channels).", channels));
         }
         catch (Exception ex)
         {
             ObTestStatus.Text = "✗ " + ex.Message;
-            DebugConsole.Warn("Onboarding : test de connexion échoué — " + ex.Message);
+            DebugConsole.Warn("Onboarding connection test failed: " + ex.Message);
         }
         finally
         {
@@ -199,36 +213,38 @@ public partial class OnboardingWindow : Window
         ElySmartOnboardingProgress.Visibility = Visibility.Visible;
         ElySmartCancelButton.Visibility = Visibility.Visible;
         NextBtn.IsEnabled = false;
-        DebugConsole.Step("Onboarding : benchmark ELYSMART…");
+        DebugConsole.Step("Onboarding: ELYSMART benchmark...");
         var workload = WorkloadFromInterests(SelectedInterests());
         var progress = new Progress<BenchmarkProgress>(p =>
         {
             ElySmartOnboardingProgress.Value = p.Percent;
-            ElySmartStageText.Text = $"{p.Stage} — {p.Detail}";
+            ElySmartStageText.Text = LocalizationService.T(p.Stage) + " - " + LocalizationService.T(p.Detail);
         });
         try
         {
             var report = await new BenchmarkEngine().RunAsync(workload, progress, _elySmartCts.Token);
-            if (report.Cancelled) { ElySmartStageText.Text = "Analyse annulée. Reviens sur cette étape pour la relancer."; _hardwareProbed = false; return; }
+            if (report.Cancelled) { ElySmartStageText.Text = LocalizationService.T("Analysis canceled. Return to this step to run it again."); _hardwareProbed = false; return; }
             _elySmartReport = report;
             _hardware = report.Hardware;
             var hw = report.Hardware;
-            var gpuLines = hw.Gpus.Count == 0 ? "GPU ......... non détecté" : string.Join("\n", hw.Gpus.Select(g => $"GPU ......... {g.Name}" + (string.IsNullOrWhiteSpace(g.Driver) ? "" : $" (driver {g.Driver})")));
-            HwSummary.Text = $"CPU ......... {hw.Cpu} ({hw.Cores} cœurs / {hw.Threads} threads)\nRAM ......... {hw.RamGb:0.#} Go\n{gpuLines}\nScore ....... {report.GlobalScore}/100 — {report.Rating} (provisoire, couverture {report.MeasurementCoveragePercent} %)";
+            var gpuLines = hw.Gpus.Count == 0 ? LocalizationService.T("GPU ......... not detected") : string.Join("\n", hw.Gpus.Select(g => $"GPU ......... {g.Name}" + (string.IsNullOrWhiteSpace(g.Driver) ? "" : $" (driver {g.Driver})")));
+            HwSummary.Text = LocalizationService.Format("CPU ......... {0} ({1} cores / {2} threads)\nRAM ......... {3:0.#} GB\n{4}\nScore ....... {5}/100: {6} (provisional, {7}% coverage)",
+                LocalizationService.T(hw.Cpu), hw.Cores, hw.Threads, hw.RamGb, gpuLines, report.GlobalScore, LocalizationService.T(report.Rating), report.MeasurementCoveragePercent);
             var c = report.Configuration;
-            var reasons = report.Recommendations.Take(3).Select(r => $"• {r.Title}: {r.Reason} (confiance {r.Confidence}%)");
-            RecoText.Text = "ELYSMART recommande :\n" + string.Join("\n", reasons);
+            var reasons = report.Recommendations.Take(3).Select(r => LocalizationService.Format("• {0}: {1} (confidence {2}%)",
+                LocalizationService.T(r.Title), LocalizationService.T(r.Reason), r.Confidence));
+            RecoText.Text = LocalizationService.T("ELYSMART recommends:") + "\n" + string.Join("\n", reasons);
             SelectCombo(EngineCombo, c.Renderer);
             VsrSwitch.IsChecked = c.RtxVsr;
             FrucSwitch.IsChecked = c.ElyFlow;
             UpdateEngineToggles();
             NextBtn.IsEnabled = true;
-            DebugConsole.Info($"Onboarding ELYSMART : score={report.GlobalScore}, backend={c.Renderer}, VSR={c.RtxVsr}, ELYFLOW={c.ElyFlow}, upscale={c.Upscaling}");
+            DebugConsole.Info($"Onboarding ELYSMART: score={report.GlobalScore}, backend={c.Renderer}, VSR={c.RtxVsr}, ELYFLOW={c.ElyFlow}, upscale={c.Upscaling}");
         }
         catch (Exception ex)
         {
             _hardwareProbed = false;
-            ElySmartStageText.Text = "ELYSMART n'a pas pu terminer : " + ex.Message;
+            ElySmartStageText.Text = LocalizationService.T("ELYSMART could not finish: ") + ex.Message;
             DebugConsole.Exception("Onboarding ELYSMART", ex);
         }
         finally
@@ -259,25 +275,25 @@ public partial class OnboardingWindow : Window
                 var frucCapable = ElyFlowService.Probe().FrucCapable;
                 FrucSwitch.IsEnabled = frucCapable;
                 if (!frucCapable) FrucSwitch.IsChecked = false;
-                FrucSwitch.ToolTip = frucCapable ? null : "Runtime NVIDIA FRUC absent sur ce PC.";
+                FrucSwitch.ToolTip = frucCapable ? null : LocalizationService.T("NVIDIA FRUC runtime unavailable on this PC.");
                 VsrSwitch.IsEnabled = _hardware?.Gpus.Any(g => g.Rtx) == true;
-                VsrSwitch.ToolTip = "Passe native ELYCORE indépendante de l'interpolation FRUC.";
+                VsrSwitch.ToolTip = LocalizationService.T("Native ELYCORE pass independent from FRUC interpolation.");
                 break;
             case "rtx-sdk":
                 VsrSwitch.IsChecked = true;
                 VsrSwitch.IsEnabled = false;
-                VsrSwitch.ToolTip = "RTX VSR fait partie intégrante de ce backend.";
+                VsrSwitch.ToolTip = LocalizationService.T("RTX VSR is an integral part of this backend.");
                 FrucSwitch.IsChecked = false;
                 FrucSwitch.IsEnabled = false;
-                FrucSwitch.ToolTip = "L'interpolation FRUC nécessite le renderer ELYCORE.";
+                FrucSwitch.ToolTip = LocalizationService.T("FRUC interpolation requires the ELYCORE renderer.");
                 break;
             default:
                 VsrSwitch.IsChecked = false;
                 VsrSwitch.IsEnabled = false;
-                VsrSwitch.ToolTip = "RTX VSR nécessite le backend RTX ou ELYCORE.";
+                VsrSwitch.ToolTip = LocalizationService.T("RTX VSR requires the RTX or ELYCORE backend.");
                 FrucSwitch.IsChecked = false;
                 FrucSwitch.IsEnabled = false;
-                FrucSwitch.ToolTip = "L'interpolation FRUC nécessite le renderer ELYCORE.";
+                FrucSwitch.ToolTip = LocalizationService.T("FRUC interpolation requires the ELYCORE renderer.");
                 break;
         }
     }
@@ -307,27 +323,27 @@ public partial class OnboardingWindow : Window
         {
             var backend = SelectedEngine();
 
-            // 1) libmpv — required by every backend except the VLC fallback.
+            // 1) libmpv - required by every backend except the VLC fallback.
             if (backend != "vlc-bitmap")
             {
                 if (string.IsNullOrWhiteSpace(MpvHwndBackend.LocateNative()))
                 {
-                    Log("• libmpv absent : téléchargement…");
+                    Log("• libmpv missing: downloading...");
                     try
                     {
                         var progress = new Progress<string>(msg => Log("  " + msg));
                         var dll = await new MpvNativeInstaller().InstallLatestAsync(progress);
-                        Log("  ✓ libmpv installé : " + dll);
+                        Log(LocalizationService.Format("  ✓ libmpv installed: {0}", dll));
                     }
                     catch (Exception ex)
                     {
                         Log("  ✗ libmpv : " + ex.Message);
-                        Log("  → ElyCast démarrera sur VLC ; installe 7-Zip puis relance l'installation de mpv depuis les réglages.");
+                        Log("  → ElyCast will start with VLC. Install 7-Zip, then retry the mpv installation from Settings.");
                     }
                 }
                 else
                 {
-                    Log("• libmpv déjà présent ✓");
+                    Log("• libmpv already present ✓");
                 }
             }
 
@@ -335,20 +351,20 @@ public partial class OnboardingWindow : Window
             var method = _elySmartReport?.Configuration.Upscaling ?? StateStore.Settings.UpscaleMethod;
             if (ShaderCatalog.MissingFor(method, "off").Count > 0)
             {
-                Log($"• Téléchargement des shaders ({method})…");
+                Log(LocalizationService.Format("• Downloading shaders ({0})...", method));
                 try
                 {
                     await new ShaderInstaller().EnsureAsync(method, "off");
-                    Log("  ✓ Shaders prêts.");
+                    Log("  ✓ Shaders ready.");
                 }
                 catch (Exception ex)
                 {
-                    Log("  ✗ Shaders : " + ex.Message + " (repli sur le scaler mpv)");
+                    Log("  ✗ Shaders: " + ex.Message + LocalizationService.T(" (falling back to the mpv scaler)"));
                 }
             }
             else
             {
-                Log($"• Shaders ({method}) déjà présents ✓");
+                Log(LocalizationService.Format("• Shaders ({0}) already present ✓", method));
             }
 
             // 3) RTX VSR functional test when the chosen pipeline relies on it.
@@ -372,7 +388,7 @@ public partial class OnboardingWindow : Window
                         if (backend == "elycore")
                         {
                             VsrSwitch.IsChecked = false;
-                            Log("  → RTX VSR désactivé dans la configuration ELYFLOW (réactivable dans les réglages).");
+                            Log("  → RTX VSR disabled in the ELYFLOW configuration (it can be enabled again in Settings).");
                         }
                         else
                         {
@@ -390,15 +406,15 @@ public partial class OnboardingWindow : Window
                         ? 0 : -1
                     : -1;
                 Log(code == 0
-                    ? "• Préflight ELYCORE (D3D11 + WGL interop) ✓"
-                    : "• ⚠ Préflight ELYCORE refusé — repli automatique sur mpv GPU au lancement.");
+                    ? "• ELYCORE preflight (D3D11 + WGL interop) ✓"
+                    : "• ⚠ ELYCORE preflight rejected: automatic fallback to mpv GPU at startup.");
             }
 
             Log("");
-            Log("Installation terminée. Clique sur « Terminer » pour lancer ElyCast.");
+            Log("Installation complete. Select Finish to start ElyCast.");
             _installDone = true;
             NextBtn.IsEnabled = true;
-            InstallBtn.Content = "Relancer l'installation";
+            InstallBtn.Content = LocalizationService.T("Run installation again");
         }
         finally
         {
@@ -409,9 +425,10 @@ public partial class OnboardingWindow : Window
 
     private void Log(string line)
     {
+        line = LocalizationService.T(line);
         InstallLog.Text += (InstallLog.Text.Length == 0 ? "" : "\n") + line;
         InstallScroll.ScrollToEnd();
-        if (!string.IsNullOrWhiteSpace(line)) DebugConsole.Info("Onboarding : " + line.Trim());
+        if (!string.IsNullOrWhiteSpace(line)) DebugConsole.Info("Onboarding: " + line.Trim());
     }
 
     // -------------------------------------------------------------- persist
@@ -419,6 +436,7 @@ public partial class OnboardingWindow : Window
     {
         var s = StateStore.Settings;
         s.UserDisplayName = NameBox.Text.Trim();
+        s.Language = _language;
         s.PreferredConnection = _connection;
         s.AccentColor = _accentHex;
         s.ContentInterests = SelectedInterests();
@@ -491,12 +509,12 @@ public partial class OnboardingWindow : Window
             profiles.RemoveAll(p => p.Name == profile.Name);
             profiles.Add(profile);
             ProfileStore.Save(profiles);
-            DebugConsole.Success("Onboarding : profil de connexion enregistré (" + profile.Name + ").");
+            DebugConsole.Success(LocalizationService.Format("Onboarding connection profile saved ({0}).", profile.Name));
             return profile.Name;
         }
         catch (Exception ex)
         {
-            DebugConsole.Warn("Onboarding : impossible d'enregistrer le profil — " + ex.Message);
+            DebugConsole.Warn("Onboarding could not save the connection profile: " + ex.Message);
             return "";
         }
     }

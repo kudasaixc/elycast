@@ -22,7 +22,7 @@ public sealed class LoggingVideoView : VideoView
     public LoggingVideoView()
     {
         // GLControl creates its GL/D3D context on Loaded but, in this beta, only
-        // ever calls EnsureRenderContextCreated() from OnDXGLChanged — which is
+        // ever calls EnsureRenderContextCreated() from OnDXGLChanged - which is
         // triggered solely by a GLVersion change that never happens. Result: mpv
         // logs "vo/libmpv: No render context set" and shows no video. We create
         // the mpv render context ourselves once the GL context exists. GLControl
@@ -36,35 +36,35 @@ public sealed class LoggingVideoView : VideoView
         var player = MediaPlayer;
         if (player == null)
         {
-            DebugConsole.Warn("render: Loaded mais aucun MediaPlayer attaché.");
+            DebugConsole.Warn("render: Loaded with no attached MediaPlayer.");
             return;
         }
 
         try
         {
-            DebugConsole.Step("render: création du contexte de rendu mpv (EnsureRenderContextCreated)…");
+            DebugConsole.Step("render: creating mpv render context (EnsureRenderContextCreated)...");
             player.EnsureRenderContextCreated();
-            DebugConsole.Success("render: contexte de rendu mpv créé.");
+            DebugConsole.Success("render: mpv render context created.");
             // Force a first paint so mpv attaches the render target immediately.
             InvalidateVisual();
         }
         catch (Exception ex)
         {
-            DebugConsole.Exception("render: échec de création du contexte de rendu mpv", ex);
+            DebugConsole.Exception("render: failed to create mpv render context", ex);
         }
     }
 
     protected override void OnDXGLChanged(DXGLContext dXGLContext)
     {
-        DebugConsole.Step("render: (re)création du contexte DXGL / mpv_render_context…");
+        DebugConsole.Step("render: (re)creating DXGL / mpv_render_context...");
         try
         {
             base.OnDXGLChanged(dXGLContext);
-            DebugConsole.Success("render: contexte DXGL / mpv_render_context prêt.");
+            DebugConsole.Success("render: DXGL / mpv_render_context ready.");
         }
         catch (Exception ex)
         {
-            DebugConsole.Exception("render: échec de création du contexte DXGL", ex);
+            DebugConsole.Exception("render: failed to create DXGL context", ex);
             throw;
         }
     }
@@ -72,7 +72,7 @@ public sealed class LoggingVideoView : VideoView
     protected override void OnRender(DrawingContext drawingContext)
     {
         var n = ++_renderCount;
-        DebugConsole.Trace($"R{n}> début (mpv_render_context_render)");
+        DebugConsole.Trace($"R{n}> start (mpv_render_context_render)");
         try
         {
             base.OnRender(drawingContext);
@@ -80,7 +80,7 @@ public sealed class LoggingVideoView : VideoView
         }
         catch (Exception ex)
         {
-            DebugConsole.Exception($"render: exception managée au render #{n}", ex);
+            DebugConsole.Exception($"render: managed exception during render #{n}", ex);
             throw;
         }
     }

@@ -57,7 +57,7 @@ public sealed class VlcBackend : IVideoBackend
     public void Play(string url)
     {
         using var media = new Media(_libVlc, new Uri(url), ":network-caching=1500");
-        if (!_player.Play(media)) throw new InvalidOperationException("VLC a refusé le média demandé.");
+        if (!_player.Play(media)) throw new InvalidOperationException("VLC rejected the requested media.");
         _hasMedia = true;
     }
 
@@ -110,7 +110,7 @@ public sealed class VlcBackend : IVideoBackend
         {
             return (_player.SpuDescription ?? [])
                 .Where(t => t.Id >= 0)
-                .Select(t => new VideoTrack(t.Id, string.IsNullOrWhiteSpace(t.Name) ? $"Piste {t.Id}" : t.Name))
+                .Select(t => new VideoTrack(t.Id, string.IsNullOrWhiteSpace(t.Name) ? LocalizationService.Format("Track {0}", t.Id) : t.Name))
                 .ToList();
         }
         catch
@@ -130,7 +130,7 @@ public sealed class VlcBackend : IVideoBackend
         {
             return (_player.AudioTrackDescription ?? [])
                 .Where(t => t.Id >= 0)
-                .Select(t => new VideoTrack(t.Id, string.IsNullOrWhiteSpace(t.Name) ? $"Piste {t.Id}" : t.Name))
+                .Select(t => new VideoTrack(t.Id, string.IsNullOrWhiteSpace(t.Name) ? LocalizationService.Format("Track {0}", t.Id) : t.Name))
                 .ToList();
         }
         catch
@@ -157,7 +157,7 @@ public sealed class VlcBackend : IVideoBackend
         lock (CoreLock)
         {
             if (_coreInitialized) return;
-            DebugConsole.Info("Initialisation du backend VLC...");
+            DebugConsole.Info("Initializing the VLC backend...");
             Core.Initialize();
             _coreInitialized = true;
         }

@@ -10,7 +10,7 @@ namespace Elysium_Cast_IPTV;
 
 /// <summary>
 /// Modal tag editor. Collects an <see cref="AudioTagEdit"/> without touching the
-/// file itself — the caller performs the write so it can release the player first.
+/// file itself - the caller performs the write so it can release the player first.
 /// </summary>
 public partial class MetadataEditorWindow : Window
 {
@@ -23,6 +23,7 @@ public partial class MetadataEditorWindow : Window
     public MetadataEditorWindow(string path, AudioMetadata metadata)
     {
         InitializeComponent();
+        LocalizationService.Attach(this);
         FileNameText.Text = path;
         TitleBox.Text = metadata.Title;
         ArtistBox.Text = metadata.Artist ?? "";
@@ -52,8 +53,8 @@ public partial class MetadataEditorWindow : Window
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Choisir une pochette",
-            Filter = "Images (*.jpg;*.jpeg;*.png;*.webp;*.bmp)|*.jpg;*.jpeg;*.png;*.webp;*.bmp|Tous les fichiers (*.*)|*.*"
+            Title = LocalizationService.T("Choose artwork"),
+            Filter = LocalizationService.T("Images (*.jpg;*.jpeg;*.png;*.webp;*.bmp)|*.jpg;*.jpeg;*.png;*.webp;*.bmp|All files (*.*)|*.*")
         };
         if (dialog.ShowDialog(this) != true) return;
         try
@@ -62,7 +63,7 @@ public partial class MetadataEditorWindow : Window
             var preview = CoverArtCache.DecodeBytes(bytes, 400);
             if (preview == null)
             {
-                MessageBox.Show(this, "Cette image est illisible.", "Métadonnées", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(this, LocalizationService.T("This image cannot be decoded."), LocalizationService.T("Metadata"), MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             using var sourceStream = new MemoryStream(bytes);
@@ -85,8 +86,8 @@ public partial class MetadataEditorWindow : Window
         }
         catch (Exception ex)
         {
-            DebugConsole.Exception("Lecture de l'image de pochette impossible", ex);
-            MessageBox.Show(this, "Impossible de lire cette image.", "Métadonnées", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DebugConsole.Exception("Could not read the artwork image", ex);
+            MessageBox.Show(this, LocalizationService.T("Could not read this image."), LocalizationService.T("Metadata"), MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -103,7 +104,7 @@ public partial class MetadataEditorWindow : Window
     {
         if (string.IsNullOrWhiteSpace(TitleBox.Text))
         {
-            MessageBox.Show(this, "Le titre ne peut pas être vide.", "Métadonnées", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, LocalizationService.T("The title cannot be empty."), LocalizationService.T("Metadata"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         uint.TryParse(TrackBox.Text.Trim(), out var track);

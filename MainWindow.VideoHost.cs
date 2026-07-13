@@ -148,7 +148,7 @@ public partial class MainWindow
 
     // Position the overlay window exactly over VideoStage, in screen DIPs
     // (PointToScreen returns device pixels, so convert via the visual's DPI).
-    // A window — unlike a popup — is free to extend past the screen edges.
+    // A window - unlike a popup - is free to extend past the screen edges.
     private void ReanchorOverlay()
     {
         if (_overlayWindow is not { IsVisible: true }) return;
@@ -232,11 +232,11 @@ public partial class MainWindow
         var preferredBackend = string.IsNullOrWhiteSpace(diagnosticBackend)
             ? StateStore.Settings.VideoBackend
             : diagnosticBackend;
-        DebugConsole.Step($"Backend: création via factory (préférence='{preferredBackend}')…");
+        DebugConsole.Step($"Backend: creating through factory (preference='{preferredBackend}')...");
         var backend = VideoBackendFactory.Create(preferredBackend);
         _videoBackend = backend;
 
-        DebugConsole.Step($"Backend: rattachement de la surface vidéo ({backend.Name}) au Visual Tree…");
+        DebugConsole.Step($"Backend: attaching video surface ({backend.Name}) to the visual tree...");
         VideoHost.Content = backend.View;
         if (backend.View is MpvHwndHost nativeHost)
         {
@@ -248,7 +248,7 @@ public partial class MainWindow
         }
         backend.Volume = (int)VolumeSlider.Value;
 
-        DebugConsole.Step("Backend: rattachement des événements…");
+        DebugConsole.Step("Backend: attaching events...");
         backend.Playing += OnBackendPlaying;
         backend.Failed += OnBackendFailed;
         backend.Ended += OnBackendEnded;
@@ -265,11 +265,11 @@ public partial class MainWindow
         // Never dereference that transient null during application startup.
         if (!ReferenceEquals(_videoBackend, backend))
         {
-            DebugConsole.Info($"Backend: transition depuis {backend.Name} programmée.");
+            DebugConsole.Info($"Backend: transition from {backend.Name} scheduled.");
             return;
         }
 
-        DebugConsole.Success($"Backend: initialisé ({backend.Name}).");
+        DebugConsole.Success($"Backend initialized ({backend.Name}).");
     }
 
     private void DetachBackendEvents(IVideoBackend backend)
@@ -290,7 +290,7 @@ public partial class MainWindow
         RefreshOsdUpscaleRow();
         RefreshOsdElyColorRow();
         RefreshOsdElySoundRow();
-        DebugConsole.Success($"Lecture en cours : {_current?.Name}");
+        DebugConsole.Success($"Now playing: {_current?.Name}");
         if (_current != null && IsAudioOnlyItem(_current))
             _mediaTransport.SetState(hasMedia: true, playing: true);
     });
@@ -299,8 +299,8 @@ public partial class MainWindow
     {
         if (!_connected) return;
         ShowOverlay(message, spinning: false);
-        TopSubtitle.Text = "Erreur";
-        DebugConsole.Error($"Échec de lecture : {_current?.Name} ({message})");
+        TopSubtitle.Text = LocalizationService.T("Error");
+        DebugConsole.Error($"Playback failed: {_current?.Name} ({message})");
         if (PlaybackTerminationPolicy.ForFailure(
                 _current?.Kind == PlayItemKind.Live,
                 StateStore.Settings.AutoReconnect) == PlaybackTerminationAction.ReconnectLive)
@@ -313,7 +313,7 @@ public partial class MainWindow
         var termination = PlaybackTerminationPolicy.ForEnd(reason, _current?.Kind == PlayItemKind.Live);
         if (termination == PlaybackTerminationAction.Ignore) return;
         _mediaTransport.SetState(hasMedia: false, playing: false);
-        DebugConsole.Info($"Fin de lecture -> raison={reason}, type={_current?.Kind}, média={_current?.Name}");
+        DebugConsole.Info($"Playback ended: reason={reason}, type={_current?.Kind}, media={_current?.Name}");
 
         Interlocked.Increment(ref _playbackGeneration);
         CancelEpgRequest();
@@ -335,25 +335,25 @@ public partial class MainWindow
 
         if (termination == PlaybackTerminationAction.ManualStop)
         {
-            TopSubtitle.Text = "Arrêté";
+            TopSubtitle.Text = LocalizationService.T("Stopped");
             SeekArea.Visibility = Visibility.Collapsed;
-            ShowOverlay("Lecture arrêtée", spinning: false);
+            ShowOverlay("Playback stopped", spinning: false);
         }
         else if (termination == PlaybackTerminationAction.ReconnectLive)
         {
-            TopSubtitle.Text = "Flux interrompu";
-            ShowOverlay("Flux interrompu — reconnexion…", spinning: true);
+            TopSubtitle.Text = LocalizationService.T("Stream interrupted");
+            ShowOverlay("Stream interrupted: reconnecting...", spinning: true);
             TryAutoReconnect();
         }
         else
         {
-            TopSubtitle.Text = "Terminé";
+            TopSubtitle.Text = LocalizationService.T("Finished");
             if (SeekArea.Visibility == Visibility.Visible)
             {
                 SeekSlider.Value = SeekSlider.Maximum;
                 CurTime.Text = TotTime.Text;
             }
-            ShowOverlay("Lecture terminée — appuie sur Lecture pour recommencer", spinning: false);
+            ShowOverlay("Playback finished. Select Play to restart", spinning: false);
         }
 
         RefreshOsdUpscaleRow();

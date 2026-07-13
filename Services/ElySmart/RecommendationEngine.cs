@@ -29,10 +29,10 @@ public sealed class RecommendationEngine
             Parallax = false
         };
         var r = new List<ElySmartRecommendation>();
-        Add("VideoBackend", config.Renderer, "Renderer recommandé", config.Renderer == "elycore" ? "ELYCORE a réussi son préflight D3D11/WGL et le GPU NVIDIA est présent." : "Choix du meilleur backend dont les dépendances ont été vérifiées.", "Meilleure stabilité de présentation", "Aucun coût ajouté isolément", true, 92);
-        if (config.RtxVsr) Add("ElyFlowRtxVsrEnabled", "true", "Activer RTX VSR", "GPU RTX, pilote et préflight ELYCORE compatibles. L'efficacité reste vérifiée média par média par le renderer.", "Netteté accrue sur sources sous la résolution d'écran", "+9 % GPU estimés, +120 Mo VRAM", true, 86);
-        Add("UpscaleMethod", config.Upscaling, "Upscaling adapté au contenu", $"Le profil {profile.Id} donne la priorité à la qualité {profile.VideoQuality:P0} et la machine dispose de {(strongGpu ? "marge GPU" : "ressources modérées")}.", "Qualité accrue avec marge de stabilité", CapabilityDatabase.Find(config.Upscaling) is { } c ? $"+{c.Gpu:0}% GPU, +{c.VramMb} Mo" : "Coût faible", true, 82);
-        Add("AudioVisualizerTargetFps", config.VisualizerFps.ToString(), "Cadence du visualiseur", "Cadence bornée par la puissance mesurée et le taux de rafraîchissement détecté.", $"Animation jusqu'à {config.VisualizerFps} FPS", config.VisualizerFps > 60 ? "+4 % CPU estimés" : "Coût contenu", false, 78);
+        Add("VideoBackend", config.Renderer, "Recommended renderer", config.Renderer == "elycore" ? "ELYCORE passed its D3D11/WGL preflight and an NVIDIA GPU is present." : "Selected the best backend whose dependencies were verified.", "More stable presentation", "No isolated added cost", true, 92);
+        if (config.RtxVsr) Add("ElyFlowRtxVsrEnabled", "true", "Enable RTX VSR", "RTX GPU, driver, and ELYCORE preflight are compatible. Effectiveness is still verified per media item by the renderer.", "Sharper undersized sources", "+9% estimated GPU, +120 MB VRAM", true, 86);
+        Add("UpscaleMethod", config.Upscaling, "Content-adapted upscaling", $"The {profile.Id} profile prioritizes quality at {profile.VideoQuality:P0}, and the machine has {(strongGpu ? "GPU headroom" : "moderate resources")}.", "Higher quality with stability headroom", CapabilityDatabase.Find(config.Upscaling) is { } c ? $"+{c.Gpu:0}% GPU, +{c.VramMb} MB" : "Low cost", true, 82);
+        Add("AudioVisualizerTargetFps", config.VisualizerFps.ToString(), "Visualizer frame rate", "Frame rate is bounded by measured performance and the detected display refresh rate.", $"Animation up to {config.VisualizerFps} FPS", config.VisualizerFps > 60 ? "+4% estimated CPU" : "Contained cost", false, 78);
         return (config, r);
 
         void Add(string setting, string value, string title, string reason, string gain, string cost, bool critical, int confidence) =>

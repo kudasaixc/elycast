@@ -13,7 +13,7 @@ public partial class MainWindow
 
     // ============ ELYCOLOR ============
     // mpv equalizer values, range -100..100. Guiding principles: brightness is
-    // a black-floor offset (washes the image — avoid, prefer gamma), contrast
+    // a black-floor offset (washes the image - avoid, prefer gamma), contrast
     // above ~+18 combined with negative gamma crushes shadow detail, hue
     // shifts tint skin very fast (±2 max on live-action), and every look must
     // stay watchable over a full film, not just on a demo scene.
@@ -28,10 +28,10 @@ public partial class MainWindow
         new()
         {
             // Flat anime masters take saturation well, but +28 bled the cel
-            // aplats; the hue shift tinted skin — gone. Slight gamma lift
+            // aplats; the hue shift tinted skin - gone. Slight gamma lift
             // keeps line-art detail in dark scenes.
             Id = "elycolor-anime",
-            Name = "ELYCOLOR Animé Vif",
+            Name = "ELYCOLOR Vivid Anime",
             IncludeVideoPipeline = false,
             Saturation = 22,
             Brightness = 0,
@@ -43,7 +43,7 @@ public partial class MainWindow
             // Subtle pop for live-action: skin must stay natural, so about
             // half the anime boost, and no black-floor lift.
             Id = "elycolor-film",
-            Name = "ELYCOLOR Film Éclatant",
+            Name = "ELYCOLOR Vivid Film",
             IncludeVideoPipeline = false,
             Saturation = 12,
             Brightness = 0,
@@ -53,10 +53,10 @@ public partial class MainWindow
         new()
         {
             // Cold desaturated dread. The old contrast 25 / gamma -12 /
-            // brightness -7 trio crushed everything the genre lives on —
+            // brightness -7 trio crushed everything the genre lives on -
             // horror needs *readable* shadows to be scary.
             Id = "elycolor-horror",
-            Name = "ELYCOLOR Horreur",
+            Name = "ELYCOLOR Horror",
             IncludeVideoPipeline = false,
             Saturation = -22,
             Brightness = -3,
@@ -82,7 +82,7 @@ public partial class MainWindow
             // neutral floor, and a light gamma dip for dense blacks that
             // still hold texture.
             Id = "elycolor-noir",
-            Name = "ELYCOLOR Noir Dense",
+            Name = "ELYCOLOR Deep Noir",
             IncludeVideoPipeline = false,
             Saturation = -100,
             Brightness = 0,
@@ -94,7 +94,7 @@ public partial class MainWindow
             // Low-fatigue evening look: softened contrast, raised gamma to
             // open shadows, near-neutral colour.
             Id = "elycolor-soft",
-            Name = "ELYCOLOR Doux Confort",
+            Name = "ELYCOLOR Soft Comfort",
             IncludeVideoPipeline = false,
             Saturation = 3,
             Brightness = 0,
@@ -121,7 +121,7 @@ public partial class MainWindow
 
             ElyColorCustomSelectCombo.Items.Clear();
             foreach (var filter in StateStore.Settings.ElyColorCustomFilters ?? new())
-                ElyColorCustomSelectCombo.Items.Add(new ComboBoxItem { Tag = filter.Id, Content = filter.Name });
+                ElyColorCustomSelectCombo.Items.Add(new ComboBoxItem { Tag = filter.Id, Content = LocalizationService.T(filter.Name) });
         }
         finally
         {
@@ -134,7 +134,7 @@ public partial class MainWindow
     {
         combo.Items.Clear();
         foreach (var filter in AllElyColorFilters())
-            combo.Items.Add(new ComboBoxItem { Tag = filter.Id, Content = filter.Name });
+            combo.Items.Add(new ComboBoxItem { Tag = filter.Id, Content = LocalizationService.T(filter.Name) });
         SelectComboItemByTag(combo, selectedId);
     }
 
@@ -316,7 +316,7 @@ public partial class MainWindow
         _syncingElyColor = true;
         try
         {
-            ElyColorNameBox.Text = filter.Name == "ELYCOLOR Off" ? NextElyColorName() : filter.Name;
+            ElyColorNameBox.Text = filter.Name == "ELYCOLOR Off" ? NextElyColorName() : LocalizationService.T(filter.Name);
             ElyColorPipelineSwitch.IsChecked = filter.IncludeVideoPipeline;
             SelectComboItemByTag(ElyColorBackendCombo, string.IsNullOrWhiteSpace(filter.VideoBackend) ? StateStore.Settings.VideoBackend : filter.VideoBackend);
             SelectComboItemByTag(ElyColorExternalUpscalerCombo, string.IsNullOrWhiteSpace(filter.UpscalerEngine) ? StateStore.Settings.UpscalerEngine : filter.UpscalerEngine);

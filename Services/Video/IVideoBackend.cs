@@ -51,8 +51,8 @@ public sealed record VideoStats(
     long DisplayedFrames,
     long DroppedFrames,
     string State,
-    string Scaler = "—",
-    string Hwdec = "—",
+    string Scaler = "-",
+    string Hwdec = "-",
     string Shaders = "");
 
 public sealed record VideoTrack(int Id, string Name);

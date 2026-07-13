@@ -20,11 +20,12 @@ public partial class MainWindow
         CancelEpgRequest();
         _current = item;
         TopTitle.Text = item.Name;
-        TopSubtitle.Text = string.IsNullOrWhiteSpace(item.CategoryName) ? item.KindLabel : $"{item.KindLabel} · {item.CategoryName}";
+        var kindLabel = LocalizationService.T(item.KindLabel);
+        TopSubtitle.Text = string.IsNullOrWhiteSpace(item.CategoryName) ? kindLabel : $"{kindLabel} · {item.CategoryName}";
         EpgProgress.Visibility = Visibility.Collapsed;
         ResetSubtitleChoices();
         ResetAudioChoices();
-        ShowOverlay("Chargement…", spinning: true);
+        ShowOverlay("Loading...", spinning: true);
         ShowOsd();
 
         // seek bar + skip buttons only make sense for finite media (films / episodes)
@@ -53,9 +54,9 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-            DebugConsole.Exception($"Échec du lancement de la lecture : {item.Name}", ex);
-            ShowOverlay("Impossible de lancer la lecture.", spinning: false);
-            TopSubtitle.Text = "Erreur";
+            DebugConsole.Exception($"Failed to start playback: {item.Name}", ex);
+            ShowOverlay("Could not start playback.", spinning: false);
+            TopSubtitle.Text = LocalizationService.T("Error");
             HideAudioVisualizer();
             return;
         }
@@ -87,7 +88,7 @@ public partial class MainWindow
 
         if (_state.LastPlayed != null)
         {
-            ResumeText.Text = "Reprendre — " + _state.LastPlayed.Name;
+            ResumeText.Text = LocalizationService.T("Resume: ") + _state.LastPlayed.Name;
             ResumeButton.Visibility = Visibility.Visible;
         }
         else ResumeButton.Visibility = Visibility.Collapsed;
@@ -103,7 +104,7 @@ public partial class MainWindow
             _videoBackend.Pause();
             SetPlayIcon(true);
             // Audio visualizer: the engine sees IsPlaying=false and lets the
-            // spectrum settle — rendering keeps running, no freeze needed.
+            // spectrum settle - rendering keeps running, no freeze needed.
         }
         else if (_videoBackend.HasMedia)
         {
@@ -154,7 +155,7 @@ public partial class MainWindow
             _reconnectTimer!.Stop();
             if (_connected && generation == _playbackGeneration && _current != null)
             {
-                DebugConsole.Warn("Reconnexion auto…");
+                DebugConsole.Warn("Automatic reconnection...");
                 Play(_current);
             }
         };
@@ -219,7 +220,7 @@ public partial class MainWindow
         if (_videoBackend == null) return;
         var len = _videoBackend.LengthMs;       // ms
         var pos = _videoBackend.PositionMs;     // ms
-        if (len <= 0) { TotTime.Text = "—"; UpdateSkipButtons(0, 0); return; }
+        if (len <= 0) { TotTime.Text = "-"; UpdateSkipButtons(0, 0); return; }
 
         if (!_userSeeking)
         {
@@ -276,8 +277,8 @@ public partial class MainWindow
     {
         _loadingSubtitleChoices = true;
         _subtitleOptions.Clear();
-        _subtitleOptions.Add(new SubtitleOption(int.MinValue, "Sous-titres", "auto", IsAuto: true));
-        _subtitleOptions.Add(new SubtitleOption(-1, "Désactivés", "off"));
+        _subtitleOptions.Add(new SubtitleOption(int.MinValue, LocalizationService.T("Subtitles"), "auto", IsAuto: true));
+        _subtitleOptions.Add(new SubtitleOption(-1, LocalizationService.T("Disabled"), "off"));
         SubtitleCombo.SelectedIndex = 0;
         SubtitleCombo.Visibility = Visibility.Collapsed;
         _loadingSubtitleChoices = false;
@@ -301,21 +302,21 @@ public partial class MainWindow
 
         _loadingSubtitleChoices = true;
         _subtitleOptions.Clear();
-        _subtitleOptions.Add(new SubtitleOption(int.MinValue, "Sous-titres", "auto", IsAuto: true));
-        _subtitleOptions.Add(new SubtitleOption(-1, "Désactivés", "off"));
+        _subtitleOptions.Add(new SubtitleOption(int.MinValue, LocalizationService.T("Subtitles"), "auto", IsAuto: true));
+        _subtitleOptions.Add(new SubtitleOption(-1, LocalizationService.T("Disabled"), "off"));
 
         try
         {
             foreach (var track in _videoBackend.GetSubtitleTracks())
             {
-                var name = string.IsNullOrWhiteSpace(track.Name) ? $"Piste {track.Id}" : track.Name;
+                var name = string.IsNullOrWhiteSpace(track.Name) ? LocalizationService.Format("Track {0}", track.Id) : track.Name;
                 if (_subtitleOptions.Any(x => x.Id == track.Id)) continue;
                 _subtitleOptions.Add(new SubtitleOption(track.Id, name, "name:" + name));
             }
         }
         catch (Exception ex)
         {
-            DebugConsole.Warn("Sous-titres indisponibles : " + ex.Message);
+            DebugConsole.Warn("Subtitles unavailable: " + ex.Message);
         }
 
         var preferred = StateStore.Settings.PreferredSubtitle;
@@ -350,7 +351,7 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-            DebugConsole.Warn("Sélection sous-titres impossible : " + ex.Message);
+            DebugConsole.Warn("Could not select subtitles: " + ex.Message);
         }
     }
 
@@ -359,7 +360,7 @@ public partial class MainWindow
     {
         _loadingAudioChoices = true;
         _audioOptions.Clear();
-        _audioOptions.Add(new AudioOption(int.MinValue, "Piste audio", "auto", IsAuto: true));
+        _audioOptions.Add(new AudioOption(int.MinValue, LocalizationService.T("Audio track"), "auto", IsAuto: true));
         AudioCombo.SelectedIndex = 0;
         AudioCombo.Visibility = Visibility.Collapsed;
         _loadingAudioChoices = false;
@@ -383,20 +384,20 @@ public partial class MainWindow
 
         _loadingAudioChoices = true;
         _audioOptions.Clear();
-        _audioOptions.Add(new AudioOption(int.MinValue, "Piste audio", "auto", IsAuto: true));
+        _audioOptions.Add(new AudioOption(int.MinValue, LocalizationService.T("Audio track"), "auto", IsAuto: true));
 
         try
         {
             foreach (var track in _videoBackend.GetAudioTracks())
             {
-                var name = string.IsNullOrWhiteSpace(track.Name) ? $"Piste {track.Id}" : track.Name;
+                var name = string.IsNullOrWhiteSpace(track.Name) ? LocalizationService.Format("Track {0}", track.Id) : track.Name;
                 if (_audioOptions.Any(x => x.Id == track.Id)) continue;
                 _audioOptions.Add(new AudioOption(track.Id, name, "name:" + name));
             }
         }
         catch (Exception ex)
         {
-            DebugConsole.Warn("Pistes audio indisponibles : " + ex.Message);
+            DebugConsole.Warn("Audio tracks unavailable: " + ex.Message);
         }
 
         var preferred = StateStore.Settings.PreferredAudio;
@@ -431,7 +432,7 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-            DebugConsole.Warn("Sélection audio impossible : " + ex.Message);
+            DebugConsole.Warn("Could not select audio track: " + ex.Message);
         }
     }
 
@@ -448,10 +449,10 @@ public partial class MainWindow
 
     private void UpdateStats()
     {
-        if (_videoBackend == null || !_videoBackend.HasMedia) { StatsText.Text = "—"; return; }
+        if (_videoBackend == null || !_videoBackend.HasMedia) { StatsText.Text = "-"; return; }
         try
         {
-            // Audio mode: video stats are meaningless (0x0) — show the stream
+            // Audio mode: video stats are meaningless (0x0) - show the stream
             // parameters and the live analysis of the visualizer instead.
             if (_current != null && IsAudioOnlyItem(_current))
             {
@@ -464,37 +465,37 @@ public partial class MainWindow
             // Upscale factor: output (display) vs source (decoded) height.
             var ratio = st.SourceHeight > 0 ? (double)st.OutputHeight / st.SourceHeight : 0;
             string upscale;
-            if (ratio <= 0) upscale = "—";
+            if (ratio <= 0) upscale = "-";
             else if (ratio > 1.02) upscale = $"▲ UPSCALE x{ratio:0.0#}  ({st.Scaler})";
             else if (ratio < 0.98) upscale = $"▼ downscale x{ratio:0.0#}  ({st.Scaler})";
-            else upscale = $"1:1 (natif, {st.Scaler})";
+            else upscale = $"1:1 ({LocalizationService.T("native")}, {st.Scaler})";
 
             // The AI chain either upscales (display > source) or falls back to
-            // its CAS/NVSharpen sharpening pass — make that visible.
+            // its CAS/NVSharpen sharpening pass - make that visible.
             var shaders = string.IsNullOrEmpty(st.Shaders)
-                ? "aucun (scaler mpv)"
-                : st.Shaders + (ratio > 1.02 ? "  [upscale IA actif]" : "  [netteté seule, affichage ≤ source]");
+                ? LocalizationService.T("none (mpv scaler)")
+                : st.Shaders + LocalizationService.T(ratio > 1.02 ? "  [AI upscale active]" : "  [sharpening only, display ≤ source]");
 
             StatsText.Text =
-                $"Backend    : {st.Backend}\n" +
-                $"Décodage   : {st.Hwdec}\n" +
-                $"Source     : {st.SourceWidth}x{st.SourceHeight}\n" +
-                $"Sortie     : {st.OutputWidth}x{st.OutputHeight}\n" +
-                $"Upscaling  : {upscale}\n" +
-                $"Shaders IA : {shaders}\n" +
-                $"ELYCOLOR   : {ActiveElyColorFilter().Name}\n" +
+                $"{LocalizationService.T("Backend"),-11}: {st.Backend}\n" +
+                $"{LocalizationService.T("Decode"),-11}: {st.Hwdec}\n" +
+                $"{LocalizationService.T("Source"),-11}: {st.SourceWidth}x{st.SourceHeight}\n" +
+                $"{LocalizationService.T("Output"),-11}: {st.OutputWidth}x{st.OutputHeight}\n" +
+                $"{LocalizationService.T("Upscaling"),-11}: {upscale}\n" +
+                $"{LocalizationService.T("AI shaders"),-11}: {shaders}\n" +
+                $"ELYCOLOR   : {LocalizationService.T(ActiveElyColorFilter().Name)}\n" +
                 $"FPS        : {st.Fps:0.0}\n" +
                 $"Bitrate    : {st.BitrateKbps:0} kb/s\n" +
-                $"Images vues: {st.DisplayedFrames}\n" +
-                $"Perdues    : {st.DroppedFrames}\n" +
-                $"État       : {st.State}";
+                $"{LocalizationService.T("Displayed"),-11}: {st.DisplayedFrames}\n" +
+                $"{LocalizationService.T("Dropped"),-11}: {st.DroppedFrames}\n" +
+                $"{LocalizationService.T("State"),-11}: {LocalizationService.T(st.State)}";
         }
-        catch { StatsText.Text = "stats indisponibles"; }
+        catch { StatsText.Text = LocalizationService.T("statistics unavailable"); }
     }
 
     private string BuildAudioStats()
     {
-        string codec = "—", rate = "—", channels = "—", bitrate = "—";
+        string codec = "-", rate = "-", channels = "-", bitrate = "-";
         if (_videoBackend is MpvHwndBackend mpv)
         {
             var c = mpv.GetOption("audio-codec-name");
@@ -515,30 +516,30 @@ public partial class MainWindow
             return new string('▮', filled) + new string('▯', 10 - filled) + $" {v * 100:0}%";
         }
 
-        var bpm = _audioEngine.EstimatedBpm > 0 ? $"≈ {_audioEngine.EstimatedBpm:0}" : "détection…";
-        var analysis = _audioEngine.HasAnalysis ? "FFT temps réel (thread dédié)" : "indisponible (format)";
+        var bpm = _audioEngine.EstimatedBpm > 0 ? $"≈ {_audioEngine.EstimatedBpm:0}" : LocalizationService.T("detecting...");
+        var analysis = LocalizationService.T(_audioEngine.HasAnalysis ? "real-time FFT (dedicated thread)" : "unavailable (format)");
         var audioCore = WantsAudioCore && CanUseAudioCore && ElyAudioCoreInterop.Available
             ? ElyAudioCoreInterop.GetStats() : default;
         var visualFps = audioCore.Active != 0 ? audioCore.ActualFps : _audioActualFps;
         var renderLine = audioCore.Active != 0
-            ? $"Render GPU : {audioCore.GpuFrameMs:0.00} ms/frame\n"
-            : $"Render CPU : {AudioSurface.AverageRenderTimeMs:0.00} ms/frame\n";
+            ? $"{LocalizationService.T("GPU render"),-11}: {audioCore.GpuFrameMs:0.00} ms/frame\n"
+            : $"{LocalizationService.T("CPU render"),-11}: {AudioSurface.AverageRenderTimeMs:0.00} ms/frame\n";
 
         return
-            $"Backend    : {_videoBackend?.Name}\n" +
-            $"Codec      : {codec}\n" +
-            $"Échantill. : {rate}\n" +
-            $"Canaux     : {channels}\n" +
+            $"{LocalizationService.T("Backend"),-11}: {_videoBackend?.Name}\n" +
+            $"{LocalizationService.T("Codec"),-11}: {codec}\n" +
+            $"{LocalizationService.T("Sample rate"),-11}: {rate}\n" +
+            $"{LocalizationService.T("Channels"),-11}: {channels}\n" +
             $"Bitrate    : {bitrate}\n" +
-            $"Analyse    : {analysis}\n" +
-            $"FFT réel   : {_audioEngine.ActualAnalysisRateHz:0.0} Hz\n" +
-            $"Renderer   : {(audioCore.Active != 0 ? "ELYCAST AudioCore+" : "Classique (WPF)")}\n" +
-            $"FPS visuel : {(visualFps > 0 ? visualFps.ToString("0.0", CultureInfo.InvariantCulture) : "mesure…")} " +
-            $"(cible {(StateStore.Settings.AudioVisualizerTargetFps <= 0 ? "illimitée" : StateStore.Settings.AudioVisualizerTargetFps.ToString(CultureInfo.InvariantCulture))}, VSync {(StateStore.Settings.AudioVisualizerVSync ? "ON" : "OFF")})\n" +
+            $"{LocalizationService.T("Analysis"),-11}: {analysis}\n" +
+            $"{LocalizationService.T("Actual FFT"),-11}: {_audioEngine.ActualAnalysisRateHz:0.0} Hz\n" +
+            $"{LocalizationService.T("Renderer"),-11}: {LocalizationService.T(audioCore.Active != 0 ? "ELYCAST AudioCore+" : "Classic (WPF)")}\n" +
+            $"{LocalizationService.T("Visual FPS"),-11}: {(visualFps > 0 ? visualFps.ToString("0.0", CultureInfo.InvariantCulture) : LocalizationService.T("measuring..."))} " +
+            $"({LocalizationService.T("target")} {(StateStore.Settings.AudioVisualizerTargetFps <= 0 ? LocalizationService.T("unlimited") : StateStore.Settings.AudioVisualizerTargetFps.ToString(CultureInfo.InvariantCulture))}, VSync {(StateStore.Settings.AudioVisualizerVSync ? "ON" : "OFF")})\n" +
             renderLine +
-            $"Basses     : {Gauge(_audioBassEnergy)}\n" +
-            $"Énergie    : {Gauge(_audioFullEnergy)}\n" +
+            $"{LocalizationService.T("Bass"),-11}: {Gauge(_audioBassEnergy)}\n" +
+            $"{LocalizationService.T("Energy"),-11}: {Gauge(_audioFullEnergy)}\n" +
             $"BPM        : {bpm}\n" +
-            $"État       : {(_videoBackend?.IsPlaying == true ? "Lecture" : "Pause")}";
+            $"{LocalizationService.T("State"),-11}: {LocalizationService.T(_videoBackend?.IsPlaying == true ? "Playing" : "Paused")}";
     }
 }

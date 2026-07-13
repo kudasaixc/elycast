@@ -13,17 +13,17 @@ public static class VideoBackendFactory
             {
                 try
                 {
-                    DebugConsole.Info("Backend vidéo -> mpv GPU HWND (" + native + ")");
+                    DebugConsole.Info("Video backend -> mpv GPU HWND (" + native + ")");
                     return new MpvHwndBackend(native);
                 }
                 catch (Exception ex)
                 {
-                    DebugConsole.Exception("Backend mpv indisponible, fallback VLC", ex);
+                    DebugConsole.Exception("mpv backend unavailable; falling back to VLC", ex);
                 }
             }
             else
             {
-                DebugConsole.Warn("Backend mpv demandé mais libmpv-2.dll introuvable, fallback VLC.");
+                DebugConsole.Warn("mpv backend requested, but libmpv-2.dll was not found; falling back to VLC.");
             }
         }
 
@@ -35,23 +35,23 @@ public static class VideoBackendFactory
             var native = MpvHwndBackend.LocateNative();
             if (string.IsNullOrWhiteSpace(native))
             {
-                DebugConsole.Warn("Backend ELYCORE demandé mais libmpv-2.dll introuvable, fallback VLC.");
+                DebugConsole.Warn("ELYCORE backend requested, but libmpv-2.dll was not found; falling back to VLC.");
             }
             else if (!ElyFlowRendererInterop.Available)
             {
-                DebugConsole.Warn("Backend ELYCORE demandé mais renderer natif indisponible (" +
-                                  ElyFlowRendererInterop.LoadError + ") — fallback mpv HWND.");
+                DebugConsole.Warn("ELYCORE backend requested, but the native renderer is unavailable (" +
+                                  ElyFlowRendererInterop.LoadError + "); falling back to mpv HWND.");
                 try { return new MpvHwndBackend(native); }
-                catch (Exception ex) { DebugConsole.Exception("Backend mpv indisponible, fallback VLC", ex); }
+                catch (Exception ex) { DebugConsole.Exception("mpv backend unavailable; falling back to VLC", ex); }
             }
             else
             {
                 var preflight = ElyFlowRendererInterop.Preflight(out var message);
                 if (preflight != 0)
                 {
-                    DebugConsole.Warn($"ELYCORE: préflight refusé ({preflight}) : {message} — fallback mpv HWND.");
+                    DebugConsole.Warn($"ELYCORE preflight rejected ({preflight}): {message}; falling back to mpv HWND.");
                     try { return new MpvHwndBackend(native); }
-                    catch (Exception ex) { DebugConsole.Exception("Backend mpv indisponible, fallback VLC", ex); }
+                    catch (Exception ex) { DebugConsole.Exception("mpv backend unavailable; falling back to VLC", ex); }
                 }
                 else
                 {
@@ -62,11 +62,11 @@ public static class VideoBackendFactory
                         var s = StateStore.Settings;
                         var fruc = s.ElyFlowEnabled &&
                                    s.ElyFlowEngine.Equals("nvidia-fruc", StringComparison.OrdinalIgnoreCase);
-                        DebugConsole.Info("Backend vidéo -> ELYCORE Renderer (" + message +
-                                          (fruc ? ", FRUC actif)" : ", FRUC inactif)"));
+                        DebugConsole.Info("Video backend -> ELYCORE Renderer (" + message +
+                                          (fruc ? ", FRUC active)" : ", FRUC inactive)"));
                         return new MpvHwndBackend(native, elyCore: true, fruc: fruc);
                     }
-                    catch (Exception ex) { DebugConsole.Exception("Backend ELYCORE indisponible, fallback VLC", ex); }
+                    catch (Exception ex) { DebugConsole.Exception("ELYCORE backend unavailable; falling back to VLC", ex); }
                 }
             }
         }
@@ -76,7 +76,7 @@ public static class VideoBackendFactory
             var native = MpvHwndBackend.LocateNative();
             if (string.IsNullOrWhiteSpace(native))
             {
-                DebugConsole.Warn("Backend RTX demandé mais libmpv-2.dll introuvable, fallback VLC.");
+                DebugConsole.Warn("RTX backend requested, but libmpv-2.dll was not found; falling back to VLC.");
             }
             else
             {
@@ -84,26 +84,26 @@ public static class VideoBackendFactory
                 // pipeline (still better than the VLC bitmap fallback).
                 var rtx = HasNvidiaDriver();
                 if (!rtx)
-                    DebugConsole.Warn("Backend RTX demandé mais aucun driver NVIDIA détecté — mpv GPU standard.");
+                    DebugConsole.Warn("RTX backend requested, but no NVIDIA driver was detected; using standard mpv GPU.");
                 try
                 {
                     DebugConsole.Info(rtx
-                        ? "Backend vidéo -> mpv GPU + RTX Video Super Resolution (" + native + ")"
-                        : "Backend vidéo -> mpv GPU HWND (" + native + ")");
+                        ? "Video backend -> mpv GPU + RTX Video Super Resolution (" + native + ")"
+                        : "Video backend -> mpv GPU HWND (" + native + ")");
                     return new MpvHwndBackend(native, rtxVsr: rtx);
                 }
                 catch (Exception ex)
                 {
-                    DebugConsole.Exception("Backend RTX indisponible, fallback VLC", ex);
+                    DebugConsole.Exception("RTX backend unavailable; falling back to VLC", ex);
                 }
             }
         }
 
-        DebugConsole.Info("Backend vidéo -> VLC bitmap");
+        DebugConsole.Info("Video backend -> VLC bitmap");
         return new VlcBackend();
     }
 
-    // nvapi64.dll only ships with the NVIDIA driver — cheap and reliable vendor
+    // nvapi64.dll only ships with the NVIDIA driver - cheap and reliable vendor
     // probe. Whether the GPU/driver actually supports VSR (RTX 20+, ≥ 531) is
     // decided by the driver itself: unsupported setups get standard VPP scaling.
     private static bool HasNvidiaDriver()

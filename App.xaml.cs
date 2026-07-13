@@ -33,6 +33,7 @@ public partial class App : Application
             StateStore.Settings.VideoBackend = "elycore";
             StateStore.Settings.AudioVisualizerRenderer = diagnosticAudioRenderer;
         }
+        LocalizationService.Initialize(StateStore.Settings.Language);
         ThemeManager.Apply(StateStore.Settings.AccentColor);
 
         // 1) bring up the debug console immediately
@@ -42,8 +43,8 @@ public partial class App : Application
         //    libraries are initialized later by the selected video backend.
         DebugConsole.RunBootSequence(StateStore.Settings.BootSeconds, () =>
         {
-            DebugConsole.Info("Préparation du shell ElyCast...");
-            DebugConsole.Success("Runtime prêt.");
+            DebugConsole.Info("Preparing the ElyCast shell...");
+            DebugConsole.Success("Runtime ready.");
         });
 
         // 3) show the UI
@@ -54,11 +55,11 @@ public partial class App : Application
         // downloads the missing dependencies before the player appears.
         if (!StateStore.Settings.OnboardingCompleted)
         {
-            DebugConsole.Step("Premier lancement détecté — ouverture de l'assistant de configuration…");
+            DebugConsole.Step("First run detected: opening the setup wizard...");
             try { new OnboardingWindow().ShowDialog(); }
             catch (Exception ex)
             {
-                DebugConsole.Exception("Onboarding : échec de l'assistant, configuration par défaut", ex);
+                DebugConsole.Exception("Onboarding wizard failed; using the default configuration", ex);
                 StateStore.Settings.OnboardingCompleted = true;
                 StateStore.Save();
             }
@@ -78,8 +79,8 @@ public partial class App : Application
         try { System.IO.File.WriteAllText(
             System.IO.Path.Combine(System.IO.Path.GetTempPath(), "elycast_error.txt"),
             e.Exception.ToString()); } catch { }
-        DebugConsole.Error("Exception non gérée : " + e.Exception);
-        MessageBox.Show(e.Exception.Message, "ElyCast – Erreur",
+        DebugConsole.Error("Unhandled exception: " + e.Exception);
+        MessageBox.Show(e.Exception.Message, LocalizationService.T("ElyCast: Error"),
             MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
     }

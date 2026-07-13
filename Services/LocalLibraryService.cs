@@ -16,13 +16,13 @@ public sealed class LocalLibraryService
     public static bool IsVideo(string path) => VideoExtensions.Contains(Path.GetExtension(path));
 
     // OpenFileDialog filters built from the recognised extension sets.
-    public static string AudioFileFilter => BuildFilter("Fichiers audio", AudioExtensions);
-    public static string VideoFileFilter => BuildFilter("Fichiers vidéo", VideoExtensions);
+    public static string AudioFileFilter => BuildFilter("Audio files", AudioExtensions);
+    public static string VideoFileFilter => BuildFilter("Video files", VideoExtensions);
 
     private static string BuildFilter(string label, IEnumerable<string> extensions)
     {
         var patterns = string.Join(";", extensions.Select(ext => "*" + ext));
-        return $"{label}|{patterns}|Tous les fichiers|*.*";
+        return $"{LocalizationService.T(label)}|{patterns}|{LocalizationService.T("All files")}|*.*";
     }
 
     public Task<IReadOnlyList<PlayItem>> ImportFolderAsync(
@@ -65,8 +65,8 @@ public sealed class LocalLibraryService
 
         var result = query.ToList();
         return audio
-            ? result.OrderBy(i => i.AlbumArtist ?? i.Artist ?? "Artiste inconnu", StringComparer.CurrentCultureIgnoreCase)
-                .ThenBy(i => i.Album ?? "Album inconnu", StringComparer.CurrentCultureIgnoreCase)
+            ? result.OrderBy(i => i.AlbumArtist ?? i.Artist ?? LocalizationService.T("Unknown artist"), StringComparer.CurrentCultureIgnoreCase)
+                .ThenBy(i => i.Album ?? LocalizationService.T("Unknown album"), StringComparer.CurrentCultureIgnoreCase)
                 .ThenBy(i => i.DiscNumber).ThenBy(i => i.TrackNumber).ThenBy(i => i.Name).ToList()
             : result.OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
@@ -76,7 +76,7 @@ public sealed class LocalLibraryService
     private static PlayItem CreateAudioItem(string path)
     {
         var item = PlayItem.FromLocalFile(path);
-        // readCover: false — the cover is fetched lazily and cached by CoverArtCache
+        // readCover: false - the cover is fetched lazily and cached by CoverArtCache
         // when a thumbnail is actually shown, so we skip decoding it here.
         var metadata = AudioMetadataReader.Read(path, item.Name, readCover: false);
         item.Name = metadata.Title;
@@ -87,7 +87,7 @@ public sealed class LocalLibraryService
         item.TrackNumber = metadata.TrackNumber;
         item.DiscNumber = metadata.DiscNumber;
         item.DurationSeconds = metadata.DurationSeconds;
-        item.CategoryName = metadata.Artist ?? metadata.AlbumArtist ?? "Artiste inconnu";
+        item.CategoryName = metadata.Artist ?? metadata.AlbumArtist ?? LocalizationService.T("Unknown artist");
         return item;
     }
 
@@ -104,7 +104,7 @@ public sealed class LocalLibraryService
         item.TrackNumber = metadata.TrackNumber;
         item.DiscNumber = metadata.DiscNumber;
         item.DurationSeconds = metadata.DurationSeconds;
-        item.CategoryName = metadata.Artist ?? metadata.AlbumArtist ?? "Artiste inconnu";
+        item.CategoryName = metadata.Artist ?? metadata.AlbumArtist ?? LocalizationService.T("Unknown artist");
         item.ResetCover();
     }
 
@@ -112,30 +112,30 @@ public sealed class LocalLibraryService
     public static List<MusicGroup> BuildGroups(string mode, IReadOnlyList<PlayItem> tracks, IReadOnlyList<LocalPlaylist> playlists)
     {
         static IOrderedEnumerable<PlayItem> AlbumOrder(IEnumerable<PlayItem> items) => items
-            .OrderBy(t => t.Album ?? "Album inconnu", StringComparer.CurrentCultureIgnoreCase)
+            .OrderBy(t => t.Album ?? LocalizationService.T("Unknown album"), StringComparer.CurrentCultureIgnoreCase)
             .ThenBy(t => t.DiscNumber).ThenBy(t => t.TrackNumber)
             .ThenBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase);
 
         switch (mode)
         {
             case "albums":
-                return tracks.GroupBy(t => t.Album ?? "Album inconnu", StringComparer.CurrentCultureIgnoreCase)
+                return tracks.GroupBy(t => t.Album ?? LocalizationService.T("Unknown album"), StringComparer.CurrentCultureIgnoreCase)
                     .Select(g => new MusicGroup
                     {
                         Kind = MusicGroupKind.Album,
                         Name = g.Key,
-                        Subtitle = MostCommon(g, t => t.AlbumArtist ?? t.Artist) ?? "Artiste inconnu",
+                        Subtitle = MostCommon(g, t => t.AlbumArtist ?? t.Artist) ?? LocalizationService.T("Unknown artist"),
                         Tracks = AlbumOrder(g).ToList()
                     })
                     .OrderBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
 
             case "genres":
-                return tracks.GroupBy(t => t.Genre ?? "Genre inconnu", StringComparer.CurrentCultureIgnoreCase)
+                return tracks.GroupBy(t => t.Genre ?? LocalizationService.T("Unknown genre"), StringComparer.CurrentCultureIgnoreCase)
                     .Select(g => new MusicGroup
                     {
                         Kind = MusicGroupKind.Genre,
                         Name = g.Key,
-                        Subtitle = g.Count() > 1 ? $"{g.Count()} titres" : "1 titre",
+                        Subtitle = TrackCount(g.Count()),
                         Tracks = AlbumOrder(g).ToList()
                     })
                     .OrderBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
@@ -148,31 +148,34 @@ public sealed class LocalLibraryService
                     {
                         Kind = MusicGroupKind.Playlist,
                         Name = p.Name,
-                        Subtitle = resolved.Count > 1 ? $"{resolved.Count} titres" : $"{resolved.Count} titre",
+                        Subtitle = TrackCount(resolved.Count),
                         Tracks = resolved,
                         Playlist = p
                     };
                 }).ToList();
 
             default: // artists (a collaboration belongs to every performer group)
-                return tracks.SelectMany(track => AudioMetadataWriter.SplitList(track.Artist ?? track.AlbumArtist ?? "Artiste inconnu")
+                return tracks.SelectMany(track => AudioMetadataWriter.SplitList(track.Artist ?? track.AlbumArtist ?? LocalizationService.T("Unknown artist"))
                         .Select(artist => (Artist: artist, Track: track)))
                     .GroupBy(pair => pair.Artist, pair => pair.Track, StringComparer.CurrentCultureIgnoreCase)
                     .Select(g =>
                     {
                         var albums = g.Select(t => t.Album).Where(a => a != null).Distinct(StringComparer.CurrentCultureIgnoreCase).Count();
-                        var titles = g.Count() > 1 ? $"{g.Count()} titres" : "1 titre";
+                        var titles = TrackCount(g.Count());
                         return new MusicGroup
                         {
                             Kind = MusicGroupKind.Artist,
                             Name = g.Key,
-                            Subtitle = albums > 0 ? $"{albums} album{(albums > 1 ? "s" : "")} · {titles}" : titles,
+                            Subtitle = albums > 0 ? LocalizationService.Format(albums == 1 ? "{0} album · {1}" : "{0} albums · {1}", albums, titles) : titles,
                             Tracks = AlbumOrder(g).ToList()
                         };
                     })
                     .OrderBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
         }
     }
+
+    private static string TrackCount(int count) =>
+        LocalizationService.Format(count == 1 ? "{0} track" : "{0} tracks", count);
 
     private static string? MostCommon(IEnumerable<PlayItem> items, Func<PlayItem, string?> selector) => items
         .Select(selector).Where(v => !string.IsNullOrWhiteSpace(v))

@@ -8,7 +8,7 @@ namespace Elysium_Cast_IPTV;
 /// <summary>
 /// Single-pass renderer for the audio visualizer: the mirrored spectrum bars,
 /// the orbiting/burst particles and the beat shockwaves are all drawn in one
-/// OnRender call using cached frozen pens and brushes — zero allocation per
+/// OnRender call using cached frozen pens and brushes - zero allocation per
 /// frame. Driven every displayed frame (CompositionTarget.Rendering), so it
 /// runs at the monitor's refresh rate. The previous implementation animated
 /// 170+ WPF elements with a fresh SolidColorBrush per bar per 30 Hz tick,
@@ -119,7 +119,7 @@ public sealed class AudioVisualizerSurface : FrameworkElement
             _particles[i] = new Particle
             {
                 OrbitAngle = _random.NextDouble() * Math.Tau,
-                // Spread far around the rings, almost static at rest — they
+                // Spread far around the rings, almost static at rest - they
                 // only pick up speed when a beat pumps the pulse (see below).
                 OrbitRadius = 210 + _random.NextDouble() * 360,
                 OrbitSpeed = 0.015 + _random.NextDouble() * 0.035,

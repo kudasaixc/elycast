@@ -52,12 +52,12 @@ public sealed class WindowsMediaTransportService : IDisposable
             _setMedia = Load<SetMediaDelegate>("ElyMediaTransport_SetMedia");
             _setState = Load<SetStateDelegate>("ElyMediaTransport_SetState");
             _instance = create(hwnd, _nativeCommand, 0);
-            if (_instance == 0) throw new InvalidOperationException("Windows a refusé la session SMTC.");
-            DebugConsole.Success("Contrôles multimédias Windows initialisés.");
+            if (_instance == 0) throw new InvalidOperationException("Windows rejected the SMTC session.");
+            DebugConsole.Success("Windows media controls initialized.");
         }
         catch (Exception ex)
         {
-            DebugConsole.Warn("Contrôles multimédias Windows indisponibles : " + ex.Message);
+            DebugConsole.Warn("Windows media controls unavailable: " + ex.Message);
             Dispose();
         }
     }
@@ -68,7 +68,7 @@ public sealed class WindowsMediaTransportService : IDisposable
         var artworkUri = CacheArtwork(metadata) ?? string.Empty;
         var hr = _setMedia(_instance, metadata.Title, metadata.Artist ?? string.Empty,
             metadata.Album ?? string.Empty, artworkUri);
-        if (hr < 0) DebugConsole.Warn($"Métadonnées Windows refusées (HRESULT 0x{hr:X8}).");
+        if (hr < 0) DebugConsole.Warn($"Windows metadata rejected (HRESULT 0x{hr:X8}).");
     }
 
     public void Clear() => SetState(hasMedia: false, playing: false);
@@ -108,7 +108,7 @@ public sealed class WindowsMediaTransportService : IDisposable
         }
         catch (Exception ex)
         {
-            DebugConsole.Warn("Pochette Windows non préparée : " + ex.Message);
+            DebugConsole.Warn("Windows artwork could not be prepared: " + ex.Message);
             return null;
         }
     }

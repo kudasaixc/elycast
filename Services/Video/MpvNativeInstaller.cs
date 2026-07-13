@@ -15,16 +15,16 @@ public sealed partial class MpvNativeInstaller
 
     public async Task<string> InstallLatestAsync(IProgress<string>? progress = null, CancellationToken cancellationToken = default)
     {
-        var sevenZip = FindSevenZip() ?? throw new InvalidOperationException("7-Zip est requis pour extraire libmpv (.7z).");
+        var sevenZip = FindSevenZip() ?? throw new InvalidOperationException(LocalizationService.T("7-Zip is required to extract libmpv (.7z)."));
         var flavor = Avx2.IsSupported ? "x86_64-v3" : "x86_64";
 
-        progress?.Report("Recherche de libmpv...");
+        progress?.Report(LocalizationService.T("Searching for libmpv..."));
         using var listingRequest = new HttpRequestMessage(HttpMethod.Get, SourceForgeLibMpvUrl);
         listingRequest.Headers.UserAgent.ParseAdd("ElyCast/2.1");
         var listing = await (await Http.SendAsync(listingRequest, cancellationToken)).Content.ReadAsStringAsync(cancellationToken);
 
         var packageName = FindPackageName(listing, flavor)
-            ?? throw new InvalidOperationException("Aucun package libmpv Windows x64 trouvé.");
+            ?? throw new InvalidOperationException("No Windows x64 libmpv package was found.");
 
         var toolsRoot = Path.Combine(StateStore.FolderPath, "tools", "mpv");
         var downloads = Path.Combine(toolsRoot, "downloads");
@@ -33,7 +33,7 @@ public sealed partial class MpvNativeInstaller
         var archivePath = Path.Combine(downloads, packageName);
         if (!File.Exists(archivePath))
         {
-            progress?.Report("Téléchargement de " + packageName + "...");
+            progress?.Report("Downloading " + packageName + "...");
             var downloadUrl = SourceForgeLibMpvUrl + Uri.EscapeDataString(packageName) + "/download";
             using var downloadRequest = new HttpRequestMessage(HttpMethod.Get, downloadUrl);
             downloadRequest.Headers.UserAgent.ParseAdd("ElyCast/2.1");
@@ -47,13 +47,13 @@ public sealed partial class MpvNativeInstaller
         var targetDir = Path.Combine(toolsRoot, Path.GetFileNameWithoutExtension(packageName));
         Directory.CreateDirectory(targetDir);
 
-        progress?.Report("Extraction de libmpv...");
+        progress?.Report(LocalizationService.T("Extracting libmpv..."));
         await ExtractWithSevenZipAsync(sevenZip, archivePath, targetDir);
 
         var dll = Directory.EnumerateFiles(targetDir, "libmpv-2.dll", SearchOption.AllDirectories).FirstOrDefault()
-            ?? throw new InvalidOperationException("libmpv-2.dll introuvable après extraction.");
+            ?? throw new InvalidOperationException("libmpv-2.dll was not found after extraction.");
 
-        progress?.Report("mpv prêt.");
+        progress?.Report("mpv ready.");
         return dll;
     }
 
@@ -108,6 +108,6 @@ public sealed partial class MpvNativeInstaller
         var error = await errorTask;
 
         if (process.ExitCode != 0)
-            throw new InvalidOperationException("Extraction 7-Zip impossible : " + (string.IsNullOrWhiteSpace(error) ? output : error));
+            throw new InvalidOperationException("7-Zip extraction failed: " + (string.IsNullOrWhiteSpace(error) ? output : error));
     }
 }

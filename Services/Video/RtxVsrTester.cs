@@ -15,7 +15,7 @@ public sealed record VsrTestResult(VsrTestOutcome Outcome, string Message, strin
 /// hidden off-screen window. RTX mode verifies NVDEC+d3d11vpp; ELYCORE verifies
 /// the native post-Blt NVIDIA status (`vsrEffective`) through ABI v3.
 /// Must run on the UI thread, and never while another backend owns libmpv
-/// rendering — the wizard runs it before MainWindow exists.
+/// rendering - the wizard runs it before MainWindow exists.
 /// </summary>
 public static class RtxVsrTester
 {
@@ -27,22 +27,22 @@ public static class RtxVsrTester
     {
         var native = MpvHwndBackend.LocateNative();
         if (string.IsNullOrWhiteSpace(native))
-            return new VsrTestResult(VsrTestOutcome.Skipped, "libmpv absent : test RTX VSR impossible.");
+            return new VsrTestResult(VsrTestOutcome.Skipped, "libmpv missing: RTX VSR test cannot run.");
         if (!File.Exists(SampleVideo))
-            return new VsrTestResult(VsrTestOutcome.Skipped, "Aucun média d'essai local trouvé : test RTX VSR ignoré.");
+            return new VsrTestResult(VsrTestOutcome.Skipped, "No local test media found: RTX VSR test skipped.");
 
         var hardware = await Task.Run(HardwareProbe.Detect, ct);
         if (!HardwareProbe.SupportsRtxVsr(hardware))
             return new VsrTestResult(VsrTestOutcome.Failed,
-                "GPU/driver hors spécification RTX VSR (RTX série 20+ et driver ≥ 531 requis).");
+                "GPU/driver does not meet the RTX VSR specification (RTX 20 series or newer and driver 531+ required).");
 
         Window? hidden = null;
         MpvHwndBackend? backend = null;
         try
         {
-            progress?.Report("Test RTX VSR : lecture d'essai dans un mini-player caché (pipeline réel)…");
+            progress?.Report("RTX VSR test: playing test media in a hidden mini-player (real pipeline)...");
             if (elyCore && (!ElyFlowRendererInterop.Available || ElyFlowRendererInterop.Preflight(out _) != 0))
-                return new VsrTestResult(VsrTestOutcome.Failed, "Renderer natif ELYCORE/ABI compatible indisponible.");
+                return new VsrTestResult(VsrTestOutcome.Failed, "Compatible ELYCORE native renderer/ABI unavailable.");
             backend = new MpvHwndBackend(native, rtxVsr: !elyCore, elyCore: elyCore);
             hidden = new Window
             {
@@ -82,14 +82,14 @@ public static class RtxVsrTester
                 var state = ElyFlowRendererInterop.GetState();
                 if (state.VsrEffective != 0)
                     return new VsrTestResult(VsrTestOutcome.Passed,
-                        $"Pipeline natif validé : RTX VSR effectif niveau {state.VsrLevel}, " +
+                        $"Native pipeline validated: RTX VSR effective at level {state.VsrLevel}, " +
                         $"{state.VsrInputWidth}×{state.VsrInputHeight} → {state.VsrContentWidth}×{state.VsrContentHeight}, DXGI {state.VsrInputFormat}.",
                         hwdec);
                 if (backend.GetStats().SourceHeight >= state.Height && state.Height > 0)
                     return new VsrTestResult(VsrTestOutcome.Skipped,
-                        "Le média Windows n'est pas inférieur à la cible : aucune passe d'upscale à confirmer.", hwdec);
+                        "The Windows media is not smaller than the target: there is no upscale pass to confirm.", hwdec);
                 return new VsrTestResult(VsrTestOutcome.Failed,
-                    $"VSR natif non effectif (demandé={state.VsrRequested}, disponible={state.VsrAvailable}, " +
+                    $"Native VSR not effective (requested={state.VsrRequested}, available={state.VsrAvailable}, " +
                     $"HRESULT=0x{unchecked((uint)state.LastVsrStatus):X8}, vendor=0x{state.AdapterVendorId:X4}).",
                     hwdec);
             }
@@ -98,16 +98,16 @@ public static class RtxVsrTester
             var vsrChainAlive = vf.Contains("d3d11vpp", StringComparison.OrdinalIgnoreCase);
             if (hwdec.Contains("d3d11va", StringComparison.OrdinalIgnoreCase) && vsrChainAlive)
                 return new VsrTestResult(VsrTestOutcome.Passed,
-                    "Pipeline réel validé : décodage NVDEC (d3d11va) + d3d11vpp scaling-mode=nvidia actifs.",
+                    "Real pipeline validated: NVDEC (d3d11va) decode + d3d11vpp scaling-mode=nvidia active.",
                     hwdec);
 
             if (string.IsNullOrWhiteSpace(hwdec) || hwdec == "no")
                 return new VsrTestResult(VsrTestOutcome.Failed,
-                    "Le décodage matériel D3D11VA n'a pas démarré (décodage logiciel) : RTX VSR indisponible.",
+                    "D3D11VA hardware decode did not start (software decode): RTX VSR unavailable.",
                     hwdec);
 
             return new VsrTestResult(VsrTestOutcome.Failed,
-                $"Pipeline partiel (hwdec={hwdec}, vf={(string.IsNullOrWhiteSpace(vf) ? "vide" : vf)}) : RTX VSR non confirmé.",
+                $"Partial pipeline (hwdec={hwdec}, vf={(string.IsNullOrWhiteSpace(vf) ? "empty" : vf)}): RTX VSR not confirmed.",
                 hwdec);
         }
         catch (OperationCanceledException) { throw; }

@@ -72,7 +72,7 @@ internal static class RuntimeAuditRunner
         var input = Path.Combine(outputDirectory, "elysound-input.wav");
         if (!File.Exists(input))
         {
-            Console.Error.WriteLine("FAIL  input absent; run --measure-audio first");
+            Console.Error.WriteLine("FAIL  input missing; run --measure-audio first");
             return 1;
         }
 

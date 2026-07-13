@@ -22,6 +22,7 @@ public partial class MainWindow
     {
         _initializing = true;
         var s = StateStore.Settings;
+        SelectComboItemByTag(LanguageCombo, s.Language);
         SelectComboItemByTag(AudioBrowseCombo, s.AudioBrowseMode);
         SelectComboItemByTag(AudioRendererCombo, s.AudioVisualizerRenderer);
         AccentSwatches.ItemsSource = ThemeManager.Presets;
@@ -66,6 +67,8 @@ public partial class MainWindow
         PopulateOsdUpscaleCombo();
         PopulateElyColorCombos();
         PopulateElySoundCombos();
+        PopulateElyColorCombos();
+        PopulateElySoundCombos();
         LoadElyFlowIntoUi();
         LoadElyColorEditor(ActiveElyColorFilter());
         var magpiePath = _magpie.Locate() ?? "";
@@ -89,6 +92,32 @@ public partial class MainWindow
         _initializing = false;
         ApplyAudioVisualizerSettings();
         RefreshAudioRendererStatus();
+    }
+
+    private void Language_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_initializing || LanguageCombo.SelectedItem is not ComboBoxItem { Tag: string language }) return;
+        language = LocalizationService.Normalize(language);
+        StateStore.Settings.Language = language;
+        LocalizationService.SetLanguage(language);
+        StateStore.Save();
+
+        ApplyOnboardingPreferences();
+        ShowSection(_section);
+        BuildOsdModesCheckboxes();
+        PopulateOsdUpscaleCombo();
+        UpdateMpvStatus();
+        UpdateUpscalerStatus();
+        UpdateElyFlowGate();
+        RefreshAudioRendererStatus();
+        UpdateStats();
+        if (_elySmartReport != null) ShowElySmartReport(_elySmartReport);
+        if (_current != null)
+        {
+            var kind = LocalizationService.T(_current.KindLabel);
+            TopSubtitle.Text = string.IsNullOrWhiteSpace(_current.CategoryName) ? kind : $"{kind} · {_current.CategoryName}";
+        }
+        if (_openMusicGroup != null) OpenMusicGroup(_openMusicGroup);
     }
 
     private void Setting_Changed(object sender, RoutedEventArgs e)
@@ -138,7 +167,7 @@ public partial class MainWindow
         s.AudioParticleCount = (int)AudioParticleCountSlider.Value;
         s.AudioParticleDistance = AudioParticleDistanceSlider.Value / 100.0;
         // Apply live (cheap: pushes config to the native scene), but DON'T write to
-        // disk on every tick — StateStore.Save() encrypts (DPAPI) and does an atomic
+        // disk on every tick - StateStore.Save() encrypts (DPAPI) and does an atomic
         // file write, which stalls the UI thread while dragging a slider and makes the
         // thumb stutter/jump. Coalesce the persist to fire once the drag settles.
         ApplyAudioVisualizerSettings();
@@ -191,10 +220,10 @@ public partial class MainWindow
         InstallMpvBtn.IsEnabled = false;
         try
         {
-            var progress = new Progress<string>(msg => MpvStatusText.Text = msg);
+            var progress = new Progress<string>(msg => MpvStatusText.Text = LocalizationService.T(msg));
             var dll = await _mpvInstaller.InstallLatestAsync(progress);
-            MpvStatusText.Text = "mpv installé";
-            DebugConsole.Success("libmpv installé : " + dll);
+            MpvStatusText.Text = LocalizationService.T("mpv installed");
+            DebugConsole.Success("libmpv installed: " + dll);
 
             StateStore.Settings.VideoBackend = "mpv-gpu";
             SelectComboItemByTag(BackendCombo, "mpv-gpu");
@@ -203,8 +232,8 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-            MpvStatusText.Text = "installation impossible";
-            DebugConsole.Error("mpv : " + ex.Message);
+            MpvStatusText.Text = LocalizationService.T("installation failed");
+            DebugConsole.Error("mpv: " + ex.Message);
         }
         finally
         {
@@ -218,13 +247,13 @@ public partial class MainWindow
     {
         if (MpvStatusText == null) return;
         var dll = _mpvInstaller.Locate();
-        MpvStatusText.Text = string.IsNullOrWhiteSpace(dll) ? "mpv non installé" : "mpv installé";
-        InstallMpvBtn.Content = string.IsNullOrWhiteSpace(dll) ? "Installer mpv" : "Réinstaller";
+        MpvStatusText.Text = LocalizationService.T(string.IsNullOrWhiteSpace(dll) ? "mpv not installed" : "mpv installed");
+        InstallMpvBtn.Content = LocalizationService.T(string.IsNullOrWhiteSpace(dll) ? "Install mpv" : "Reinstall");
     }
 
     private void RecreateVideoBackend(bool replayCurrent)
     {
-        DebugConsole.Step("Backend: changement demandé, démontage de l'ancien backend…");
+        DebugConsole.Step("Backend change requested: tearing down the old backend...");
 
         var current = _current;
         var hadMedia = _videoBackend?.HasMedia == true;
@@ -240,25 +269,25 @@ public partial class MainWindow
         {
             // 1. Detach all managed event handlers from the OLD backend so late
             //    Playing/Failed/Ended/Paused events cannot reach the UI.
-            try { DebugConsole.Step("Backend: détachement des événements…"); DetachBackendEvents(old); }
-            catch (Exception ex) { DebugConsole.Exception("Backend: échec du détachement des événements", ex); }
+            try { DebugConsole.Step("Backend: detaching events..."); DetachBackendEvents(old); }
+            catch (Exception ex) { DebugConsole.Exception("Backend: failed to detach events", ex); }
 
             // 2. Stop playback so no new native frames are decoded or rendered.
-            try { DebugConsole.Step("Backend: arrêt de la lecture…"); old.Stop(PlaybackEndReason.Replaced); }
-            catch (Exception ex) { DebugConsole.Exception("Backend: échec de l'arrêt", ex); }
+            try { DebugConsole.Step("Backend: stopping playback..."); old.Stop(PlaybackEndReason.Replaced); }
+            catch (Exception ex) { DebugConsole.Exception("Backend: failed to stop playback", ex); }
 
             // 3. Dispose the OLD backend WHILE its video surface is still in the
             //    Visual Tree. The mpv render context (OpenGL) must be freed while
-            //    its GL context is still alive — Dispose() internally detaches the
+            //    its GL context is still alive - Dispose() internally detaches the
             //    native render callback before freeing libmpv.
-            try { DebugConsole.Step("Backend: disposition de l'ancien backend…"); old.Dispose(); }
-            catch (Exception ex) { DebugConsole.Exception("Backend: échec de la disposition", ex); }
+            try { DebugConsole.Step("Backend: disposing the old backend..."); old.Dispose(); }
+            catch (Exception ex) { DebugConsole.Exception("Backend: failed to dispose the old backend", ex); }
 
             // 4. Only now remove the surface from the Visual Tree. This triggers
             //    the GL/D3D context teardown, which is safe because no native
             //    handle still references it.
-            try { DebugConsole.Step("Backend: retrait de la surface vidéo du Visual Tree…"); VideoHost.Content = null; }
-            catch (Exception ex) { DebugConsole.Exception("Backend: échec du retrait de la surface", ex); }
+            try { DebugConsole.Step("Backend: removing the video surface from the visual tree..."); VideoHost.Content = null; }
+            catch (Exception ex) { DebugConsole.Exception("Backend: failed to remove the video surface", ex); }
         }
         else
         {
@@ -274,15 +303,15 @@ public partial class MainWindow
         {
             try
             {
-                DebugConsole.Step("Backend: création du nouveau backend…");
+                DebugConsole.Step("Backend: creating the new backend...");
                 InitVideoBackend();
                 if (_videoBackend != null) _videoBackend.Volume = volume;
                 UpdateStats();
-                DebugConsole.Success("Backend: nouveau backend prêt.");
+                DebugConsole.Success("Backend: new backend ready.");
             }
             catch (Exception ex)
             {
-                DebugConsole.Exception("Backend: échec de création du nouveau backend", ex);
+                DebugConsole.Exception("Backend: failed to create the new backend", ex);
                 return;
             }
 
@@ -334,6 +363,7 @@ public partial class MainWindow
     {
         var oldBackend = StateStore.Settings.VideoBackend;
         StateStore.Current.Settings = new Settings();
+        LocalizationService.SetLanguage(StateStore.Settings.Language);
         ThemeManager.Apply(StateStore.Settings.AccentColor);
         LoadSettingsIntoUi();
         StateStore.Save();
@@ -449,7 +479,7 @@ public partial class MainWindow
         var dlg = new OpenFileDialog
         {
             Filter = "Magpie.exe|Magpie.exe|Applications (*.exe)|*.exe",
-            Title = "Choisir Magpie.exe"
+            Title = LocalizationService.T("Choose Magpie.exe")
         };
         if (dlg.ShowDialog(this) != true) return;
 
@@ -466,16 +496,16 @@ public partial class MainWindow
         InstallMagpieBtn.IsEnabled = false;
         try
         {
-            var progress = new Progress<string>(msg => UpscalerStatusText.Text = msg);
+            var progress = new Progress<string>(msg => UpscalerStatusText.Text = LocalizationService.T(msg));
             var exe = await _magpie.InstallLatestAsync(progress);
             MagpiePathBox.Text = exe;
             UpdateUpscalerStatus();
-            DebugConsole.Success("Magpie installé : " + exe);
+            DebugConsole.Success("Magpie installed: " + exe);
         }
         catch (Exception ex)
         {
-            UpscalerStatusText.Text = "Installation Magpie impossible";
-            DebugConsole.Error("Magpie : " + ex.Message);
+            UpscalerStatusText.Text = LocalizationService.T("Magpie installation failed");
+            DebugConsole.Error("Magpie: " + ex.Message);
         }
         finally
         {
@@ -506,7 +536,7 @@ public partial class MainWindow
 
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
-            UpscalerStatusText.Text = "Installe Magpie d'abord";
+            UpscalerStatusText.Text = LocalizationService.T("Install Magpie first");
             OpenSettingsPanel();
             return;
         }
@@ -518,23 +548,23 @@ public partial class MainWindow
             StateStore.Save();
             _magpie.ConfigureForEngine(StateStore.Settings.UpscalerEngine);
             if (!await _magpie.EnsureRunningAsync(path))
-                throw new InvalidOperationException("Magpie n'a pas pu démarrer.");
+                throw new InvalidOperationException(LocalizationService.T("Magpie could not start."));
 
             // Let Magpie initialize its hidden window/tray state before sending the hotkey.
             await Task.Delay(250);
             var hwnd = MagpieUpscalerService.HwndFor(this);
             await _magpie.ActivateScalingAsync(hwnd, StateStore.Settings.MagpieHotkey);
             UpscalerStatusText.Text = _upscalerActive
-                ? $"Arrêt demandé ({UpscalerEngineLabel()})"
-                : $"Activation demandée ({UpscalerEngineLabel()})";
+                ? LocalizationService.Format("Stop requested ({0})", UpscalerEngineLabel())
+                : LocalizationService.Format("Activation requested ({0})", UpscalerEngineLabel());
             await Task.Delay(900);
             RefreshMagpieActiveState();
             DebugConsole.Success("Toggle upscaling Magpie / " + UpscalerEngineLabel());
         }
         catch (Exception ex)
         {
-            UpscalerStatusText.Text = "Activation Magpie impossible";
-            DebugConsole.Error("Magpie : " + ex.Message);
+            UpscalerStatusText.Text = LocalizationService.T("Magpie activation failed");
+            DebugConsole.Error("Magpie: " + ex.Message);
         }
         finally
         {
@@ -551,12 +581,12 @@ public partial class MainWindow
 
         RefreshMagpieActiveState(updateText: false);
         UpscalerStatusText.Text = StateStore.Settings.UpscalerEngine == "off"
-            ? "Upscaling externe désactivé"
+            ? LocalizationService.T("External upscaling disabled")
             : _upscalerActive
-                ? $"{UpscalerEngineLabel()} actif"
+                ? LocalizationService.Format("{0} active", UpscalerEngineLabel())
                 : located != null
-                    ? $"{UpscalerEngineLabel()} prêt"
-                : "Magpie requis pour l'upscaling GPU";
+                    ? LocalizationService.Format("{0} ready", UpscalerEngineLabel())
+                : LocalizationService.T("Magpie is required for GPU upscaling");
     }
 
     private void RefreshMagpieActiveState(bool updateText = true)
@@ -565,7 +595,9 @@ public partial class MainWindow
         if (UpscalerBtn?.Content is TextBlock text)
             text.Text = _upscalerActive ? "ON" : "FSR";
         if (updateText && UpscalerStatusText != null && StateStore.Settings.UpscalerEngine != "off")
-            UpscalerStatusText.Text = _upscalerActive ? $"{UpscalerEngineLabel()} actif" : $"{UpscalerEngineLabel()} prêt";
+            UpscalerStatusText.Text = _upscalerActive
+                ? LocalizationService.Format("{0} active", UpscalerEngineLabel())
+                : LocalizationService.Format("{0} ready", UpscalerEngineLabel());
     }
 
     private void InitMagpieMessages()
@@ -602,7 +634,7 @@ public partial class MainWindow
             // During Windows' modal move/size loop a top-level Popup lags a frame or two
             // behind the window. The OSD controls are auto-hidden while dragging, but the
             // always-on STATS box stays visible and so visibly "detaches". Hide just the
-            // stats box for the duration of the drag (no popup reopen — that path is
+            // stats box for the duration of the drag (no popup reopen - that path is
             // fragile over the mpv render surface and was crashing the app).
             _statsHiddenForMove = StatsOverlay.Visibility == Visibility.Visible;
             if (_statsHiddenForMove) StatsOverlay.Visibility = Visibility.Collapsed;
@@ -620,7 +652,7 @@ public partial class MainWindow
         else if (msg == WM_WINDOWPOSCHANGED)
         {
             // Fires continuously during the move loop and for non-modal changes
-            // (maximize, Win+arrow snap, DPI) — keep the overlay glued to the window.
+            // (maximize, Win+arrow snap, DPI) - keep the overlay glued to the window.
             ReanchorOverlay();
         }
         return IntPtr.Zero;
@@ -669,7 +701,7 @@ public partial class MainWindow
         "magpie-fsrcnnx" => "Magpie FSRCNNX",
         "magpie-anime4k" => "Magpie Anime4K",
         "magpie-fsr" => "Magpie FSR",
-        _ => "désactivé"
+        _ => LocalizationService.T("Disabled")
     };
 
     private static void SelectComboItemByTag(ComboBox combo, string tag)

@@ -188,7 +188,7 @@ public static class ElyFlowRendererInterop
                 if (abiVersion == RequiredAbiVersion && _create != null && _setSourceFps != null && _configureVsr != null &&
                     _configureFruc != null && _getState != null && _destroy != null && _preflight != null)
                 {
-                    DebugConsole.Info("ELYCORE: renderer natif chargé -> " + path);
+                    DebugConsole.Info("ELYCORE: native renderer loaded -> " + path);
                     return;
                 }
 
@@ -196,14 +196,14 @@ public static class ElyFlowRendererInterop
                 _configureFruc = null; _getState = null; _destroy = null;
                 _loadError = abiVersion switch
                 {
-                    0 => path + $" -> ABI ELYCORE absente (DLL antérieure à ABI v{RequiredAbiVersion}).",
+                    0 => path + $" -> ELYCORE ABI missing (DLL predates ABI v{RequiredAbiVersion}).",
                     not RequiredAbiVersion => path + $" -> ABI ELYCORE incompatible (DLL v{abiVersion}, application v{RequiredAbiVersion}).",
-                    _ => path + $" -> ABI ELYCORE v{abiVersion}, mais exports obligatoires incomplets."
+                    _ => path + $" -> ELYCORE ABI v{abiVersion}, but required exports are incomplete."
                 };
                 FreeLibrary(module);
             }
 
-            if (string.IsNullOrEmpty(_loadError)) _loadError = "ElyFlow.Native.dll introuvable.";
+            if (string.IsNullOrEmpty(_loadError)) _loadError = "ElyFlow.Native.dll not found.";
         }
     }
 

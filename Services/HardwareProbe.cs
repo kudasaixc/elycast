@@ -41,7 +41,7 @@ public static class HardwareProbe
 {
     public static HardwareInfo Detect()
     {
-        var cpuName = "CPU inconnu";
+        var cpuName = "Unknown CPU";
         int cores = Environment.ProcessorCount, threads = Environment.ProcessorCount;
         try
         {
@@ -135,26 +135,26 @@ public static class HardwareProbe
             backend = "elycore";
             vsr = vsrCapable;
             fruc = elyflow.FrucCapable;
-            reason = "GPU NVIDIA + renderer natif ELYCORE disponible : pipeline zéro-copie D3D11"
-                     + (vsr ? " avec RTX VSR" : "")
-                     + (fruc ? " et interpolation FRUC (ELYFLOW)" : "") + ".";
+            reason = "NVIDIA GPU + native ELYCORE renderer available: zero-copy D3D11 pipeline"
+                     + (vsr ? " with RTX VSR" : "")
+                     + (fruc ? " and FRUC interpolation (ELYFLOW)" : "") + ".";
         }
         else if (hw.NvidiaDriverPresent && vsrCapable)
         {
             backend = "rtx-sdk";
-            reason = "GPU RTX détecté : mpv gpu-next + RTX Video Super Resolution via le processeur vidéo D3D11.";
+            reason = "RTX GPU detected: mpv gpu-next + RTX Video Super Resolution through the D3D11 video processor.";
         }
         else if (mpvPresent || hw.PrimaryGpu != null)
         {
             backend = "mpv-gpu";
             reason = mpvPresent
-                ? "Pipeline GPU mpv (gpu-next, décodage matériel, scalers avancés) — le meilleur choix sans RTX."
-                : "Pipeline GPU mpv recommandé — libmpv sera téléchargé pendant l'installation.";
+                ? "mpv GPU pipeline (gpu-next, hardware decode, advanced scalers): the best option without RTX."
+                : "mpv GPU pipeline recommended; libmpv will be downloaded during installation.";
         }
         else
         {
             backend = "vlc-bitmap";
-            reason = "Aucun GPU exploitable détecté : VLC (compatibilité maximale).";
+            reason = "No usable GPU detected: VLC (maximum compatibility).";
         }
 
         // Content preferences refine the enhancement chain, never the backend.

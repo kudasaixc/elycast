@@ -38,7 +38,7 @@ public static class StateStore
         }
         catch (Exception ex)
         {
-            DebugConsole.Error("Lecture de l'état impossible : " + ex.Message);
+            DebugConsole.Error("Could not read state: " + ex.Message);
             Current = new();
         }
     }
@@ -55,7 +55,7 @@ public static class StateStore
         }
         catch (Exception ex)
         {
-            DebugConsole.Error("Sauvegarde de l'état impossible : " + ex.Message);
+            DebugConsole.Error("Could not save state: " + ex.Message);
         }
     }
 
@@ -117,7 +117,7 @@ public static class StateStore
         s.AudioBackgroundDim = double.IsFinite(s.AudioBackgroundDim) ? Math.Clamp(s.AudioBackgroundDim, 0.15, 0.85) : 0.85;
         s.AudioBackgroundParallaxIntensity = double.IsFinite(s.AudioBackgroundParallaxIntensity)
             ? Math.Clamp(s.AudioBackgroundParallaxIntensity, 0, 2) : 1.0;
-        // 0 = illimité (aucun plafond de cadence côté renderer natif).
+        // 0 = unlimited (no frame-rate ceiling in the native renderer).
         s.AudioVisualizerTargetFps = s.AudioVisualizerTargetFps <= 0
             ? 0 : Math.Clamp(s.AudioVisualizerTargetFps, 30, 480);
         // One-time bump of the former 96 default to the new 192 default; runs once
@@ -142,6 +142,7 @@ public static class StateStore
         s.OsdUpscaleModes ??= new List<string>();
         s.ContentInterests ??= new List<string>();
         if (string.IsNullOrWhiteSpace(s.PreferredConnection)) s.PreferredConnection = "xtream";
+        s.Language = LocalizationService.Normalize(s.Language);
 
         // "fsr" was removed from the OSD quick-selector defaults (redundant with
         // FSRCNNX/Anime4K); drop it from lists persisted before the change. The

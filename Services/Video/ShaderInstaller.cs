@@ -4,8 +4,8 @@ using System.Net.Http;
 namespace Elysium_Cast_IPTV.Services.Video;
 
 /// <summary>
-/// Downloads the GLSL upscaling shaders on demand — the first time a method is
-/// selected — and generates the sharpen-tuned CAS / NVSharpen companions (same
+/// Downloads the GLSL upscaling shaders on demand - the first time a method is
+/// selected - and generates the sharpen-tuned CAS / NVSharpen companions (same
 /// runtime-download pattern as MpvNativeInstaller). Without this, selecting
 /// FSR / NVScaler / FSRCNNX on a fresh install silently did nothing because the
 /// shader files simply were not there.
@@ -33,7 +33,7 @@ public sealed class ShaderInstaller
                     var tunedPath = ShaderCatalog.PathFor(file);
                     Directory.CreateDirectory(Path.GetDirectoryName(tunedPath)!);
                     await File.WriteAllTextAsync(tunedPath, ShaderCatalog.GenerateTuned(baseFile, pristine, sharpen), cancellationToken);
-                    DebugConsole.Success($"Shader généré : {file}");
+                    DebugConsole.Success($"Shader generated: {file}");
                 }
                 else
                 {
@@ -50,9 +50,9 @@ public sealed class ShaderInstaller
         if (File.Exists(path)) return path;
 
         if (!ShaderCatalog.DownloadUrls.TryGetValue(fileName, out var url))
-            throw new InvalidOperationException($"Pas d'URL connue pour le shader {fileName}.");
+            throw new InvalidOperationException(LocalizationService.Format("No known URL for shader {0}.", fileName));
 
-        DebugConsole.Step($"Shader manquant, téléchargement : {fileName}…");
+        DebugConsole.Step($"Missing shader, downloading: {fileName}...");
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.UserAgent.ParseAdd("ElyCast/2.1");
         using var response = await Http.SendAsync(request, cancellationToken);
@@ -60,11 +60,11 @@ public sealed class ShaderInstaller
         var text = await response.Content.ReadAsStringAsync(cancellationToken);
 
         if (!text.Contains("//!HOOK", StringComparison.Ordinal))
-            throw new InvalidOperationException($"Le contenu téléchargé pour {fileName} ne ressemble pas à un shader mpv.");
+            throw new InvalidOperationException($"The downloaded content for {fileName} does not look like an mpv shader.");
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         await File.WriteAllTextAsync(path, text, cancellationToken);
-        DebugConsole.Success($"Shader installé : {fileName}");
+        DebugConsole.Success($"Shader installed: {fileName}");
         return path;
     }
 }

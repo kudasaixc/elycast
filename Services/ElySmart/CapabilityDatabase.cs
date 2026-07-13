@@ -6,13 +6,13 @@ public static class CapabilityDatabase
 {
     private static readonly Dictionary<string, CapabilityCost> Costs = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["anime4k-fast"] = new("anime4k-fast", 73, 7, 2, 45, "Upscaling anime léger"),
-        ["anime4k-hq"] = new("anime4k-hq", 94, 18, 3, 95, "Chaîne Anime4K qualité"),
-        ["fsrcnnx"] = new("fsrcnnx", 88, 15, 3, 110, "Upscaling neuronal généraliste"),
-        ["rtx-vsr"] = new("rtx-vsr", 91, 9, 1, 120, "Coût indicatif, validé seulement par test réel"),
+        ["anime4k-fast"] = new("anime4k-fast", 73, 7, 2, 45, "Light anime upscaling"),
+        ["anime4k-hq"] = new("anime4k-hq", 94, 18, 3, 95, "Quality Anime4K chain"),
+        ["fsrcnnx"] = new("fsrcnnx", 88, 15, 3, 110, "General-purpose neural upscaling"),
+        ["rtx-vsr"] = new("rtx-vsr", 91, 9, 1, 120, "Indicative cost; validated only by a real test"),
         ["elyflow"] = new("elyflow", 98, 12, 2, 140, "Interpolation ×2 NVIDIA"),
-        ["visualizer-120"] = new("visualizer-120", 88, 1, 4, 30, "Visualiseur audio haute cadence"),
-        ["background-dynamic"] = new("background-dynamic", 82, 2, 1, 30, "Fond animé et flouté")
+        ["visualizer-120"] = new("visualizer-120", 88, 1, 4, 30, "High-cadence audio visualizer"),
+        ["background-dynamic"] = new("background-dynamic", 82, 2, 1, 30, "Animated blurred background")
     };
 
     public static CapabilityCost? Find(string id) => Costs.GetValueOrDefault(id);

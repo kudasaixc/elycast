@@ -25,7 +25,7 @@ public sealed record ElyFlowStatus(
 
     /// <summary>
     /// Everything FRUC needs is installed (GPU, driver, runtime, native DLL).
-    /// Unlike <see cref="FrucReady"/> this is true outside of playback — use it
+    /// Unlike <see cref="FrucReady"/> this is true outside of playback - use it
     /// to decide whether the feature can be offered, not whether it is running.
     /// </summary>
     public bool FrucCapable => NvidiaGpu && OpticalFlowDriver && FrucRuntime && NativeDllLoaded;
@@ -179,32 +179,32 @@ public static class ElyFlowService
     private static string BuildBackendStatus(NativeApi? native, NativeRuntimeInfo? info)
     {
         if (native?.Loaded != true)
-            return native?.LoadError ?? "ElyFlow.Native.dll absent.";
+            return native?.LoadError ?? "ElyFlow.Native.dll missing.";
         if (info == null)
-            return "ElyFlow.Native.dll chargé, diagnostic runtime indisponible.";
-        return FirstNonEmpty(info.Status, "ElyFlow.Native.dll chargé.");
+            return "ElyFlow.Native.dll loaded; runtime diagnostics unavailable.";
+        return FirstNonEmpty(info.Status, "ElyFlow.Native.dll loaded.");
     }
 
     private static string BuildUnavailableReason(bool nvidiaGpu, bool opticalFlowDriver, bool frucRuntime, NativeApi? native, int nativeStatus)
     {
-        if (!nvidiaGpu) return "Aucun GPU NVIDIA détecté.";
-        if (!opticalFlowDriver) return "nvofapi64.dll absent : le driver NVIDIA Optical Flow n'est pas disponible.";
-        if (native?.Loaded != true) return "ElyFlow.Native.dll absent : backend natif non chargé.";
-        if (!frucRuntime) return "Runtime FRUC NVIDIA absent : ajoutez le SDK/runtime officiel contenant la DLL FRUC.";
+        if (!nvidiaGpu) return "No NVIDIA GPU detected.";
+        if (!opticalFlowDriver) return "nvofapi64.dll missing: the NVIDIA Optical Flow driver is unavailable.";
+        if (native?.Loaded != true) return "ElyFlow.Native.dll missing: native backend not loaded.";
+        if (!frucRuntime) return "NVIDIA FRUC runtime missing: add the official SDK/runtime containing the FRUC DLL.";
 
         return nativeStatus switch
         {
             StatusOk => "",
-            StatusNativeDllReady => "Backend natif charge, mais aucune session FRUC active n'est initialisee.",
-            StatusSdkAdapterNotCompiled => "Runtime FRUC trouvé, mais l'adaptateur officiel SDK FRUC n'est pas encore compilé dans ElyFlow.Native.",
-            StatusNvidiaDriverMissing => "Backend natif chargé, mais nvofapi64.dll n'a pas pu être chargé.",
-            StatusFrucRuntimeMissing => "Backend natif chargé, mais aucune DLL FRUC officielle n'a pu être chargée.",
-            StatusTexturePipelineNotConnected => "SDK FRUC compile et exports NvOFFRUC resolus ; il manque encore le pipeline D3D11 mpv -> textures -> ElyFlow.Native -> swapchain.",
-            StatusFrucSymbolMissing => "NvOFFRUC.dll est chargee, mais au moins un export officiel NVIDIA est absent.",
-            StatusFrucCreateFailed => "NvOFFRUCCreate a echoue : voir le diagnostic backend pour le code NVIDIA exact.",
-            StatusFrameResourceMissing => "Session FRUC presente, mais les textures D3D11 entree/sortie ne sont pas encore fournies.",
-            StatusFrucProcessFailed => "NvOFFRUCProcess a echoue : voir le diagnostic backend pour le code NVIDIA exact.",
-            _ => "Backend FRUC indisponible : code " + nativeStatus.ToString()
+            StatusNativeDllReady => "Native backend loaded, but no active FRUC session is initialized.",
+            StatusSdkAdapterNotCompiled => "FRUC runtime found, but the official FRUC SDK adapter is not compiled into ElyFlow.Native.",
+            StatusNvidiaDriverMissing => "Native backend loaded, but nvofapi64.dll could not be loaded.",
+            StatusFrucRuntimeMissing => "Native backend loaded, but no official FRUC DLL could be loaded.",
+            StatusTexturePipelineNotConnected => "FRUC SDK compiled and NvOFFRUC exports resolved; the D3D11 mpv -> textures -> ElyFlow.Native -> swapchain pipeline is still missing.",
+            StatusFrucSymbolMissing => "NvOFFRUC.dll is loaded, but at least one official NVIDIA export is missing.",
+            StatusFrucCreateFailed => "NvOFFRUCCreate failed: see the backend diagnostic for the exact NVIDIA code.",
+            StatusFrameResourceMissing => "FRUC session present, but the D3D11 input/output textures have not been supplied yet.",
+            StatusFrucProcessFailed => "NvOFFRUCProcess failed: see the backend diagnostic for the exact NVIDIA code.",
+            _ => "FRUC backend unavailable: code " + nativeStatus.ToString()
         };
     }
 
@@ -266,7 +266,7 @@ public static class ElyFlowService
 
             return new NativeApi(IntPtr.Zero, "", MissingRuntimeInfo, MissingString, MissingString)
             {
-                LoadError = errors.Length == 0 ? "ElyFlow.Native.dll introuvable dans les chemins de recherche." : errors.ToString()
+                LoadError = errors.Length == 0 ? "ElyFlow.Native.dll was not found in the search paths." : errors.ToString()
             };
         }
 
@@ -289,7 +289,7 @@ public static class ElyFlowService
             }
             catch (Exception ex)
             {
-                return new NativeRuntimeInfo(-1, false, false, false, "", "", "unknown", "Erreur diagnostic ElyFlow.Native : " + ex.Message);
+                return new NativeRuntimeInfo(-1, false, false, false, "", "", "unknown", "ElyFlow.Native diagnostic error: " + ex.Message);
             }
         }
 

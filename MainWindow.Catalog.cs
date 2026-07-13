@@ -52,7 +52,7 @@ public partial class MainWindow
         if (string.IsNullOrEmpty(_iptv.ProfileKey) && target is "Live" or "Movies" or "Series")
         {
             Disconnect_Click(this, new RoutedEventArgs());
-            StatusText.Text = "Connecte un profil IPTV pour accéder au Live, aux Films et aux Séries.";
+            StatusText.Text = LocalizationService.T("Connect an IPTV profile to access Live TV, Movies, and Series.");
             return;
         }
         CloseSettingsPanel();
@@ -86,25 +86,25 @@ public partial class MainWindow
     {
         if (s == Section.Movies && _movieItems == null)
         {
-            SectionTitle.Text = "Films…";
+            SectionTitle.Text = LocalizationService.T("Movies...");
             try { _movieItems = (await _iptv.GetVodAsync(ct)).Select(PlayItem.FromVod).ToList(); MarkFavorites(_movieItems); }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                DebugConsole.Error("VOD : " + ex.Message);
-                SectionTitle.Text = "Films indisponibles — réessaie";
+                DebugConsole.Error("VOD: " + ex.Message);
+                SectionTitle.Text = LocalizationService.T("Movies unavailable: try again");
                 return;
             }
         }
         else if (s == Section.Series && _seriesItems == null)
         {
-            SectionTitle.Text = "Séries…";
+            SectionTitle.Text = LocalizationService.T("Series...");
             try { _seriesItems = (await _iptv.GetSeriesAsync(ct)).Select(PlayItem.FromSeries).ToList(); }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                DebugConsole.Error("Séries : " + ex.Message);
-                SectionTitle.Text = "Séries indisponibles — réessaie";
+                DebugConsole.Error("Series: " + ex.Message);
+                SectionTitle.Text = LocalizationService.T("Series unavailable: try again");
                 return;
             }
         }
@@ -125,20 +125,20 @@ public partial class MainWindow
             Section.Fav => GetFavorites(),
             _ => _liveItems
         };
-        SectionTitle.Text = s switch
+        SectionTitle.Text = LocalizationService.T(s switch
         {
-            Section.LocalAudio => "Musique locale",
-            Section.LocalVideo => "Vidéos locales",
-            Section.Live => "Chaînes", Section.Movies => "Films",
-            Section.Series => "Séries", Section.Fav => "Favoris", _ => ""
-        };
+            Section.LocalAudio => "Local music",
+            Section.LocalVideo => "Local videos",
+            Section.Live => "Channels", Section.Movies => "Movies",
+            Section.Series => "Series", Section.Fav => "Favorites", _ => ""
+        });
 
         LocalActionsPanel.Visibility = s is Section.LocalAudio or Section.LocalVideo ? Visibility.Visible : Visibility.Collapsed;
         AudioLibraryActions.Visibility = s == Section.LocalAudio ? Visibility.Visible : Visibility.Collapsed;
         VideoLibraryActions.Visibility = s == Section.LocalVideo ? Visibility.Visible : Visibility.Collapsed;
 
         // Local audio browses through grouped covers (albums / artists / genres /
-        // playlists); the flat PlayItem list only serves "tous les titres" and the
+        // playlists); the flat PlayItem list only serves "all tracks" and the
         // other sections.
         var groupMode = s == Section.LocalAudio && IsAudioGroupMode;
         MusicGroupList.Visibility = groupMode ? Visibility.Visible : Visibility.Collapsed;
@@ -209,13 +209,12 @@ public partial class MainWindow
     {
         if (_localAudioItems.Count == 0)
         {
-            ShowOverlay("La bibliothèque audio est déjà vide", spinning: false);
+            ShowOverlay("The audio library is already empty", spinning: false);
             return;
         }
         var answer = MessageBox.Show(this,
-            $"Retirer les {_localAudioItems.Count} titre(s) de la bibliothèque audio ?\n" +
-            "Les fichiers ne sont pas supprimés du disque.",
-            "Réinitialiser la bibliothèque", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            LocalizationService.Format("Remove {0} track(s) from the audio library?\nThe files will not be deleted from disk.", _localAudioItems.Count),
+            LocalizationService.T("Reset library"), MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (answer != MessageBoxResult.Yes) return;
 
         CloseMusicPanel();
@@ -250,7 +249,7 @@ public partial class MainWindow
             try { _videoBackend?.Stop(PlaybackEndReason.Replaced); } catch { }
             HideAudioVisualizer();
             _current = null;
-            ShowOverlay("Fichier local retire.", spinning: false);
+            ShowOverlay(LocalizationService.T("Local file removed."), spinning: false);
         }
 
         UpdateQueueLabel();
@@ -298,7 +297,7 @@ public partial class MainWindow
     {
         var cats = source.Select(c => c.CategoryName).Where(c => !string.IsNullOrWhiteSpace(c))
             .Distinct().OrderBy(c => c).ToList();
-        var items = new List<string> { AllCategories };
+        var items = new List<string> { LocalizationService.T(AllCategories) };
         items.AddRange(cats);
         CategoryCombo.ItemsSource = items;
         CategoryCombo.SelectedIndex = 0;
@@ -318,7 +317,9 @@ public partial class MainWindow
 
     private void Category_Changed(object sender, SelectionChangedEventArgs e)
     {
-        _selectedCategory = CategoryCombo.SelectedItem as string ?? AllCategories;
+        var selected = CategoryCombo.SelectedItem as string;
+        _selectedCategory = string.Equals(selected, LocalizationService.T(AllCategories), StringComparison.Ordinal)
+            ? AllCategories : selected ?? AllCategories;
         _view?.Refresh(); UpdateCount();
     }
 
@@ -395,7 +396,7 @@ public partial class MainWindow
             if (seasons.Count > 0) SeasonCombo.SelectedIndex = 0;
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) { DebugConsole.Error("Infos série : " + ex.Message); }
+        catch (Exception ex) { DebugConsole.Error("Series details: " + ex.Message); }
         finally
         {
             if (ReferenceEquals(_seriesCts, cts)) _seriesCts = null;
@@ -427,7 +428,7 @@ public partial class MainWindow
     }
 
     // With the WriteableBitmap renderer there is no airspace, so panels compose
-    // over the video natively — nothing to toggle.
+    // over the video natively - nothing to toggle.
     private void UpdatePanelsVideo() { }
 
     // ============ AUDIO VISUALIZER ============
@@ -521,7 +522,7 @@ public partial class MainWindow
     }
 
     // Embedded tags (title / artist / album / cover): when present, the layout
-    // splits — visualizer on the left, big cover with the credits on the
+    // splits - visualizer on the left, big cover with the credits on the
     // right. The centre disc ALWAYS keeps the Elycast Audio artwork.
     private void ApplyAudioMetadata(PlayItem item, AudioMetadata metadata)
     {
@@ -545,7 +546,7 @@ public partial class MainWindow
                 cover = image;
             }
         }
-        catch (Exception ex) { DebugConsole.Warn("Pochette audio illisible : " + ex.Message); }
+        catch (Exception ex) { DebugConsole.Warn("Audio artwork unreadable: " + ex.Message); }
 
         _audioEmbeddedCover = cover;
         if (cover == null && !metadata.HasEmbeddedTitle && artist == null && album == null)
@@ -563,9 +564,9 @@ public partial class MainWindow
         AudioMetaColumn.Width = new GridLength(1, GridUnitType.Star);
         AudioMetaPanel.Visibility = Visibility.Visible;
         AudioTitleBlock.Visibility = Visibility.Collapsed;
-        DebugConsole.Info($"Métadonnées audio : {title}" +
-                          (artist != null ? $" — {artist}" : "") +
-                          (cover != null ? " (pochette intégrée)" : " (sans pochette)"));
+        DebugConsole.Info($"Audio metadata: {title}" +
+                          (artist != null ? $" - {artist}" : "") +
+                          (cover != null ? " (embedded artwork)" : " (no artwork)"));
     }
 
     private void ResetAudioMetadataUi()
@@ -607,7 +608,7 @@ public partial class MainWindow
                 : $"asset:{s.AudioBackgroundImage}";
 
         // The adaptive palette depends only on the background image, not on the
-        // slider being dragged — so memoise it by background key instead of running
+        // slider being dragged - so memoise it by background key instead of running
         // the (expensive) dominant-colour extraction on every settings change.
         Color[]? palette = null;
         if (source is BitmapSource bitmap && s.AudioPaletteAutomatic && s.AudioParticleAdaptiveColors)
@@ -783,13 +784,13 @@ public partial class MainWindow
     private void RefreshAudioRendererStatus()
     {
         if (AudioRendererStatusText == null) return;
-        AudioRendererStatusText.Text = _audioCoreRuntimeFailed
-            ? "AudioCore+ a rencontré des erreurs D3D11 répétées — fallback Classique actif."
+        AudioRendererStatusText.Text = LocalizationService.T(_audioCoreRuntimeFailed
+            ? "AudioCore+ encountered repeated D3D11 errors: Classic fallback active."
             : WantsAudioCore
             ? CanUseAudioCore
-                ? "ELYCAST AudioCore+ actif — scène native D3D11, FRUC ignoré pour l’audio."
-                : "AudioCore+ indisponible avec ce backend — fallback Classique (WPF) actif."
-            : "Renderer Classique (WPF) actif.";
+                ? "ELYCAST AudioCore+ active: native D3D11 scene, FRUC bypassed for audio."
+                : "AudioCore+ unavailable with this backend: Classic (WPF) fallback active."
+            : "Classic (WPF) renderer active.");
     }
 
     private void ApplyAudioRendererSelection(bool showFeedback)
@@ -904,7 +905,7 @@ public partial class MainWindow
 
         var now = _audioVisualStopwatch.Elapsed.TotalSeconds;
         var settings = StateStore.Settings;
-        // 0 = illimité : aucune limite de cadence (intervalle nul = pas de gate).
+        // 0 = unlimited: no frame-rate limit (a zero interval disables the gate).
         var frameInterval = settings.AudioVisualizerTargetFps > 0
             ? 1.0 / Math.Clamp(settings.AudioVisualizerTargetFps, 30, 480) : 0.0;
         // Phase accumulator instead of elapsed-time skipping. On a 360 Hz
@@ -932,7 +933,7 @@ public partial class MainWindow
             _audioFpsWindowFrames = 0;
         }
 
-        // The UI thread owns the backend — the engine thread never touches mpv.
+        // The UI thread owns the backend - the engine thread never touches mpv.
         // mpv property reads cross the native boundary; 120 state syncs/s are
         // enough for an analyzer running at 120 Hz and avoid 240-360 P/Invokes/s.
         if (now - _audioLastPlayerSyncSeconds >= 1.0 / 120.0)
@@ -1021,7 +1022,7 @@ public partial class MainWindow
                     _audioCoreRuntimeFailed = true;
                     ElyAudioCoreInterop.SetScene(false);
                     ApplyAudioRendererSelection(showFeedback: false);
-                    DebugConsole.Error($"ELYCAST AudioCore+ désactivé après erreurs D3D11 répétées (0x{health.LastError:X8}).");
+                    DebugConsole.Error($"ELYCAST AudioCore+ disabled after repeated D3D11 errors (0x{health.LastError:X8}).");
                 }
             }
         }

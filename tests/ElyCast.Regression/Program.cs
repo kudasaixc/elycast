@@ -1,5 +1,6 @@
 using Elysium_Cast_IPTV.Services.Video;
 using Elysium_Cast_IPTV.Services.Audio;
+using Elysium_Cast_IPTV.Services;
 
 if (args is ["--measure-audio", var libMpvDirectory, var outputDirectory])
     return AudioMeasurementRunner.Run(libMpvDirectory, outputDirectory);
@@ -23,14 +24,14 @@ if (args is ["--stress-runtime", var stressLibMpvDirectory, var stressOutputDire
 
 var cases = new (string Name, PlaybackTerminationAction Actual, PlaybackTerminationAction Expected)[]
 {
-    ("fin naturelle audio local", PlaybackTerminationPolicy.ForEnd(PlaybackEndReason.NaturalEnd, isLive: false), PlaybackTerminationAction.CleanFiniteEnd),
-    ("fin naturelle vidéo locale", PlaybackTerminationPolicy.ForEnd(PlaybackEndReason.NaturalEnd, isLive: false), PlaybackTerminationAction.CleanFiniteEnd),
-    ("arrêt manuel", PlaybackTerminationPolicy.ForEnd(PlaybackEndReason.UserStop, isLive: false), PlaybackTerminationAction.ManualStop),
-    ("erreur réseau live", PlaybackTerminationPolicy.ForFailure(isLive: true, autoReconnect: true), PlaybackTerminationAction.ReconnectLive),
-    ("reconnexion IPTV désactivée", PlaybackTerminationPolicy.ForFailure(isLive: true, autoReconnect: false), PlaybackTerminationAction.ShowError),
-    ("fin d'un flux live", PlaybackTerminationPolicy.ForEnd(PlaybackEndReason.NaturalEnd, isLive: true), PlaybackTerminationAction.ReconnectLive),
-    ("lecture suivante", PlaybackTerminationPolicy.ForEnd(PlaybackEndReason.Replaced, isLive: false), PlaybackTerminationAction.Ignore),
-    ("erreur fichier local", PlaybackTerminationPolicy.ForFailure(isLive: false, autoReconnect: true), PlaybackTerminationAction.ShowError)
+    ("natural local audio end", PlaybackTerminationPolicy.ForEnd(PlaybackEndReason.NaturalEnd, isLive: false), PlaybackTerminationAction.CleanFiniteEnd),
+    ("natural local video end", PlaybackTerminationPolicy.ForEnd(PlaybackEndReason.NaturalEnd, isLive: false), PlaybackTerminationAction.CleanFiniteEnd),
+    ("manual stop", PlaybackTerminationPolicy.ForEnd(PlaybackEndReason.UserStop, isLive: false), PlaybackTerminationAction.ManualStop),
+    ("live network error", PlaybackTerminationPolicy.ForFailure(isLive: true, autoReconnect: true), PlaybackTerminationAction.ReconnectLive),
+    ("disabled IPTV reconnection", PlaybackTerminationPolicy.ForFailure(isLive: true, autoReconnect: false), PlaybackTerminationAction.ShowError),
+    ("live stream end", PlaybackTerminationPolicy.ForEnd(PlaybackEndReason.NaturalEnd, isLive: true), PlaybackTerminationAction.ReconnectLive),
+    ("next playback", PlaybackTerminationPolicy.ForEnd(PlaybackEndReason.Replaced, isLive: false), PlaybackTerminationAction.Ignore),
+    ("local file error", PlaybackTerminationPolicy.ForFailure(isLive: false, autoReconnect: true), PlaybackTerminationAction.ShowError)
 };
 
 var failures = cases.Where(test => test.Actual != test.Expected).ToArray();
@@ -42,22 +43,22 @@ var stereoTopology = ElySoundGraph.BuildTopology(stereo: true);
 var monoTopology = ElySoundGraph.BuildTopology(stereo: false);
 foreach (var forbidden in new[] { "dynaudnorm", "crossfeed", "stereowiden" })
     if (stereoTopology.Contains(forbidden, StringComparison.OrdinalIgnoreCase))
-        graphFailures.Add("filtre interdit présent: " + forbidden);
+        graphFailures.Add("forbidden filter present: " + forbidden);
 if (!stereoTopology.Contains("extrastereo@width=m=1:c=0", StringComparison.Ordinal))
-    graphFailures.Add("largeur stéréo permanente absente");
+    graphFailures.Add("permanent stereo width is missing");
 if (monoTopology.Contains("extrastereo", StringComparison.OrdinalIgnoreCase))
-    graphFailures.Add("élargissement appliqué au mono");
+    graphFailures.Add("stereo widening applied to mono");
 if (!stereoTopology.Contains("alimiter@limiter=level_in=1:level_out=1:level=0", StringComparison.Ordinal))
-    graphFailures.Add("limiteur utilisé comme amplificateur");
+    graphFailures.Add("limiter used as an amplifier");
 
 var expectedIds = new[] { "cinema", "music", "anime", "voice", "night", "bass", "horror", "sport" };
 if (!ElySoundCatalog.BuiltIn.Select(profile => profile.Id).SequenceEqual(expectedIds))
-    graphFailures.Add("catalogue de presets incomplet");
+    graphFailures.Add("preset catalog is incomplete");
 foreach (var profile in ElySoundCatalog.BuiltIn)
 {
     var resolved = ElySoundGraph.Resolve(profile, virtualSurround: true, stereo: true);
     if (resolved.RuntimeUpdates.Any(update => !update.Target.Contains('@')))
-        graphFailures.Add(profile.Id + ": cible FFmpeg non qualifiée");
+        graphFailures.Add(profile.Id + ": unqualified FFmpeg target");
 }
 var issuedCommands = new List<string[]>();
 var channelCount = "2";
@@ -71,23 +72,23 @@ controller.Apply(ElySoundCatalog.BuiltIn[1], enabled: false, virtualSurround: fa
 controller.Apply(ElySoundCatalog.BuiltIn[1], enabled: true, virtualSurround: false);
 var graphAddsAfterBypass = issuedCommands.Count(command => command.Length > 1 && command[0] == "af" && command[1] == "add");
 if (!firstApply.Applied || !secondApply.Applied)
-    graphFailures.Add("application runtime nominale refusée");
+    graphFailures.Add("nominal runtime application was rejected");
 if (issuedCommands.Any(command => command.Any(argument => argument is "seek" or "loadfile" or "stop")))
-    graphFailures.Add("une transition DSP touche au transport média");
+    graphFailures.Add("a DSP transition touched media transport");
 if (graphAddsAfterBypass != graphAddsBeforeBypass)
-    graphFailures.Add("le bypass A/B reconstruit le graphe");
+    graphFailures.Add("A/B bypass rebuilds the graph");
 var graphAddsBeforeSameLayoutTrack = graphAddsAfterBypass;
 controller.MediaChanged();
 controller.TryApplyWhenAudioReady();
 var graphAddsAfterSameLayoutTrack = issuedCommands.Count(command => command.Length > 1 && command[0] == "af" && command[1] == "add");
 if (graphAddsAfterSameLayoutTrack != graphAddsBeforeSameLayoutTrack)
-    graphFailures.Add("un changement de piste avec le mÃªme layout reconstruit le graphe");
+    graphFailures.Add("a track change with the same layout rebuilds the graph");
 channelCount = "6";
 controller.MediaChanged();
 controller.TryApplyWhenAudioReady();
 var graphAddsAfterLayoutChange = issuedCommands.Count(command => command.Length > 1 && command[0] == "af" && command[1] == "add");
 if (graphAddsAfterLayoutChange != graphAddsAfterSameLayoutTrack + 1)
-    graphFailures.Add("un vrai changement de layout ne reconstruit pas la topologie");
+    graphFailures.Add("a real layout change does not rebuild the topology");
 
 var rejectRuntime = false;
 var fallbackCommands = new List<string[]>();
@@ -102,10 +103,20 @@ fallbackController.Apply(ElySoundCatalog.BuiltIn[0], enabled: true, virtualSurro
 rejectRuntime = true;
 var rejected = fallbackController.Apply(ElySoundCatalog.BuiltIn[1], enabled: true, virtualSurround: false);
 if (rejected.Applied || !fallbackCommands.Any(command => command.SequenceEqual(new[] { "af", "remove", "@elysound" })))
-    graphFailures.Add("fallback DSP n'enlève pas uniquement @elysound");
+    graphFailures.Add("DSP fallback removes more than @elysound");
 foreach (var failure in graphFailures)
     Console.WriteLine("FAIL  ELYSOUND+ " + failure);
 if (graphFailures.Count == 0)
-    Console.WriteLine("PASS  ELYSOUND+ topologie, bypass mono, limiteur et presets");
+    Console.WriteLine("PASS  ELYSOUND+ topology, mono bypass, limiter, and presets");
 
-return failures.Length == 0 && graphFailures.Count == 0 ? 0 : 1;
+var localizationFailures = new List<string>();
+if (!LocalizationCatalog.TryGetFrench("Sign in", out var signIn) || signIn != "Se connecter")
+    localizationFailures.Add("exact lookup failed");
+if (!LocalizationCatalog.TryGetFrenchTemplate("Track 42", out var track) || track != "Piste 42")
+    localizationFailures.Add("formatted lookup failed");
+foreach (var failure in localizationFailures)
+    Console.WriteLine("FAIL  localization catalog " + failure);
+if (localizationFailures.Count == 0)
+    Console.WriteLine("PASS  localization catalog exact and formatted lookups");
+
+return failures.Length == 0 && graphFailures.Count == 0 && localizationFailures.Count == 0 ? 0 : 1;

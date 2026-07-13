@@ -36,7 +36,7 @@ public sealed class BenchmarkReport
     public Dictionary<string, int> Scores { get; set; } = new();
     public int GlobalScore { get; set; }
     public int MeasurementCoveragePercent { get; set; }
-    public string Rating { get; set; } = "Non évalué";
+    public string Rating { get; set; } = "Not evaluated";
     public ElySmartConfiguration Configuration { get; set; } = new();
     public List<ElySmartRecommendation> Recommendations { get; set; } = new();
     public List<string> Journal { get; set; } = new();

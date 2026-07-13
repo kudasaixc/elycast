@@ -27,8 +27,8 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// ELYFLOW n'est activable que lorsque le renderer ELYCORE est le backend
-    /// vidéo choisi : le switch est verrouillé (avec un indice) sinon.
+    /// ELYFLOW can be enabled only when ELYCORE is the selected video backend;
+    /// otherwise the switch remains locked with an explanatory hint.
     /// </summary>
     private void UpdateElyFlowGate()
     {
@@ -90,14 +90,14 @@ public partial class MainWindow
         {
             var elyCore = string.Equals(StateStore.Settings.VideoBackend, "elycore", StringComparison.OrdinalIgnoreCase);
             ElyFlowRtxVsrSwitch.IsEnabled = elyCore;
-            ElyFlowRtxVsrSwitch.ToolTip = elyCore
-                ? "Passe RTX VSR native ELYCORE, indépendante de l'interpolation FRUC."
-                : "RTX VSR natif nécessite le backend ELYCORE.";
+            ElyFlowRtxVsrSwitch.ToolTip = LocalizationService.T(elyCore
+                ? "Native ELYCORE RTX VSR pass, independent from FRUC interpolation."
+                : "Native RTX VSR requires the ELYCORE backend.");
         }
         ElyFlowTargetCombo.IsEnabled = !nativeFruc;
-        ElyFlowTargetCombo.ToolTip = nativeFruc
-            ? "Le runtime NVIDIA FRUC est un interpolateur ×2. La cadence effective dépend de la source."
-            : "Cadence demandée à mpv display-resample.";
+        ElyFlowTargetCombo.ToolTip = LocalizationService.T(nativeFruc
+            ? "The NVIDIA FRUC runtime is a 2x interpolator. Effective frame rate depends on the source."
+            : "Frame rate requested from mpv display-resample.");
         if (ElyFlowTargetLabel != null)
             ElyFlowTargetLabel.Opacity = nativeFruc ? 0.55 : 1.0;
     }
@@ -106,22 +106,22 @@ public partial class MainWindow
     {
         if (ElyFlowStatusText == null) return;
         var st = ElyFlowService.Probe();
-        var gpu = st.NvidiaGpu ? st.GpuName : "NVIDIA non détecté";
-        var of = st.OpticalFlowDriver ? "driver Optical Flow OK" : "nvofapi64.dll absent";
-        var fruc = st.FrucRuntime ? "runtime FRUC OK : " + st.FrucPath : "runtime FRUC absent (NvOFFRUC64.dll)";
-        var native = st.NativeDllLoaded ? "ElyFlow.Native OK : " + st.NativePath : "ElyFlow.Native absent";
+        var gpu = st.NvidiaGpu ? st.GpuName : LocalizationService.T("NVIDIA not detected");
+        var of = LocalizationService.T(st.OpticalFlowDriver ? "Optical Flow driver OK" : "nvofapi64.dll missing");
+        var fruc = st.FrucRuntime ? LocalizationService.T("FRUC runtime OK: ") + st.FrucPath : LocalizationService.T("FRUC runtime missing (NvOFFRUC64.dll)");
+        var native = st.NativeDllLoaded ? LocalizationService.T("ElyFlow.Native OK: ") + st.NativePath : LocalizationService.T("ElyFlow.Native missing");
         var version = string.IsNullOrWhiteSpace(st.RuntimeVersion) ? "unknown" : st.RuntimeVersion;
-        var reason = string.IsNullOrWhiteSpace(st.UnavailableReason) ? "Disponible" : st.UnavailableReason;
+        var reason = string.IsNullOrWhiteSpace(st.UnavailableReason) ? LocalizationService.T("Available") : LocalizationService.T(st.UnavailableReason);
         ElyFlowStatusText.Text =
             $"GPU : {gpu}\n" +
-            $"Driver : {st.DriverVersion}\n" +
+            $"{LocalizationService.T("Driver")} : {st.DriverVersion}\n" +
             $"Optical Flow : {of}\n" +
             $"Runtime FRUC : {fruc}\n" +
-            $"Version runtime : {version}\n" +
-            $"Backend natif : {native}\n" +
-            $"Code backend : {st.NativeStatusCode}\n" +
-            $"Raison : {reason}\n" +
-            $"Statut : {st.BackendStatus}";
+            $"{LocalizationService.T("Runtime version")} : {version}\n" +
+            $"{LocalizationService.T("Native backend")} : {native}\n" +
+            $"{LocalizationService.T("Backend code")} : {st.NativeStatusCode}\n" +
+            $"{LocalizationService.T("Reason")} : {reason}\n" +
+            $"{LocalizationService.T("Status")} : {LocalizationService.T(st.BackendStatus)}";
     }
 
     private void ApplyElyFlowToBackend()
@@ -129,12 +129,10 @@ public partial class MainWindow
         if (_videoBackend is not MpvHwndBackend mpv) return;
         var s = StateStore.Settings;
 
-        // ELYFLOW (FRUC + VSR natif) vit exclusivement dans le renderer
-        // ELYCORE. Sur les autres backends la fonctionnalité est inapplicable
-        // et le backend choisi par l'utilisateur n'est JAMAIS remplacé ici —
-        // l'ancien basculement automatique rtx-sdk -> renderer natif recréait
-        // le pipeline en pleine lecture (écran noir) et écrasait le choix fait
-        // dans les réglages.
+        // ELYFLOW (FRUC + native VSR) lives exclusively in ELYCORE. Other
+        // backends are never replaced here: the former automatic rtx-sdk to
+        // native-renderer switch rebuilt the pipeline during playback, caused a
+        // black screen, and overwrote the user's explicit selection.
         if (!mpv.IsElyCoreRenderer)
         {
             ResetMpvFramePacing(mpv);
@@ -152,7 +150,7 @@ public partial class MainWindow
             s.ElyFlowEngine.Equals("mpv-pacing", StringComparison.OrdinalIgnoreCase))
         {
             var effectiveTarget = ApplyMpvFramePacing(mpv, s.ElyFlowTargetFps, s.ElyFlowLiveBufferSeconds);
-            DebugConsole.Info($"ELYFLOW mpv pacing -> {effectiveTarget} fps effectifs");
+            DebugConsole.Info($"ELYFLOW mpv pacing: {effectiveTarget} effective fps");
             return;
         }
 
@@ -160,11 +158,11 @@ public partial class MainWindow
         if (frucWanted)
         {
             ApplyMpvLiveBuffer(mpv, s.ElyFlowLiveBufferSeconds);
-            DebugConsole.Info("ELYFLOW NVIDIA FRUC -> actif sur le renderer ELYCORE.");
+            DebugConsole.Info("ELYFLOW NVIDIA FRUC active on the ELYCORE renderer.");
         }
         else
         {
-            DebugConsole.Info("ELYFLOW -> off (renderer ELYCORE conservé, FRUC arrêté à chaud).");
+            DebugConsole.Info("ELYFLOW off (ELYCORE retained, FRUC stopped live).");
         }
         UpdateElyFlowStatus();
     }
@@ -181,7 +179,7 @@ public partial class MainWindow
         var effective = refresh > 0 ? Math.Min(requested, refresh) : Math.Min(requested, 120.0);
         var effectiveText = effective.ToString("0.###", CultureInfo.InvariantCulture);
         if (effective + 0.5 < requested)
-            DebugConsole.Info($"ELYFLOW mpv: cible {requested:0.###} plafonnée au moniteur ({refresh:0.###} Hz).");
+            DebugConsole.Info($"ELYFLOW mpv: target {requested:0.###} capped to the display ({refresh:0.###} Hz).");
 
         mpv.SetOption("video-sync", "display-resample");
         mpv.SetOption("interpolation", "yes");

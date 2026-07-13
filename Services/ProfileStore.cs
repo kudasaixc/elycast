@@ -34,7 +34,7 @@ public static class ProfileStore
         }
         catch (Exception ex)
         {
-            DebugConsole.Error("Lecture des profils impossible : " + ex.Message);
+            DebugConsole.Error("Could not read profiles: " + ex.Message);
             return new();
         }
     }
@@ -47,11 +47,11 @@ public static class ProfileStore
             var json = JsonSerializer.Serialize(profiles, Options);
             var cipher = ProtectedData.Protect(Encoding.UTF8.GetBytes(json), null, DataProtectionScope.CurrentUser);
             WriteAtomically(FilePath, ProtectedHeader + Convert.ToBase64String(cipher));
-            DebugConsole.Debug($"Profils enregistrés ({profiles.Count}) -> {FilePath}");
+            DebugConsole.Debug($"Profiles saved ({profiles.Count}) -> {FilePath}");
         }
         catch (Exception ex)
         {
-            DebugConsole.Error("Sauvegarde des profils impossible : " + ex.Message);
+            DebugConsole.Error("Could not save profiles: " + ex.Message);
         }
     }
 

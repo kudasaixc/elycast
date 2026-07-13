@@ -8,7 +8,7 @@ namespace Elysium_Cast_IPTV.Services;
 /// <summary>
 /// Background analysis loop for the audio visualizer: streams the file,
 /// computes a Hann-windowed FFT folded into log-spaced bands, tracks bass /
-/// energy and detects beats — all OFF the UI thread, so the visual rendering
+/// energy and detects beats - all OFF the UI thread, so the visual rendering
 /// can run at monitor refresh rate without ever waiting on disk I/O or DSP.
 /// The player position/state is fed from the UI thread (which owns the video
 /// backend); this thread never touches mpv.
@@ -66,7 +66,7 @@ public sealed class AudioVisualEngine : IDisposable
         }
         catch (Exception ex)
         {
-            DebugConsole.Warn("Analyse audio du visualizer indisponible : " + ex.Message);
+            DebugConsole.Warn("Audio visualizer analysis unavailable: " + ex.Message);
             reader?.Dispose();
             reader = null;
         }
@@ -182,7 +182,7 @@ public sealed class AudioVisualEngine : IDisposable
                 try { Tick(sessionId, reader, readBuffer, window, fft, dt, now); }
                 catch (Exception ex)
                 {
-                    DebugConsole.Warn("Analyse audio du visualizer interrompue : " + ex.Message);
+                    DebugConsole.Warn("Audio visualizer analysis interrupted: " + ex.Message);
                     if (sessionId == Volatile.Read(ref _sessionId)) HasAnalysis = false;
                     break;
                 }
@@ -251,7 +251,7 @@ public sealed class AudioVisualEngine : IDisposable
     }
 
     // Sequential streaming into the rolling mono window; only re-sync to the
-    // player position on real drift (seek, lag) — re-seeking every tick is
+    // player position on real drift (seek, lag) - re-seeking every tick is
     // what made the old implementation stutter on MP3.
     private bool PumpSamples(AudioFileReader reader, float[] readBuffer, float[] window, double dt)
     {
@@ -320,7 +320,7 @@ public sealed class AudioVisualEngine : IDisposable
         {
             for (var band = 0; band < Bands; band++)
             {
-                // Fast attack, slower release — punchy but stable.
+                // Fast attack, slower release - punchy but stable.
                 var current = _spectrum[band];
                 _spectrum[band] = values[band] > current
                     ? current + (values[band] - current) * 0.62

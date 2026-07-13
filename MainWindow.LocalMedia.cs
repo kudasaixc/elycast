@@ -34,7 +34,7 @@ public partial class MainWindow
     private List<PlayItem> GetAudioSectionItems()
     {
         foreach (var track in _localAudioItems)
-            track.CategoryName = track.Artist ?? track.AlbumArtist ?? "Artiste inconnu";
+            track.CategoryName = track.Artist ?? track.AlbumArtist ?? LocalizationService.T("Unknown artist");
         return _localAudioItems;
     }
 
@@ -47,7 +47,7 @@ public partial class MainWindow
         var audio = _section == Section.LocalAudio;
         var dialog = new OpenFolderDialog
         {
-            Title = audio ? "Importer un dossier de musique" : "Importer un dossier de vidéos",
+            Title = LocalizationService.T(audio ? "Import a music folder" : "Import a video folder"),
             Multiselect = false
         };
         if (dialog.ShowDialog(this) != true) return;
@@ -59,7 +59,7 @@ public partial class MainWindow
         var audio = _section == Section.LocalAudio;
         var dialog = new OpenFileDialog
         {
-            Title = audio ? "Importer des fichiers de musique" : "Importer des fichiers vidéo",
+            Title = LocalizationService.T(audio ? "Import music files" : "Import video files"),
             Multiselect = true,
             Filter = audio ? LocalLibraryService.AudioFileFilter : LocalLibraryService.VideoFileFilter
         };
@@ -77,7 +77,7 @@ public partial class MainWindow
             var now = Environment.TickCount64;
             if (now - lastTick < 120) return;
             lastTick = now;
-            LocalImportButton.Content = $"Analyse… {count} fichier(s)";
+            LocalImportButton.Content = LocalizationService.Format("Scanning... {0} file(s)", count);
         });
     }
 
@@ -85,7 +85,7 @@ public partial class MainWindow
     {
         LocalImportButton.IsEnabled = !busy;
         LocalImportFilesButton.IsEnabled = !busy;
-        LocalImportButton.Content = busy ? "Analyse en cours…" : "Importer un dossier";
+        LocalImportButton.Content = LocalizationService.T(busy ? "Scanning..." : "Import folder");
     }
 
     private int ApplyImportedItems(IReadOnlyList<PlayItem> imported, bool audio)
@@ -106,12 +106,12 @@ public partial class MainWindow
             var added = ApplyImportedItems(imported, audio);
             SaveLocalLibrary();
             ShowSection(audio ? Section.LocalAudio : Section.LocalVideo);
-            ShowOverlay($"{added} fichier(s) importé(s)", spinning: false);
+            ShowOverlay(LocalizationService.Format("{0} file(s) imported", added), spinning: false);
         }
         catch (Exception ex)
         {
-            DebugConsole.Exception("Import local impossible", ex);
-            ShowOverlay("Impossible d’importer ces éléments", spinning: false);
+            DebugConsole.Exception("Local import failed", ex);
+            ShowOverlay("Could not import these items", spinning: false);
         }
         finally
         {
@@ -148,7 +148,7 @@ public partial class MainWindow
         var videoFiles = files.Where(LocalLibraryService.IsVideo).ToList();
         if (audioFiles.Count == 0 && videoFiles.Count == 0)
         {
-            ShowOverlay("Aucun fichier audio ou vidéo reconnu", spinning: false);
+            ShowOverlay("No recognized audio or video files", spinning: false);
             return;
         }
 
@@ -167,12 +167,12 @@ public partial class MainWindow
             // switch to whichever kind was actually dropped.
             var showAudio = _section == Section.LocalAudio ? audioFiles.Count > 0 : videoFiles.Count == 0;
             ShowSection(showAudio ? Section.LocalAudio : Section.LocalVideo);
-            ShowOverlay($"{added} fichier(s) importé(s)", spinning: false);
+            ShowOverlay(LocalizationService.Format("{0} file(s) imported", added), spinning: false);
         }
         catch (Exception ex)
         {
-            DebugConsole.Exception("Import par glisser-déposer impossible", ex);
-            ShowOverlay("Impossible d’importer ces éléments", spinning: false);
+            DebugConsole.Exception("Drag-and-drop import failed", ex);
+            ShowOverlay("Could not import these items", spinning: false);
         }
         finally
         {
@@ -249,12 +249,12 @@ public partial class MainWindow
     private void OpenMusicGroup(MusicGroup group)
     {
         _openMusicGroup = group;
-        MusicPanelKind.Text = group.KindLabel.ToUpperInvariant();
+        MusicPanelKind.Text = LocalizationService.T(group.KindLabel).ToUpperInvariant();
         MusicPanelTitle.Text = group.Name;
         var redundantSubtitle = group.Kind is MusicGroupKind.Genre or MusicGroupKind.Playlist;
         MusicPanelSubtitle.Text = redundantSubtitle ? "" : group.Subtitle;
         MusicPanelSubtitle.Visibility = redundantSubtitle || string.IsNullOrWhiteSpace(group.Subtitle) ? Visibility.Collapsed : Visibility.Visible;
-        MusicPanelDetail.Text = group.DetailLine;
+        MusicPanelDetail.Text = LocalizationService.T(group.DetailLine);
         MusicPanelCover.Source = group.Cover;
         MusicPanelInitial.Text = group.Initial;
         for (var i = 0; i < group.Tracks.Count; i++)
@@ -322,7 +322,7 @@ public partial class MainWindow
         foreach (var track in group.Tracks)
             if (!_audioQueue.Any(q => q.SameAs(track))) _audioQueue.Add(track);
         UpdateQueueLabel();
-        ShowOverlay($"{group.Tracks.Count} titre(s) ajoutés à la file", spinning: false);
+        ShowOverlay(LocalizationService.Format("{0} track(s) added to the queue", group.Tracks.Count), spinning: false);
     }
 
     private void PlayGroupTracks(IReadOnlyList<PlayItem> tracks, bool shuffle)
@@ -399,8 +399,8 @@ public partial class MainWindow
         var isPlaylist = _menuTargetGroup is { Kind: MusicGroupKind.Playlist };
         ContextRemoveMusicGroup.IsEnabled = _menuTargetGroup?.Tracks.Count > 0;
         ContextRemoveMusicGroup.Header = _menuTargetGroup is { } group
-            ? $"Retirer {group.Tracks.Count} titre(s) de la bibliothèque"
-            : "Retirer de la bibliothèque";
+            ? LocalizationService.Format("Remove {0} track(s) from the library", group.Tracks.Count)
+            : LocalizationService.T("Remove from library");
         ContextPlaylistSeparator.Visibility = isPlaylist ? Visibility.Visible : Visibility.Collapsed;
         ContextDeletePlaylist.Visibility = isPlaylist ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -410,8 +410,8 @@ public partial class MainWindow
         if (ContextMusicGroup(sender) is not { Tracks.Count: > 0 } group) return;
         var tracks = group.Tracks.ToList();
         var answer = MessageBox.Show(this,
-            $"Retirer les {tracks.Count} titre(s) de « {group.Name} » de la bibliothèque locale ?\n\nLes fichiers resteront sur le disque.",
-            "Retirer de la bibliothèque", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            LocalizationService.Format("Remove {0} track(s) from “{1}” in the local library?\n\nThe files will remain on disk.", tracks.Count, group.Name),
+            LocalizationService.T("Remove from library"), MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (answer != MessageBoxResult.Yes) return;
 
         CloseMusicPanel();
@@ -424,10 +424,10 @@ public partial class MainWindow
         if (!playlist.TrackPaths.Contains(path, StringComparer.OrdinalIgnoreCase)) playlist.TrackPaths.Add(path);
         StateStore.Save();
         if (_section == Section.LocalAudio && AudioBrowseMode == "playlists") RebuildMusicGroups();
-        ShowOverlay($"Ajouté à « {playlist.Name} »", spinning: false);
+        ShowOverlay(LocalizationService.Format("Added to “{0}”", playlist.Name), spinning: false);
     }
 
-    // "Ajouter à une playlist" submenu, rebuilt each time the menu opens.
+    // "Add to playlist" submenu, rebuilt each time the menu opens.
     private void PopulatePlaylistMenu(MenuItem menu, PlayItem? track)
     {
         menu.Items.Clear();
@@ -435,7 +435,7 @@ public partial class MainWindow
         menu.IsEnabled = playlists.Count > 0 && track != null;
         if (!menu.IsEnabled)
         {
-            menu.Items.Add(new MenuItem { Header = "Aucune playlist — crée-la dans « Playlists »", IsEnabled = false });
+            menu.Items.Add(new MenuItem { Header = LocalizationService.T("No playlists. Create one under Playlists."), IsEnabled = false });
             return;
         }
         foreach (var playlist in playlists)
@@ -456,7 +456,7 @@ public partial class MainWindow
         group.Tracks.RemoveAll(t => t.SameAs(track));
         MusicTrackList.ItemsSource = null;
         MusicTrackList.ItemsSource = group.Tracks;
-        MusicPanelDetail.Text = group.DetailLine;
+        MusicPanelDetail.Text = LocalizationService.T(group.DetailLine);
         RebuildMusicGroups();
     }
 
@@ -525,7 +525,7 @@ public partial class MainWindow
             {
                 MusicTrackList.ItemsSource = null;
                 MusicTrackList.ItemsSource = group.Tracks;
-                MusicPanelDetail.Text = group.DetailLine;
+                MusicPanelDetail.Text = LocalizationService.T(group.DetailLine);
             }
         }
     }
@@ -537,7 +537,7 @@ public partial class MainWindow
         var path = LocalLibraryService.PathOf(item);
         if (!File.Exists(path))
         {
-            ShowOverlay("Fichier introuvable sur le disque.", spinning: false);
+            ShowOverlay("File not found on disk.", spinning: false);
             return;
         }
 
@@ -560,16 +560,16 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-            DebugConsole.Exception("Écriture des métadonnées impossible", ex);
-            ShowOverlay("Impossible d’écrire les métadonnées (fichier verrouillé ?)", spinning: false);
+            DebugConsole.Exception("Could not write metadata", ex);
+            ShowOverlay("Could not write metadata (is the file locked?)", spinning: false);
             return;
         }
 
         LocalLibraryService.RefreshFromFile(item);
         SynchronizeFavoriteCopy(item);
         SaveLocalLibrary();
-        DebugConsole.Info($"Métadonnées enregistrées : {item.Name}");
-        ShowOverlay("Métadonnées enregistrées", spinning: false);
+        DebugConsole.Info($"Metadata saved: {item.Name}");
+        ShowOverlay("Metadata saved", spinning: false);
 
         if (_section is Section.LocalAudio or Section.Fav)
         {

@@ -33,19 +33,19 @@ public sealed class MusicGroup : INotifyPropertyChanged
     public string KindLabel => Kind switch
     {
         MusicGroupKind.Album => "Album",
-        MusicGroupKind.Artist => "Artiste",
+        MusicGroupKind.Artist => "Artist",
         MusicGroupKind.Genre => "Genre",
         MusicGroupKind.Playlist => "Playlist",
         _ => ""
     };
 
-    /// <summary>"12 titres · 47 min" — shown in the detail panel header.</summary>
+    /// <summary>"12 tracks · 47 min" - shown in the detail panel header.</summary>
     public string DetailLine
     {
         get
         {
             var count = Tracks.Count;
-            var label = count > 1 ? $"{count} titres" : $"{count} titre";
+            var label = count == 1 ? $"{count} track" : $"{count} tracks";
             var total = TimeSpan.FromSeconds(Tracks.Sum(t => t.DurationSeconds));
             if (total.TotalSeconds < 1) return label;
             var duration = total.TotalHours >= 1

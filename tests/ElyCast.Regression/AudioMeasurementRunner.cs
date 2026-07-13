@@ -53,7 +53,7 @@ internal static class AudioMeasurementRunner
                 Console.Error.WriteLine($"FAIL  layout {channels}ch: {layoutResult.Message}");
                 return 1;
             }
-            Console.WriteLine($"PASS  layout {channels}ch: graphe accepté sans élargissement stéréo");
+            Console.WriteLine($"PASS  layout {channels}ch: graph accepted without stereo widening");
         }
         Console.WriteLine("REPORT " + report);
         return 0;
@@ -170,9 +170,9 @@ internal static class AudioMeasurementRunner
             ("audio-format", "s16"), ("audio-samplerate", SampleRate.ToString(CultureInfo.InvariantCulture)),
             ("untimed", "yes"), ("pause", "yes"), ("keep-open", "yes"), ("idle", "yes")
         })
-            if (!mpv.SetOption(option.Item1, option.Item2)) return new(false, "option refusée: " + option.Item1);
-        if (!mpv.Initialize()) return new(false, "mpv_initialize a échoué");
-        if (!mpv.Command("loadfile", input, "replace")) return new(false, "loadfile refusé");
+            if (!mpv.SetOption(option.Item1, option.Item2)) return new(false, "option rejected: " + option.Item1);
+        if (!mpv.Initialize()) return new(false, "mpv_initialize failed");
+        if (!mpv.Command("loadfile", input, "replace")) return new(false, "loadfile rejected");
 
         for (var i = 0; i < 200 && string.IsNullOrEmpty(mpv.Get("audio-params/channel-count")); i++)
             Thread.Sleep(10);
@@ -183,7 +183,7 @@ internal static class AudioMeasurementRunner
             if (!result.Applied) return new(false, result.Message);
         }
 
-        if (!mpv.SetProperty("pause", "no")) return new(false, "resume refusé");
+        if (!mpv.SetProperty("pause", "no")) return new(false, "resume rejected");
         for (var i = 0; i < 1000; i++)
         {
             if (string.Equals(mpv.Get("eof-reached"), "yes", StringComparison.OrdinalIgnoreCase))
@@ -193,7 +193,7 @@ internal static class AudioMeasurementRunner
         mpv.Command("stop");
         return File.Exists(output) && new FileInfo(output).Length > 44
             ? new(true, "ok")
-            : new(false, "sortie PCM absente");
+            : new(false, "PCM output is missing");
     }
 
     private static float[] GenerateSignal()
@@ -386,7 +386,7 @@ internal static class AudioMeasurementRunner
     private static float[] ReadWave(string path)
     {
         using var reader = new BinaryReader(File.OpenRead(path));
-        if (Encoding.ASCII.GetString(reader.ReadBytes(4)) != "RIFF") throw new InvalidDataException("WAV RIFF attendu");
+        if (Encoding.ASCII.GetString(reader.ReadBytes(4)) != "RIFF") throw new InvalidDataException("WAV RIFF expected");
         reader.ReadInt32(); reader.ReadBytes(4);
         short channels = 0, bits = 0; byte[]? data = null;
         while (reader.BaseStream.Position + 8 <= reader.BaseStream.Length)
@@ -396,7 +396,7 @@ internal static class AudioMeasurementRunner
             else if (id == "data") { data = reader.ReadBytes(size); break; }
             else reader.ReadBytes(size);
         }
-        if (channels != 2 || bits != 16 || data == null) throw new InvalidDataException($"WAV PCM stéréo 16-bit attendu ({channels}ch/{bits}bit)");
+        if (channels != 2 || bits != 16 || data == null) throw new InvalidDataException($"16-bit stereo PCM WAV expected ({channels}ch/{bits}bit)");
         var samples = new float[data.Length / 2];
         for (var i = 0; i < samples.Length; i++) samples[i] = BitConverter.ToInt16(data, i * 2) / 32768f;
         return samples;

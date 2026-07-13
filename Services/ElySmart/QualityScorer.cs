@@ -13,9 +13,9 @@ public sealed class QualityScorer
         return new()
         {
             ["CPU"] = Group("cpu"), ["GPU"] = Group("gpu", "elycore", "vsr", "elyflow"),
-            ["Décodage"] = Group("decode"), ["Shaders"] = Group("shader"),
+            ["Decode"] = Group("decode"), ["Shaders"] = Group("shader"),
             ["ELYCOLOR"] = Group("elycolor"), ["ELYFLOW"] = Group("elyflow"),
-            ["Audio"] = Group("audio", "fft"), ["Visualiseur"] = Group("visualizer")
+            ["Audio"] = Group("audio", "fft"), ["Visualizer"] = Group("visualizer")
         };
     }
 
@@ -26,8 +26,8 @@ public sealed class QualityScorer
         var weighted = new (string Name, double Weight)[]
         {
             ("CPU", p.Efficiency), ("GPU", (p.VideoQuality + p.Fluidity) / 2),
-            ("Décodage", p.Stability), ("Shaders", p.VideoQuality / 2),
-            ("Audio", p.AudioQuality), ("Visualiseur", .08),
+            ("Decode", p.Stability), ("Shaders", p.VideoQuality / 2),
+            ("Audio", p.AudioQuality), ("Visualizer", .08),
             ("ELYCOLOR", p.VideoQuality / 4), ("ELYFLOW", p.Fluidity / 3)
         };
         var available = weighted.Where(x => scores.GetValueOrDefault(x.Name) > 0).ToArray();
@@ -36,5 +36,5 @@ public sealed class QualityScorer
         return Math.Clamp((int)Math.Round(available.Sum(x => scores[x.Name] * x.Weight) / totalWeight), 0, 100);
     }
 
-    public static string Rating(int score) => score >= 92 ? "Excellent" : score >= 80 ? "Très bon" : score >= 65 ? "Bon" : score >= 48 ? "Correct" : "Limité";
+    public static string Rating(int score) => score >= 92 ? "Excellent" : score >= 80 ? "Very good" : score >= 65 ? "Good" : score >= 48 ? "Fair" : "Limited";
 }

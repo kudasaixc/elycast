@@ -4,7 +4,7 @@
 // never raw D3D11 textures. The only clean zero-copy bridge on NVIDIA is
 // WGL_NV_DX_interop2: a D3D11 texture is registered as the storage of a GL
 // texture, mpv renders into an FBO wrapping it, and the very same GPU memory
-// is then visible to D3D11 — no CPU roundtrip anywhere.
+// is then visible to D3D11 - no CPU roundtrip anywhere.
 //
 // Pipeline (all on one dedicated render thread):
 //   mpv decode -> mpv_render_context_render(FBO/GL) -> D3D11 texture
@@ -77,7 +77,7 @@ typedef BOOL (WINAPI* PFNWGLDXLOCKOBJECTSNV)(HANDLE, GLint, HANDLE*);
 typedef BOOL (WINAPI* PFNWGLDXUNLOCKOBJECTSNV)(HANDLE, GLint, HANDLE*);
 
 // libmpv render exports, resolved from the libmpv-2.dll already loaded by the
-// player process — no import library, no second copy of mpv.
+// player process - no import library, no second copy of mpv.
 typedef int (*PFN_mpv_render_context_create)(mpv_render_context**, mpv_handle*, mpv_render_param*);
 typedef void (*PFN_mpv_render_context_set_update_callback)(mpv_render_context*, mpv_render_update_fn, void*);
 typedef uint64_t (*PFN_mpv_render_context_update)(mpv_render_context*);
@@ -240,7 +240,7 @@ namespace
         // streams: an RGBA input is classified as graphics and silently
         // bypassed (Blt succeeds, IsInUse stays false). A first VideoProcessor
         // pass therefore converts mpv's RGBA render target to NV12 on the GPU,
-        // and the VSR VideoProcessor consumes that NV12 — the exact input
+        // and the VSR VideoProcessor consumes that NV12 - the exact input
         // Chromium / mpv d3d11vpp / MPC-VR feed when VSR does engage.
         // Cross-device bridge (keyed mutex): the RGBA source frame written by
         // the main device, read by the video device; the RGBA VSR result
@@ -456,7 +456,7 @@ namespace
 
         // Both probes rejected: record the failing HRESULT for the audit but
         // keep the availability established at initialisation. Also snapshot
-        // the video-device health — a silently removed device explains
+        // the video-device health - a silently removed device explains
         // "successful" Blts that actually execute nothing.
         r.state.vsrQueryRaw = static_cast<uint32_t>(status);
         const HRESULT removed = r.vsrDevice ? r.vsrDevice->GetDeviceRemovedReason() : S_OK;
@@ -666,7 +666,7 @@ float2 PsChroma(VSOut i) : SV_Target
         if (inputWidth < 2 || inputHeight < 2) return false;
 
         // Aspect-fitted content size: the VSR VP renders full-frame into a
-        // target of exactly this size (dest rect == output rect, mandatory —
+        // target of exactly this size (dest rect == output rect, mandatory -
         // see vsrDestOffsetX comment), centering happens post-VSR.
         const double scale = std::min(outputWidth / static_cast<double>(inputWidth),
                                       outputHeight / static_cast<double>(inputHeight));
@@ -706,7 +706,7 @@ float2 PsChroma(VSOut i) : SV_Target
         if (FAILED(status)) return false;
 
         // NV12 intermediate lives entirely on the video device. The VsrProbe
-        // matrix proved a plain RENDER_TARGET NV12 engages VSR — no decoder
+        // matrix proved a plain RENDER_TARGET NV12 engages VSR - no decoder
         // bind or 16-alignment required.
         D3D11_TEXTURE2D_DESC nv12Desc{};
         nv12Desc.Width = inputWidth;
@@ -866,7 +866,7 @@ float2 PsChroma(VSOut i) : SV_Target
             DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709);
 
         // Debug isolation switch: ELYFLOW_VSR_NO_EXT=1 keeps the whole NV12
-        // chain but never enables the NVIDIA extension — separates "the VP
+        // chain but never enables the NVIDIA extension - separates "the VP
         // chain crashes" from "the VSR kernel crashes".
         const bool skipExtension = GetEnvironmentVariableA("ELYFLOW_VSR_NO_EXT", nullptr, 0) != 0;
         if (!skipExtension)
@@ -981,7 +981,7 @@ float2 PsChroma(VSOut i) : SV_Target
         }
         if (FAILED(status)) return false;
 
-        // Stage 2 (video device): NV12 -> RGBA upscale — the pass RTX VSR
+        // Stage 2 (video device): NV12 -> RGBA upscale - the pass RTX VSR
         // actually processes. GPU-timed as execution proof.
         CollectVsrTiming(r);
         if (r.outMutexRemote->AcquireSync(0, 100) != S_OK) return false;
@@ -1008,7 +1008,7 @@ float2 PsChroma(VSOut i) : SV_Target
         if (FAILED(status)) return false;
 
         // Debug isolation switch: ELYFLOW_VSR_NO_QUERY=1 keeps VSR enabled but
-        // never issues the state query after Blt — separates "the VSR kernel
+        // never issues the state query after Blt - separates "the VSR kernel
         // crashes" from "querying the extension while VSR runs crashes".
         static const bool skipQuery = GetEnvironmentVariableA("ELYFLOW_VSR_NO_QUERY", nullptr, 0) != 0;
         if (!skipQuery)
@@ -1110,7 +1110,7 @@ float2 PsChroma(VSOut i) : SV_Target
             {
                 if (FAILED(r.swapChain->ResizeBuffers(0, w, h, DXGI_FORMAT_UNKNOWN, 0)))
                 {
-                    r.SetMessage("ResizeBuffers a échoué — reconstruction reportée au prochain frame.");
+                    r.SetMessage("ResizeBuffers failed; rebuild deferred to the next frame.");
                     return false;
                 }
                 r.swapWidth = w;
@@ -1140,7 +1140,7 @@ float2 PsChroma(VSOut i) : SV_Target
                 r.glTexture, GL_TEXTURE_2D, WGL_ACCESS_READ_WRITE_NV);
             if (!r.interopTexture)
             {
-                r.SetMessage("wglDXRegisterObjectNV a refusé la texture de rendu.");
+                r.SetMessage("wglDXRegisterObjectNV rejected the render texture.");
                 return false;
             }
 
@@ -1154,7 +1154,7 @@ float2 PsChroma(VSOut i) : SV_Target
             r.api.DXUnlockObjectsNV(r.interopDevice, 1, &r.interopTexture);
             if (complete != GL_FRAMEBUFFER_COMPLETE)
             {
-                r.SetMessage("FBO incomplet sur la texture D3D11 partagée.");
+                r.SetMessage("Incomplete FBO on the shared D3D11 texture.");
                 return false;
             }
 
@@ -1164,7 +1164,7 @@ float2 PsChroma(VSOut i) : SV_Target
                 std::lock_guard lock(r.stateMutex);
                 r.state.lastVsrStatus = static_cast<int32_t>(vsrStatus);
                 strncpy_s(r.state.message,
-                    "RTX VSR refusé par le processeur vidéo D3D11; repli GPU direct.", _TRUNCATE);
+                    "RTX VSR rejected by the D3D11 video processor; direct GPU fallback.", _TRUNCATE);
                 return false;
             }
 
@@ -1235,12 +1235,12 @@ float2 PsChroma(VSOut i) : SV_Target
         if (FAILED(hr))
         {
             r.state.presentErrors++;
-            // DEVICE_REMOVED/RESET here is the signature of a driver TDR — the
+            // DEVICE_REMOVED/RESET here is the signature of a driver TDR - the
             // swapchain then shows black. Surface it in the state message so
             // the C# diagnostics can tell this apart from a pacing problem.
             const HRESULT removed = r.device ? r.device->GetDeviceRemovedReason() : S_OK;
             char buf[160];
-            sprintf_s(buf, "Present a echoue (0x%08X), GetDeviceRemovedReason=0x%08X.",
+            sprintf_s(buf, "Present failed (0x%08X), GetDeviceRemovedReason=0x%08X.",
                 static_cast<unsigned>(hr), static_cast<unsigned>(removed));
             strncpy_s(r.state.message, buf, _TRUNCATE);
             return;
@@ -1390,7 +1390,7 @@ float2 PsChroma(VSOut i) : SV_Target
         {
             std::lock_guard lock(r.stateMutex);
             r.state.active = 1;
-            strncpy_s(r.state.message, "Pipeline ELYCORE actif (mpv -> D3D11 -> VSR/FRUC -> swapchain).", _TRUNCATE);
+            strncpy_s(r.state.message, "ELYCORE pipeline active (mpv -> D3D11 -> VSR/FRUC -> swapchain).", _TRUNCATE);
         }
         return ELYFLOW_RENDERER_OK;
     }
@@ -1484,7 +1484,7 @@ float2 PsChroma(VSOut i) : SV_Target
             {
                 if (!r.audioCore.Render(r.device, r.context, r.renderTarget,
                     r.renderWidth, r.renderHeight, QpcSeconds()))
-                    r.SetMessage("ELYCAST AudioCore+: compilation/rendu shader D3D11 impossible.");
+                    r.SetMessage("ELYCAST AudioCore+: D3D11 shader compilation/rendering failed.");
                 // Advance the cadence deadline; if we fell behind (GPU hitch or a
                 // slow interval), resync to now so we never spiral into catch-up.
                 audioNextPresent += audioInterval;
@@ -1495,7 +1495,7 @@ float2 PsChroma(VSOut i) : SV_Target
             // mpv -> GL FBO -> D3D11 renderTarget (same GPU memory).
             else if (!r.api.DXLockObjectsNV(r.interopDevice, 1, &r.interopTexture))
             {
-                // Rendering into an unlocked interop texture is undefined —
+                // Rendering into an unlocked interop texture is undefined -
                 // that is exactly what showed up as random black frames.
                 skipFrame();
                 continue;
@@ -1545,7 +1545,7 @@ float2 PsChroma(VSOut i) : SV_Target
                     r.state.vsrActive = 0;
                     r.state.lastVsrStatus = static_cast<int32_t>(vsrStatus);
                     strncpy_s(r.state.message,
-                        "RTX VSR a échoué pendant VideoProcessorBlt; repli au prochain frame.", _TRUNCATE);
+                        "RTX VSR failed during VideoProcessorBlt; fallback on the next frame.", _TRUNCATE);
                     continue;
                 }
                 processedTexture = r.vsrResult;
@@ -1560,7 +1560,7 @@ float2 PsChroma(VSOut i) : SV_Target
                     r.state.vsrLevel = static_cast<int32_t>(r.vsrLevel);
                     if (!r.vsrEffective)
                         strncpy_s(r.state.message,
-                            "Passe D3D11 active, mais le driver NVIDIA ne déclare pas RTX VSR en utilisation (réglage pilote/source).",
+                            "D3D11 pass active, but the NVIDIA driver does not report RTX VSR in use (driver/source setting).",
                             _TRUNCATE);
                 }
             }
@@ -1642,7 +1642,7 @@ float2 PsChroma(VSOut i) : SV_Target
                 {
                     // FRUC may or may not have signalled out.signalFenceValue
                     // before failing. Skip that value so the next Signal never
-                    // reuses a fence value the SDK could already have written —
+                    // reuses a fence value the SDK could already have written -
                     // a non-monotonic Signal corrupts the fence and stalls the
                     // GPU queue.
                     ++r.fenceValue;
@@ -1653,7 +1653,7 @@ float2 PsChroma(VSOut i) : SV_Target
             {
                 // Interpolated frame sits temporally between previous and
                 // current: present it first, then the real frame half an
-                // interval later — doubles the displayed rate.
+                // interval later - doubles the displayed rate.
                 PresentTexture(r, r.interpolated);
                 const double currentDeadline = now + r.frameInterval * 0.5;
                 const double workMs = (QpcSeconds() - now) * 1000.0;
@@ -1730,20 +1730,20 @@ int32_t ElyFlowRenderer_Preflight(char* message, int32_t messageSize)
     ID3D11DeviceContext* context = nullptr;
     static const D3D_FEATURE_LEVEL levels[] = { D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0 };
     if (FAILED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, levels, 2, D3D11_SDK_VERSION, &device, nullptr, &context)))
-        return report("D3D11CreateDevice a échoué.", ELYFLOW_RENDERER_D3D11_FAILED);
+        return report("D3D11CreateDevice failed.", ELYFLOW_RENDERER_D3D11_FAILED);
 
     GlContext gl;
     GlApi api;
     int32_t code = ELYFLOW_RENDERER_OK;
-    const char* text = "Préflight OK : D3D11 + WGL_NV_DX_interop2 disponibles.";
+    const char* text = "Preflight OK: D3D11 + WGL_NV_DX_interop2 available.";
 
-    if (!gl.Create()) { code = ELYFLOW_RENDERER_WGL_FAILED; text = "Contexte WGL indisponible."; }
-    else if (!api.LoadFbo()) { code = ELYFLOW_RENDERER_GL_FUNCTIONS_MISSING; text = "Fonctions FBO OpenGL indisponibles."; }
-    else if (!api.LoadInterop()) { code = ELYFLOW_RENDERER_INTEROP_MISSING; text = "WGL_NV_DX_interop2 absent (driver non NVIDIA ?)."; }
+    if (!gl.Create()) { code = ELYFLOW_RENDERER_WGL_FAILED; text = "WGL context unavailable."; }
+    else if (!api.LoadFbo()) { code = ELYFLOW_RENDERER_GL_FUNCTIONS_MISSING; text = "OpenGL FBO functions unavailable."; }
+    else if (!api.LoadInterop()) { code = ELYFLOW_RENDERER_INTEROP_MISSING; text = "WGL_NV_DX_interop2 missing (non-NVIDIA driver?)."; }
     else
     {
         HANDLE interop = api.DXOpenDeviceNV(device);
-        if (!interop) { code = ELYFLOW_RENDERER_INTEROP_MISSING; text = "wglDXOpenDeviceNV a refusé le device D3D11."; }
+        if (!interop) { code = ELYFLOW_RENDERER_INTEROP_MISSING; text = "wglDXOpenDeviceNV rejected the D3D11 device."; }
         else api.DXCloseDeviceNV(interop);
     }
 

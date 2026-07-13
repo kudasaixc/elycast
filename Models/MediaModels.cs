@@ -1,8 +1,9 @@
 using System.Text.Json.Serialization;
+using Elysium_Cast_IPTV.Services;
 
 namespace Elysium_Cast_IPTV.Models;
 
-// ========================================================== VOD (films)
+// ========================================================== VOD (movies)
 public class VodStream
 {
     [JsonPropertyName("name")] public string Name { get; set; } = "";
@@ -134,7 +135,7 @@ public class PlayItem : System.ComponentModel.INotifyPropertyChanged
     public string Initial => string.IsNullOrWhiteSpace(Name) ? "?" : Name.Trim()[0].ToString().ToUpperInvariant();
 
     [JsonIgnore]
-    public string ArtistLine => Artist ?? AlbumArtist ?? "Artiste inconnu";
+    public string ArtistLine => Artist ?? AlbumArtist ?? LocalizationService.T("Unknown artist");
 
     [JsonIgnore]
     public string TrackNumberLabel => TrackNumber > 0 ? TrackNumber.ToString() : Initial;
@@ -162,9 +163,9 @@ public class PlayItem : System.ComponentModel.INotifyPropertyChanged
     public string KindLabel => Kind switch
     {
         PlayItemKind.Live => "Live",
-        PlayItemKind.Movie => "Film",
-        PlayItemKind.Series => "Série",
-        PlayItemKind.Episode => "Épisode",
+        PlayItemKind.Movie => "Movie",
+        PlayItemKind.Series => "Series",
+        PlayItemKind.Episode => "Episode",
         PlayItemKind.Local => "Local",
         _ => ""
     };
@@ -190,7 +191,7 @@ public class PlayItem : System.ComponentModel.INotifyPropertyChanged
     public static PlayItem FromEpisode(Episode e, string seriesName) => new()
     {
         Kind = PlayItemKind.Episode, Id = e.Id,
-        Name = $"{seriesName} — S{e.Season:00}E{e.EpisodeNum:00} {e.Title}".Trim(),
+        Name = $"{seriesName} - S{e.Season:00}E{e.EpisodeNum:00} {e.Title}".Trim(),
         Ext = e.ContainerExtension, CategoryName = seriesName
     };
 
@@ -214,7 +215,7 @@ public class PlayItem : System.ComponentModel.INotifyPropertyChanged
         {
             "mp3", "flac", "wav", "aac", "m4a", "ogg", "opus", "wma", "alac", "aiff", "ape"
         };
-        return audio.Contains(ext) ? "Audio local" : "Vidéo locale";
+        return audio.Contains(ext) ? "Local audio" : "Local video";
     }
 
     public bool SameAs(PlayItem? other) => other != null && other.Kind == Kind && other.Id == Id;
@@ -224,7 +225,7 @@ public class PlayItem : System.ComponentModel.INotifyPropertyChanged
 public sealed class LocalPlaylist
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public string Name { get; set; } = "Nouvelle playlist";
+    public string Name { get; set; } = "New playlist";
     public List<string> TrackPaths { get; set; } = new();
 }
 
