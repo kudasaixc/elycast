@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  ElyCast connects to IPTV services and M3U playlists, organizes local media, and uses the GPU for sharper video, smoother motion, and live audio processing.
+  ElyCast connects to IPTV services and M3U playlists, organizes local media, and harnesses the power of your GPU for sharper video, smoother motion, and live audio processing.
 </p>
 
 <p align="center">
