@@ -10,7 +10,7 @@ public class VodStream
     [JsonPropertyName("stream_id")] public int StreamId { get; set; }
     [JsonPropertyName("stream_icon")] public string? StreamIcon { get; set; }
     [JsonPropertyName("container_extension")] public string? ContainerExtension { get; set; }
-    [JsonPropertyName("category_id")] public string? CategoryId { get; set; }
+    [JsonPropertyName("category_id"), JsonConverter(typeof(FlexibleStringConverter))] public string? CategoryId { get; set; }
     [JsonIgnore] public string CategoryName { get; set; } = "";
 }
 
@@ -20,7 +20,7 @@ public class SeriesItem
     [JsonPropertyName("name")] public string Name { get; set; } = "";
     [JsonPropertyName("series_id")] public int SeriesId { get; set; }
     [JsonPropertyName("cover")] public string? Cover { get; set; }
-    [JsonPropertyName("category_id")] public string? CategoryId { get; set; }
+    [JsonPropertyName("category_id"), JsonConverter(typeof(FlexibleStringConverter))] public string? CategoryId { get; set; }
     [JsonPropertyName("plot")] public string? Plot { get; set; }
     [JsonIgnore] public string CategoryName { get; set; } = "";
 }
@@ -33,7 +33,7 @@ public class SeriesInfo
 
 public class Episode
 {
-    [JsonPropertyName("id")] public string Id { get; set; } = "";
+    [JsonPropertyName("id"), JsonConverter(typeof(FlexibleStringConverter))] public string Id { get; set; } = "";
     [JsonPropertyName("title")] public string Title { get; set; } = "";
     [JsonPropertyName("container_extension")] public string? ContainerExtension { get; set; }
     [JsonPropertyName("season")] public int Season { get; set; }
@@ -218,7 +218,12 @@ public class PlayItem : System.ComponentModel.INotifyPropertyChanged
         return audio.Contains(ext) ? "Local audio" : "Local video";
     }
 
-    public bool SameAs(PlayItem? other) => other != null && other.Kind == Kind && other.Id == Id;
+    [JsonIgnore]
+    public string IdentityKey => Kind + ":" + (Kind == PlayItemKind.Local
+        ? LocalLibraryService.PathOf(this).ToUpperInvariant()
+        : Kind == PlayItemKind.Live && !string.IsNullOrWhiteSpace(DirectUrl) ? DirectUrl : Id);
+
+    public bool SameAs(PlayItem? other) => other != null && IdentityKey == other.IdentityKey;
 }
 
 /// <summary>An audio-only user playlist. Track paths remain stable across metadata refreshes.</summary>

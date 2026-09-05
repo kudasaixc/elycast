@@ -340,7 +340,7 @@
                                               Stretch="Uniform" Width="22" Height="20"
                                               Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
                                               StrokeThickness="1.3"/>
-                                        <TextBlock Text="Controls" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,0"
+                                        <TextBlock Text="Settings" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,0"
                                                    Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
                                     </StackPanel>
                                 </RadioButton>
@@ -349,7 +349,7 @@
                                     <StackPanel>
                                         <Path Data="M8,1 L3,1 L3,17 L8,17 M6,9 H15 M11,5 L15,9 L11,13" Stretch="Uniform"
                                               Width="22" Height="20" Stroke="{DynamicResource MutedBrush}" StrokeThickness="1.3"/>
-                                        <TextBlock Text="Exit" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,0"
+                                        <TextBlock Text="Sign out" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,0"
                                                    Foreground="{DynamicResource MutedBrush}"/>
                                     </StackPanel>
                                 </Button>
@@ -1237,7 +1237,7 @@
                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="260"/></Grid.ColumnDefinitions>
                                                     <StackPanel>
                                                         <TextBlock Text="Visualizer renderer" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
-                                                        <TextBlock Text="Switching is immediate. AudioCore+ requires ELYCORE; the classic renderer remains available as a fallback."
+                                                        <TextBlock Text="Choose Classic, or AudioCore+ when using ELYCORE."
                                                                    FontSize="11" Margin="0,4,18,0" TextWrapping="Wrap" Foreground="{DynamicResource FaintBrush}"/>
                                                         <TextBlock x:Name="AudioRendererStatusText" FontSize="11" Margin="0,6,18,0"
                                                                    TextWrapping="Wrap" Foreground="{DynamicResource AccentSoftBrush}"/>
@@ -1328,7 +1328,7 @@
                                                 <StackPanel>
                                                     <TextBlock Text="Video backend" VerticalAlignment="Center"
                                                                Foreground="{DynamicResource TextBrush}"/>
-                                                    <TextBlock Text="mpv GPU targets Direct3D/libplacebo rendering. RTX VSR adds NVIDIA driver AI upscaling (GeForce RTX 20 series or newer, driver 531+). VLC remains the stable fallback."
+                                                    <TextBlock Text="Choose a playback engine. If a video will not play, try VLC."
                                                                FontSize="11" Margin="0,4,16,0" TextWrapping="Wrap"
                                                                Foreground="{DynamicResource FaintBrush}"/>
                                                 </StackPanel>
@@ -1427,9 +1427,9 @@
                                                             Text="Magpie not verified"/>
                                              </StackPanel>
 
-                                             <TextBlock Text="mpv UPSCALING (internal, GPU)" Margin="0,26,0,6" FontSize="11"
+                                             <TextBlock Text="VIDEO SHARPNESS" Margin="0,26,0,6" FontSize="11"
                                                         FontWeight="SemiBold" Foreground="{DynamicResource MutedBrush}"/>
-                                             <TextBlock Text="The target resolution pre-upscales the stream on the GPU (RTX VSR on the RTX backend, D3D11 video processor otherwise) and works with every method. The selected algorithm (FSR, NVIDIA, FSRCNNX, Anime4K...) then scales to the window size, while CAS / NVSharpen remains active when no enlargement is needed. Shaders are downloaded automatically on first use."
+                                             <TextBlock Text="Sharpen videos when watching at a larger size. Higher quality uses more graphics power. The first use may require a download."
                                                         FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap"
                                                         Foreground="{DynamicResource FaintBrush}"/>
                                              <Grid Margin="0,4,0,0">
@@ -1505,7 +1505,7 @@
                                             <StackPanel x:Name="SettingsElyColorPanel" Visibility="Collapsed">
                                                 <TextBlock Text="ELYCOLOR" Margin="0,26,0,6" FontSize="11"
                                                            FontWeight="SemiBold" Foreground="{DynamicResource MutedBrush}"/>
-                                                <TextBlock Text="Image filters applied live through mpv: saturation, brightness, contrast, gamma, and hue. User filters can also retain the backend, upscaling, and target resolution."
+                                                <TextBlock Text="Adjust the picture while watching, then save your choices as a preset."
                                                            FontSize="11" Margin="0,0,0,12" TextWrapping="Wrap"
                                                            Foreground="{DynamicResource FaintBrush}"/>
 
@@ -1863,7 +1863,7 @@
                                             <StackPanel x:Name="SettingsElyFlowPanel" Visibility="Collapsed">
                                                 <TextBlock Text="ELYFLOW" Margin="0,26,0,6" FontSize="11"
                                                            FontWeight="SemiBold" Foreground="{DynamicResource MutedBrush}"/>
-                                                <TextBlock Text="NVIDIA FRUC produces one intermediate frame per source frame (2x: 24&gt;48, 30&gt;60). The manual target applies only to mpv pacing; requesting 120-360 FPS does not create additional FRUC frames and would waste GPU resources."
+                                                <TextBlock Text="Make motion smoother by adding an intermediate frame: 24 FPS becomes 48, and 30 becomes 60. Requires compatible NVIDIA hardware."
                                                            FontSize="11" Margin="0,0,0,12" TextWrapping="Wrap"
                                                            Foreground="{DynamicResource FaintBrush}"/>
 
@@ -1886,14 +1886,14 @@
                                                               Style="{StaticResource FieldCombo}"
                                                               SelectionChanged="ElyFlowCombo_Changed">
                                                         <ComboBoxItem Tag="nvidia-fruc" Content="NVIDIA Optical Flow FRUC"/>
-                                                        <ComboBoxItem Tag="mpv-pacing" Content="mpv pacing / display-resample"/>
+                                                        <ComboBoxItem Tag="mpv-pacing" Content="Match the display refresh rate"/>
                                                     </ComboBox>
                                                 </Grid>
 
                                                 <CheckBox x:Name="ElyFlowRtxVsrSwitch" Margin="0,12,0,2"
                                                           Style="{StaticResource Switch}"
-                                                          Content="RTX Video Super Resolution before FRUC"
-                                                          ToolTip="NVIDIA AI upscale on D3D11, followed by FRUC interpolation at output resolution."
+                                                          Content="RTX Video Super Resolution"
+                                                          ToolTip="Improve video detail with NVIDIA Super Resolution."
                                                           Click="ElyFlowSetting_Changed"/>
 
                                                 <Grid Margin="0,10,0,0">
@@ -1901,7 +1901,7 @@
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="260"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock x:Name="ElyFlowTargetLabel" Text="Target FPS (mpv pacing)" VerticalAlignment="Center"
+                                                    <TextBlock x:Name="ElyFlowTargetLabel" Text="Display frame rate" VerticalAlignment="Center"
                                                                Foreground="{DynamicResource TextBrush}"/>
                                                     <ComboBox x:Name="ElyFlowTargetCombo" Grid.Column="1" Height="40"
                                                               Style="{StaticResource FieldCombo}"
@@ -1949,7 +1949,7 @@
 
                                             <TextBlock Text="ELYSMART" Margin="0,26,0,6" FontSize="11"
                                                        FontWeight="SemiBold" Foreground="{DynamicResource AccentBBrush}"/>
-                                            <TextBlock Text="ElyCast's built-in performance engineer. Measurements, detections, and estimates remain identified separately."
+                                            <TextBlock Text="Check how ElyCast runs on your PC and review suggested settings before applying them."
                                                        Foreground="{DynamicResource FaintBrush}" TextWrapping="Wrap" Margin="0,0,0,14"/>
                                             <Grid>
                                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="260"/></Grid.ColumnDefinitions>
@@ -1985,16 +1985,6 @@
                                                       Content="Zap with the ↑ ↓ arrow keys" Click="Setting_Changed"/>
                                             <CheckBox x:Name="ConfirmExitSwitch" Style="{StaticResource Switch}"
                                                       Content="Confirm before exiting" Click="Setting_Changed"/>
-                                            <Grid Margin="0,10,0,0">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="180"/>
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Text="Console duration at startup (s)" VerticalAlignment="Center"
-                                                           Foreground="{DynamicResource TextBrush}"/>
-                                                <Slider x:Name="BootSlider" Grid.Column="1" Minimum="2" Maximum="12"
-                                                        Style="{StaticResource VolumeSlider}" ValueChanged="SliderSetting_Changed"/>
-                                            </Grid>
 
                                             <StackPanel Orientation="Horizontal" Margin="0,24,0,0">
                                                 <Button Content="Open data folder" Style="{StaticResource GhostButton}"
@@ -2003,10 +1993,6 @@
                                                         Height="42" Width="130" Margin="10,0,0,0" Click="ResetSettings_Click"/>
                                             </StackPanel>
 
-                                            <TextBlock Text="COMING SOON" Margin="0,28,0,8" FontSize="11"
-                                                       FontWeight="SemiBold" Foreground="{DynamicResource MutedBrush}"/>
-                                            <TextBlock Foreground="{DynamicResource FaintBrush}" FontSize="12" TextWrapping="Wrap"
-                                                       Text="Stream recording and screenshot   • Picture-in-Picture and taskbar minimization   • Multi-stream mosaic   • PIN parental controls   • Local logo cache   • Shortcut help overlay (?)"/>
                                             </StackPanel>
                                         </StackPanel>
                                     </ScrollViewer>

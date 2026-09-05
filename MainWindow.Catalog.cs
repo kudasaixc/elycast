@@ -44,6 +44,7 @@ public partial class MainWindow
     {
         if (!_connected || _suppressNav) return;
         if (sender is not RadioButton { IsChecked: true, Tag: string target }) return;
+        _sectionCts?.Cancel();
         if (target == "Settings") { _sectionBeforeSettings = _section; OpenSettingsPanel(); return; }
 
         // Local-only mode sets _connected so the local library can use the
@@ -84,13 +85,22 @@ public partial class MainWindow
 
     private async Task ShowSectionAsync(Section s, CancellationToken ct)
     {
+        var service = _iptv;
         if (s == Section.Movies && _movieItems == null)
         {
             SectionTitle.Text = LocalizationService.T("Movies...");
-            try { _movieItems = (await _iptv.GetVodAsync(ct)).Select(PlayItem.FromVod).ToList(); MarkFavorites(_movieItems); }
+            try
+            {
+                var loaded = (await service.GetVodAsync(ct)).Select(PlayItem.FromVod).ToList();
+                ct.ThrowIfCancellationRequested();
+                if (!ReferenceEquals(service, _iptv) || _shuttingDown) return;
+                _movieItems = loaded;
+                MarkFavorites(loaded);
+            }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
+                if (ct.IsCancellationRequested || !ReferenceEquals(service, _iptv) || _shuttingDown) return;
                 DebugConsole.Error("VOD: " + ex.Message);
                 SectionTitle.Text = LocalizationService.T("Movies unavailable: try again");
                 return;
@@ -99,10 +109,18 @@ public partial class MainWindow
         else if (s == Section.Series && _seriesItems == null)
         {
             SectionTitle.Text = LocalizationService.T("Series...");
-            try { _seriesItems = (await _iptv.GetSeriesAsync(ct)).Select(PlayItem.FromSeries).ToList(); }
+            try
+            {
+                var loaded = (await service.GetSeriesAsync(ct)).Select(PlayItem.FromSeries).ToList();
+                ct.ThrowIfCancellationRequested();
+                if (!ReferenceEquals(service, _iptv) || _shuttingDown) return;
+                _seriesItems = loaded;
+                MarkFavorites(loaded);
+            }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
+                if (ct.IsCancellationRequested || !ReferenceEquals(service, _iptv) || _shuttingDown) return;
                 DebugConsole.Error("Series: " + ex.Message);
                 SectionTitle.Text = LocalizationService.T("Series unavailable: try again");
                 return;
@@ -115,6 +133,7 @@ public partial class MainWindow
     private void ShowSection(Section s)
     {
         _section = s;
+        _selectedCategory = AllCategories;
         List<PlayItem> source = s switch
         {
             Section.Live => _liveItems,
@@ -174,7 +193,10 @@ public partial class MainWindow
         MarkFavorites(_localVideoItems);
 
         var snapshot = _localAudioItems.ToList();
-        var enriched = await Task.Run(() => snapshot.Select(LocalLibraryService.EnrichAudioItem).ToList());
+        List<PlayItem> enriched;
+        try { enriched = await Task.Run(() => snapshot.Select(LocalLibraryService.EnrichAudioItem).ToList()); }
+        catch (Exception ex) { DebugConsole.Exception("Library metadata refresh failed", ex); return; }
+        if (_shuttingDown) return;
         var enrichedByPath = enriched.ToDictionary(LocalLibraryService.PathOf, StringComparer.OrdinalIgnoreCase);
         // Merge into the live list: imports may append while TagLib is reading
         // the startup snapshot, and removals must not be resurrected.
@@ -192,11 +214,6 @@ public partial class MainWindow
         StateStore.Current.LocalAudioLibrary = _localAudioItems.ToList();
         StateStore.Current.LocalVideoLibrary = _localVideoItems.ToList();
         StateStore.Save();
-    }
-
-    private void AddLocalFiles_Click(object sender, RoutedEventArgs e)
-    {
-        ImportLocalFolder_Click(sender, e);
     }
 
     private void RemoveLocalFile_Click(object sender, RoutedEventArgs e)
@@ -231,8 +248,8 @@ public partial class MainWindow
         var targets = items.Where(item => item.Kind == PlayItemKind.Local).DistinctBy(LocalLibraryService.PathOf).ToList();
         if (targets.Count == 0) return;
 
-        bool Matches(PlayItem candidate) => targets.Any(target => candidate.SameAs(target));
         var removedPaths = targets.Select(LocalLibraryService.PathOf).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        bool Matches(PlayItem candidate) => candidate.Kind == PlayItemKind.Local && removedPaths.Contains(LocalLibraryService.PathOf(candidate));
 
         _localAudioItems.RemoveAll(Matches);
         _localVideoItems.RemoveAll(Matches);
@@ -240,12 +257,22 @@ public partial class MainWindow
             playlist.TrackPaths.RemoveAll(path => removedPaths.Contains(path));
         for (var i = _audioQueue.Count - 1; i >= 0; i--)
             if (Matches(_audioQueue[i])) _audioQueue.RemoveAt(i);
-        _audioPlayContext?.RemoveAll(Matches);
+        if (_audioPlayContext != null)
+        {
+            _audioAutoIndex -= _audioPlayContext.Take(_audioAutoIndex + 1).Count(Matches);
+            _audioPlayContext.RemoveAll(Matches);
+        }
         foreach (var profile in StateStore.Current.Profiles.Values)
+        {
             profile.Favorites.RemoveAll(Matches);
+            if (profile.LastPlayed != null && Matches(profile.LastPlayed)) profile.LastPlayed = null;
+        }
 
         if (_current != null && Matches(_current))
         {
+            Interlocked.Increment(ref _playbackGeneration);
+            _progressTimer.Stop(); _statsTimer.Stop();
+            _mediaTransport.Clear();
             try { _videoBackend?.Stop(PlaybackEndReason.Replaced); } catch { }
             HideAudioVisualizer();
             _current = null;
@@ -254,7 +281,6 @@ public partial class MainWindow
 
         UpdateQueueLabel();
         SaveLocalLibrary();
-        StateStore.Save();
         ShowSection(_section);
     }
 
@@ -309,10 +335,7 @@ public partial class MainWindow
         if (o is not PlayItem c) return false;
         if (_selectedCategory != AllCategories && !string.IsNullOrEmpty(_selectedCategory)
             && !string.Equals(c.CategoryName, _selectedCategory, StringComparison.Ordinal)) return false;
-        var q = SearchBox.Text;
-        return string.IsNullOrWhiteSpace(q) || c.Name.Contains(q, StringComparison.OrdinalIgnoreCase)
-            || (c.Artist?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-            || (c.Album?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
+        return _catalogSearch.Matches(c.Name, c.Artist, c.Album, c.CategoryName);
     }
 
     private void Category_Changed(object sender, SelectionChangedEventArgs e)
@@ -325,6 +348,23 @@ public partial class MainWindow
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
+        _searchTimer ??= CreateSearchTimer();
+        _searchTimer.Stop();
+        _searchTimer.Start();
+    }
+
+    private readonly MediaSearch _catalogSearch = new();
+    private System.Windows.Threading.DispatcherTimer? _searchTimer;
+    private System.Windows.Threading.DispatcherTimer CreateSearchTimer()
+    {
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) };
+        timer.Tick += (_, _) => { timer.Stop(); RefreshCatalogSearch(); };
+        return timer;
+    }
+
+    private void RefreshCatalogSearch()
+    {
+        _catalogSearch.SetQuery(SearchBox.Text);
         if (_section == Section.LocalAudio && IsAudioGroupMode) { ApplyMusicGroupFilter(); return; }
         _view?.Refresh(); UpdateCount();
     }
@@ -345,8 +385,8 @@ public partial class MainWindow
     // ============ FAVOURITES ============
     private void MarkFavorites(IEnumerable<PlayItem> list)
     {
-        var set = _state.Favorites.Select(f => f.Kind + ":" + f.Id).ToHashSet();
-        foreach (var it in list) it.IsFavorite = set.Contains(it.Kind + ":" + it.Id);
+        var set = _state.Favorites.Select(f => f.IdentityKey).ToHashSet(StringComparer.Ordinal);
+        foreach (var it in list) it.IsFavorite = set.Contains(it.IdentityKey);
     }
 
     private void Fav_Toggle(object sender, RoutedEventArgs e)
@@ -389,14 +429,23 @@ public partial class MainWindow
         UpdatePanelsVideo();
         try
         {
-            _seriesInfo = await _iptv.GetSeriesInfoAsync(series.Id, cts.Token);
+            var info = await _iptv.GetSeriesInfoAsync(series.Id, cts.Token);
             cts.Token.ThrowIfCancellationRequested();
+            if (_shuttingDown) return;
+            _seriesInfo = info;
             var seasons = _seriesInfo.Episodes.Keys.OrderBy(k => int.TryParse(k, out var n) ? n : 0).ToList();
-            SeasonCombo.ItemsSource = seasons.Select(s => $"Saison {s}").ToList();
+            SeasonCombo.ItemsSource = seasons.Select(s => LocalizationService.Format("Season {0}", s)).ToList();
             if (seasons.Count > 0) SeasonCombo.SelectedIndex = 0;
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) { DebugConsole.Error("Series details: " + ex.Message); }
+        catch (Exception ex)
+        {
+            if (!cts.IsCancellationRequested && !_shuttingDown)
+            {
+                DebugConsole.Error("Series details: " + ex.Message);
+                SeriesPanelTitle.Text = LocalizationService.T("Could not load episodes. Open the series to retry.");
+            }
+        }
         finally
         {
             if (ReferenceEquals(_seriesCts, cts)) _seriesCts = null;

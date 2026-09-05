@@ -1,7 +1,6 @@
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using Elysium_Cast_IPTV.Models;
 
 namespace Elysium_Cast_IPTV.Services;
@@ -17,36 +16,18 @@ public static class ProfileStore
     private static readonly string FilePath = Path.Combine(Dir, "profiles.json");
     private const string ProtectedHeader = "ElyCastProfiles:v1:";
 
-    private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
+    private static readonly ProtectedJsonStore<List<Profile>> Store = new(FilePath, ProtectedHeader);
 
     public static List<Profile> Load()
     {
-        try
-        {
-            if (!File.Exists(FilePath)) return new();
-            var json = File.ReadAllText(FilePath);
-            if (json.StartsWith(ProtectedHeader, StringComparison.Ordinal))
-            {
-                var cipher = Convert.FromBase64String(json[ProtectedHeader.Length..]);
-                json = Encoding.UTF8.GetString(ProtectedData.Unprotect(cipher, null, DataProtectionScope.CurrentUser));
-            }
-            return JsonSerializer.Deserialize<List<Profile>>(json) ?? new();
-        }
-        catch (Exception ex)
-        {
-            DebugConsole.Error("Could not read profiles: " + ex.Message);
-            return new();
-        }
+        return Store.Load(profiles => (profiles ?? []).Where(profile => profile != null).ToList());
     }
 
     public static void Save(List<Profile> profiles)
     {
         try
         {
-            Directory.CreateDirectory(Dir);
-            var json = JsonSerializer.Serialize(profiles, Options);
-            var cipher = ProtectedData.Protect(Encoding.UTF8.GetBytes(json), null, DataProtectionScope.CurrentUser);
-            WriteAtomically(FilePath, ProtectedHeader + Convert.ToBase64String(cipher));
+            Store.Save(profiles);
             DebugConsole.Debug($"Profiles saved ({profiles.Count}) -> {FilePath}");
         }
         catch (Exception ex)
@@ -79,17 +60,4 @@ public static class ProfileStore
 
     public static string FolderPath => Dir;
 
-    private static void WriteAtomically(string path, string content)
-    {
-        var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
-        {
-            File.WriteAllText(temp, content);
-            File.Move(temp, path, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(temp)) File.Delete(temp);
-        }
-    }
 }

@@ -30,10 +30,32 @@ public sealed class LocalLibraryService
         Task.Run<IReadOnlyList<PlayItem>>(() =>
         {
             Func<string, bool> predicate = audio ? IsAudio : IsVideo;
-            var files = Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
+            var files = DiscoverFiles([folder], ct)
                 .Where(predicate).ToList();
             return BuildItems(files, audio, progress, ct);
         }, ct);
+
+    /// <summary>One cancellable discovery path for both folder import and drops.</summary>
+    internal static IEnumerable<string> DiscoverFiles(IEnumerable<string> paths, CancellationToken ct)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true, IgnoreInaccessible = true,
+            AttributesToSkip = FileAttributes.ReparsePoint
+        };
+        foreach (var path in paths)
+        {
+            ct.ThrowIfCancellationRequested();
+            IEnumerable<string> files = Directory.Exists(path)
+                ? Directory.EnumerateFiles(path, "*", options) : File.Exists(path) ? [path] : [];
+            foreach (var file in files)
+            {
+                ct.ThrowIfCancellationRequested();
+                if ((IsAudio(file) || IsVideo(file)) && seen.Add(Path.GetFullPath(file))) yield return Path.GetFullPath(file);
+            }
+        }
+    }
 
     /// <summary>Imports an explicit set of file paths (file picker or drag-and-drop).</summary>
     public Task<IReadOnlyList<PlayItem>> ImportFilesAsync(
@@ -119,11 +141,13 @@ public sealed class LocalLibraryService
         switch (mode)
         {
             case "albums":
-                return tracks.GroupBy(t => t.Album ?? LocalizationService.T("Unknown album"), StringComparer.CurrentCultureIgnoreCase)
+                return tracks.GroupBy(t => (
+                        Album: (t.Album ?? LocalizationService.T("Unknown album")).ToUpperInvariant(),
+                        Artist: (t.AlbumArtist ?? t.Artist ?? LocalizationService.T("Unknown artist")).ToUpperInvariant()))
                     .Select(g => new MusicGroup
                     {
                         Kind = MusicGroupKind.Album,
-                        Name = g.Key,
+                        Name = g.First().Album ?? LocalizationService.T("Unknown album"),
                         Subtitle = MostCommon(g, t => t.AlbumArtist ?? t.Artist) ?? LocalizationService.T("Unknown artist"),
                         Tracks = AlbumOrder(g).ToList()
                     })
@@ -190,7 +214,8 @@ public sealed class LocalLibraryService
 
     public static IReadOnlyList<PlayItem> ResolvePlaylist(LocalPlaylist playlist, IEnumerable<PlayItem> library)
     {
-        var byPath = library.ToDictionary(PathOf, StringComparer.OrdinalIgnoreCase);
+        var byPath = library.GroupBy(PathOf, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
         return playlist.TrackPaths.Where(byPath.ContainsKey).Select(path => byPath[path]).ToList();
     }
 

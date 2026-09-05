@@ -16,6 +16,13 @@ public partial class MainWindow
     private void Play(PlayItem item, bool persistHistory = true)
     {
         if (_videoBackend == null) return;
+        if (item.Kind == PlayItemKind.Series) { OpenSeries(item); return; }
+        if (item.Kind == PlayItemKind.Local && !System.IO.File.Exists(LocalLibraryService.PathOf(item)))
+        {
+            ShowOverlay("File not found on disk.", spinning: false); return;
+        }
+        _reconnectTimer?.Stop();
+        _userSeeking = false;
         var generation = Interlocked.Increment(ref _playbackGeneration);
         CancelEpgRequest();
         _current = item;
@@ -167,6 +174,7 @@ public partial class MainWindow
     {
         if (_current != null && IsAudioOnlyItem(_current))
         {
+            if (dir > 0 && TryPlayQueuedAudio()) return;
             PlayAdjacentAudio(dir);
             return;
         }
@@ -191,7 +199,7 @@ public partial class MainWindow
             var now = list.FirstOrDefault(x => x.Start <= DateTime.Now && DateTime.Now < x.End) ?? list[0];
             var next = list.SkipWhile(x => x != now).Skip(1).FirstOrDefault();
             TopSubtitle.Text = next != null
-                ? $"● {now.Title}   ·   ensuite : {next.Title}"
+                ? LocalizationService.Format("{0} · Next: {1}", now.Title, next.Title)
                 : $"● {now.Title}";
             EpgProgress.Tag = now;
             EpgProgress.Value = now.ProgressPercent;
@@ -286,8 +294,9 @@ public partial class MainWindow
 
     private async void RefreshSubtitleTracksSoon(int generation)
     {
+        var expectedBackend = _videoBackend;
         await Task.Delay(1200);
-        if (generation != _playbackGeneration || _current == null) return;
+        if (_shuttingDown || generation != _playbackGeneration || _current == null || !ReferenceEquals(expectedBackend, _videoBackend)) return;
         if (!Dispatcher.CheckAccess())
         {
             Dispatcher.Invoke(RefreshSubtitleTracks);
@@ -368,8 +377,9 @@ public partial class MainWindow
 
     private async void RefreshAudioTracksSoon(int generation)
     {
+        var expectedBackend = _videoBackend;
         await Task.Delay(1200);
-        if (generation != _playbackGeneration || _current == null) return;
+        if (_shuttingDown || generation != _playbackGeneration || _current == null || !ReferenceEquals(expectedBackend, _videoBackend)) return;
         if (!Dispatcher.CheckAccess())
         {
             Dispatcher.Invoke(RefreshAudioTracks);

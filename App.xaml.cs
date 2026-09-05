@@ -17,7 +17,19 @@ public partial class App : Application
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
         // 0) load persisted settings + favourites, apply the accent colour
-        StateStore.Load();
+        var cleanDiagnostic = Environment.GetEnvironmentVariable("ELYCAST_DIAGNOSTIC_CLEAN") == "1"
+            && System.IO.File.Exists(Environment.GetEnvironmentVariable("ELYCAST_DIAGNOSTIC_FILE"));
+        if (!cleanDiagnostic) StateStore.Load();
+        else
+        {
+            StateStore.SuppressSaves = true;
+            StateStore.Settings.OnboardingCompleted = true;
+            StateStore.Settings.PreferredConnection = "local";
+            StateStore.Settings.AutoConnectProfile = "";
+            StateStore.Settings.BootSeconds = 0;
+            StateStore.Settings.ConfirmExit = false;
+            StateStore.Settings.DefaultVolume = 0;
+        }
         // Opt-in renderer validation runs must be reproducible on a clean
         // machine and must not persist test preferences into the user's state.
         // The diagnostic media hook below already scopes the process to a local

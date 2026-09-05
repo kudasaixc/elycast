@@ -1,7 +1,4 @@
 using System.IO;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using Elysium_Cast_IPTV.Models;
 
 namespace Elysium_Cast_IPTV.Services;
@@ -15,32 +12,15 @@ public static class StateStore
     private static readonly string Dir =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ElyCast");
     private static readonly string FilePath = Path.Combine(Dir, "state.json");
-    private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
     private const string ProtectedHeader = "ElyCastState:v1:";
+    private static readonly ProtectedJsonStore<AppState> Store = new(FilePath, ProtectedHeader);
 
     public static AppState Current { get; private set; } = new();
     public static bool SuppressSaves { get; set; }
 
     public static void Load()
     {
-        try
-        {
-            if (File.Exists(FilePath))
-            {
-                var content = File.ReadAllText(FilePath);
-                if (content.StartsWith(ProtectedHeader, StringComparison.Ordinal))
-                {
-                    var cipher = Convert.FromBase64String(content[ProtectedHeader.Length..]);
-                    content = Encoding.UTF8.GetString(ProtectedData.Unprotect(cipher, null, DataProtectionScope.CurrentUser));
-                }
-                Current = Normalize(JsonSerializer.Deserialize<AppState>(content));
-            }
-        }
-        catch (Exception ex)
-        {
-            DebugConsole.Error("Could not read state: " + ex.Message);
-            Current = new();
-        }
+        Current = Store.Load(Normalize);
     }
 
     public static void Save()
@@ -48,10 +28,7 @@ public static class StateStore
         if (SuppressSaves) return;
         try
         {
-            Directory.CreateDirectory(Dir);
-            var json = JsonSerializer.Serialize(Normalize(Current), Options);
-            var cipher = ProtectedData.Protect(Encoding.UTF8.GetBytes(json), null, DataProtectionScope.CurrentUser);
-            WriteAtomically(FilePath, ProtectedHeader + Convert.ToBase64String(cipher));
+            Store.Save(Normalize(Current));
         }
         catch (Exception ex)
         {
@@ -74,7 +51,7 @@ public static class StateStore
 
     public static string FolderPath => Dir;
 
-    private static AppState Normalize(AppState? state)
+    internal static AppState Normalize(AppState? state)
     {
         state ??= new AppState();
         state.Settings ??= new Settings();
@@ -83,6 +60,15 @@ public static class StateStore
         state.LocalAudioLibrary ??= new List<PlayItem>();
         state.LocalVideoLibrary ??= new List<PlayItem>();
         state.LocalPlaylists ??= new List<LocalPlaylist>();
+        state.LocalLibrary.RemoveAll(item => item == null);
+        state.LocalAudioLibrary.RemoveAll(item => item == null || string.IsNullOrWhiteSpace(item.DirectUrl ?? item.Id));
+        state.LocalVideoLibrary.RemoveAll(item => item == null || string.IsNullOrWhiteSpace(item.DirectUrl ?? item.Id));
+        foreach (var key in state.Profiles.Keys.ToList())
+        {
+            var profile = state.Profiles[key] ??= new ProfileState();
+            profile.Favorites ??= new();
+            profile.Favorites.RemoveAll(item => item == null);
+        }
 
         // v1.1 migration: the former mixed local library is split once without
         // losing paths, favourites or resume entries.
@@ -105,7 +91,8 @@ public static class StateStore
             playlist.Id = string.IsNullOrWhiteSpace(playlist.Id) ? Guid.NewGuid().ToString("N") : playlist.Id;
             playlist.Name = string.IsNullOrWhiteSpace(playlist.Name) ? "Playlist" : playlist.Name.Trim();
             playlist.TrackPaths ??= new List<string>();
-            playlist.TrackPaths = playlist.TrackPaths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            playlist.TrackPaths = playlist.TrackPaths.Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         }
 
         var s = state.Settings;
@@ -137,6 +124,7 @@ public static class StateStore
         s.ElySmartIgnoredHealthIssues ??= new List<string>();
         s.ElySmartIgnoredHealthIssues.RemoveAll(value => !Enum.TryParse<ElySmart.HealthIssueKind>(value, out _));
         s.ElyColorCustomFilters ??= new List<ElyColorFilter>();
+        s.ElyColorCustomFilters.RemoveAll(filter => filter == null);
         s.ElySoundCustomProfile ??= ElySoundProfile.DefaultCustom();
         NormalizeElySoundProfile(s.ElySoundCustomProfile);
         s.OsdUpscaleModes ??= new List<string>();
@@ -185,17 +173,4 @@ public static class StateStore
         profile.Limiter = 0;
     }
 
-    private static void WriteAtomically(string path, string content)
-    {
-        var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
-        {
-            File.WriteAllText(temp, content);
-            File.Move(temp, path, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(temp)) File.Delete(temp);
-        }
-    }
 }

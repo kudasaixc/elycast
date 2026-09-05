@@ -91,13 +91,13 @@ public partial class MainWindow
             var elyCore = string.Equals(StateStore.Settings.VideoBackend, "elycore", StringComparison.OrdinalIgnoreCase);
             ElyFlowRtxVsrSwitch.IsEnabled = elyCore;
             ElyFlowRtxVsrSwitch.ToolTip = LocalizationService.T(elyCore
-                ? "Native ELYCORE RTX VSR pass, independent from FRUC interpolation."
-                : "Native RTX VSR requires the ELYCORE backend.");
+                ? "Improve video detail, with or without motion smoothing."
+                : "Select ELYCORE to use this setting.");
         }
         ElyFlowTargetCombo.IsEnabled = !nativeFruc;
         ElyFlowTargetCombo.ToolTip = LocalizationService.T(nativeFruc
-            ? "The NVIDIA FRUC runtime is a 2x interpolator. Effective frame rate depends on the source."
-            : "Frame rate requested from mpv display-resample.");
+            ? "Motion smoothing doubles the source frame rate."
+            : "Choose a rate supported by your display. This mode does not create intermediate images.");
         if (ElyFlowTargetLabel != null)
             ElyFlowTargetLabel.Opacity = nativeFruc ? 0.55 : 1.0;
     }

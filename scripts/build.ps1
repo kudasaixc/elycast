@@ -28,10 +28,20 @@ function Find-CMake {
 }
 
 $cmake = Find-CMake
+$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+if (!(Test-Path -LiteralPath $vswhere)) {
+    throw 'The native renderer requires Visual Studio C++ Build Tools and the Windows SDK. Install the Desktop development with C++ workload, then rerun this script.'
+}
+$vsVersion = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationVersion
+if (!$vsVersion) { throw 'No Visual Studio installation with x64 C++ tools was found. Add the Desktop development with C++ workload.' }
+$vsMajor = ([version]$vsVersion).Major
+$generatorMatch = [regex]::Match((& $cmake --help | Out-String), "Visual Studio $vsMajor \d{4}")
+if (!$generatorMatch.Success) { throw "This CMake installation does not support Visual Studio $vsVersion. Update CMake or configure the native renderer manually." }
+$generator = $generatorMatch.Value
 
 Push-Location $root
 try {
-    & $cmake -S $nativeSource -B $nativeBuild -A x64
+    & $cmake -S $nativeSource -B $nativeBuild -G $generator -A x64
     if ($LASTEXITCODE -ne 0) { throw "CMake configuration failed ($LASTEXITCODE)." }
 
     & $cmake --build $nativeBuild --config $Configuration

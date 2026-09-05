@@ -55,9 +55,4 @@ public sealed class MusicGroup : INotifyPropertyChanged
         }
     }
 
-    public bool Matches(string query) =>
-        Name.Contains(query, StringComparison.OrdinalIgnoreCase)
-        || Subtitle.Contains(query, StringComparison.OrdinalIgnoreCase)
-        || Tracks.Any(t => t.Name.Contains(query, StringComparison.OrdinalIgnoreCase)
-                           || (t.Artist?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false));
 }

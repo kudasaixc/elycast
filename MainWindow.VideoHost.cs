@@ -249,10 +249,16 @@ public partial class MainWindow
         backend.Volume = (int)VolumeSlider.Value;
 
         DebugConsole.Step("Backend: attaching events...");
-        backend.Playing += OnBackendPlaying;
-        backend.Failed += OnBackendFailed;
-        backend.Ended += OnBackendEnded;
-        backend.Paused += OnBackendPaused;
+        var events = new BackendEventHandlers(
+            () => DispatchBackendEvent(backend, OnBackendPlaying),
+            message => DispatchBackendEvent(backend, () => OnBackendFailed(message)),
+            reason => DispatchBackendEvent(backend, () => OnBackendEnded(reason)),
+            () => DispatchBackendEvent(backend, OnBackendPaused));
+        _backendEventHandlers[backend] = events;
+        backend.Playing += events.Playing;
+        backend.Failed += events.Failed;
+        backend.Ended += events.Ended;
+        backend.Paused += events.Paused;
 
         ApplyUpscalingToBackend();
         ApplyElyColorToBackend();
@@ -272,15 +278,31 @@ public partial class MainWindow
         DebugConsole.Success($"Backend initialized ({backend.Name}).");
     }
 
-    private void DetachBackendEvents(IVideoBackend backend)
+    private sealed record BackendEventHandlers(Action Playing, Action<string> Failed, Action<PlaybackEndReason> Ended, Action Paused);
+    private readonly Dictionary<IVideoBackend, BackendEventHandlers> _backendEventHandlers = new();
+
+    private void DispatchBackendEvent(IVideoBackend backend, Action action)
     {
-        backend.Playing -= OnBackendPlaying;
-        backend.Failed -= OnBackendFailed;
-        backend.Ended -= OnBackendEnded;
-        backend.Paused -= OnBackendPaused;
+        var generation = Volatile.Read(ref _playbackGeneration);
+        void Apply()
+        {
+            if (!_shuttingDown && generation == _playbackGeneration && ReferenceEquals(backend, _videoBackend)) action();
+        }
+        if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished) return;
+        if (Dispatcher.CheckAccess()) Apply();
+        else Dispatcher.BeginInvoke(new Action(Apply));
     }
 
-    private void OnBackendPlaying() => Dispatcher.Invoke(() =>
+    private void DetachBackendEvents(IVideoBackend backend)
+    {
+        if (!_backendEventHandlers.Remove(backend, out var events)) return;
+        backend.Playing -= events.Playing;
+        backend.Failed -= events.Failed;
+        backend.Ended -= events.Ended;
+        backend.Paused -= events.Paused;
+    }
+
+    private void OnBackendPlaying()
     {
         var generation = _playbackGeneration;
         HideOverlay(); SetPlayIcon(false); ShowOsd();
@@ -293,9 +315,9 @@ public partial class MainWindow
         DebugConsole.Success($"Now playing: {_current?.Name}");
         if (_current != null && IsAudioOnlyItem(_current))
             _mediaTransport.SetState(hasMedia: true, playing: true);
-    });
+    }
 
-    private void OnBackendFailed(string message) => Dispatcher.Invoke(() =>
+    private void OnBackendFailed(string message)
     {
         if (!_connected) return;
         ShowOverlay(message, spinning: false);
@@ -305,9 +327,9 @@ public partial class MainWindow
                 _current?.Kind == PlayItemKind.Live,
                 StateStore.Settings.AutoReconnect) == PlaybackTerminationAction.ReconnectLive)
             TryAutoReconnect();
-    });
+    }
 
-    private void OnBackendEnded(PlaybackEndReason reason) => Dispatcher.Invoke(() =>
+    private void OnBackendEnded(PlaybackEndReason reason)
     {
         var endedAudio = reason == PlaybackEndReason.NaturalEnd && _current != null && IsAudioOnlyItem(_current);
         var termination = PlaybackTerminationPolicy.ForEnd(reason, _current?.Kind == PlayItemKind.Live);
@@ -360,19 +382,22 @@ public partial class MainWindow
         RefreshOsdElyColorRow();
         RefreshOsdElySoundRow();
         ShowOsd();
-    });
+    }
 
-    private void OnBackendPaused() => Dispatcher.Invoke(() =>
+    private void OnBackendPaused()
     {
         SetPlayIcon(true);
         ShowOsd();
         if (_current != null && IsAudioOnlyItem(_current))
             _mediaTransport.SetState(hasMedia: true, playing: false);
-    });
+    }
 
     private async void RefreshOsdSafeAreaSoon()
     {
+        var backend = _videoBackend;
+        var generation = _playbackGeneration;
         await Task.Delay(700);
+        if (_shuttingDown || generation != _playbackGeneration || !ReferenceEquals(backend, _videoBackend)) return;
         if (!Dispatcher.CheckAccess())
         {
             Dispatcher.Invoke(UpdateOsdSafeArea);

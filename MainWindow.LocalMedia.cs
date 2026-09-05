@@ -22,6 +22,7 @@ public partial class MainWindow
     private List<PlayItem>? _audioPlayContext;
     private int _audioAutoIndex = -1;
     private bool _audioPlayingManualQueue;
+    private CancellationTokenSource? _importCts;
 
     private string AudioBrowseMode => (AudioBrowseCombo?.SelectedItem as ComboBoxItem)?.Tag as string ?? "albums";
     private bool IsAudioGroupMode => AudioBrowseMode is "albums" or "artists" or "genres" or "playlists";
@@ -51,7 +52,7 @@ public partial class MainWindow
             Multiselect = false
         };
         if (dialog.ShowDialog(this) != true) return;
-        await ImportSingleKindAsync(progress => _localLibrary.ImportFolderAsync(dialog.FolderName, audio, progress), audio);
+        await ImportSingleKindAsync((progress, ct) => _localLibrary.ImportFolderAsync(dialog.FolderName, audio, progress, ct), audio);
     }
 
     private async void ImportLocalFiles_Click(object sender, RoutedEventArgs e)
@@ -64,16 +65,17 @@ public partial class MainWindow
             Filter = audio ? LocalLibraryService.AudioFileFilter : LocalLibraryService.VideoFileFilter
         };
         if (dialog.ShowDialog(this) != true) return;
-        await ImportSingleKindAsync(progress => _localLibrary.ImportFilesAsync(dialog.FileNames, audio, progress), audio);
+        await ImportSingleKindAsync((progress, ct) => _localLibrary.ImportFilesAsync(dialog.FileNames, audio, progress, ct), audio);
     }
 
     // Throttled UI updates: the parallel import fires one report per file, but
     // we only refresh the button label a few times per second.
-    private IProgress<int> MakeImportProgress()
+    private IProgress<int> MakeImportProgress(CancellationTokenSource operation)
     {
         var lastTick = 0L;
         return new Progress<int>(count =>
         {
+            if (!ReferenceEquals(_importCts, operation) || operation.IsCancellationRequested || _shuttingDown) return;
             var now = Environment.TickCount64;
             if (now - lastTick < 120) return;
             lastTick = now;
@@ -97,17 +99,22 @@ public partial class MainWindow
         return target.Count - before;
     }
 
-    private async Task ImportSingleKindAsync(Func<IProgress<int>, Task<IReadOnlyList<PlayItem>>> import, bool audio)
+    private async Task ImportSingleKindAsync(Func<IProgress<int>, CancellationToken, Task<IReadOnlyList<PlayItem>>> import, bool audio)
     {
+        if (_importCts != null) return;
+        using var operation = new CancellationTokenSource();
+        _importCts = operation;
         SetImportBusy(true);
         try
         {
-            var imported = await import(MakeImportProgress());
+            var imported = await import(MakeImportProgress(operation), operation.Token);
+            if (_shuttingDown) return;
             var added = ApplyImportedItems(imported, audio);
             SaveLocalLibrary();
-            ShowSection(audio ? Section.LocalAudio : Section.LocalVideo);
+            if (_connected && _section == (audio ? Section.LocalAudio : Section.LocalVideo)) ShowSection(_section);
             ShowOverlay(LocalizationService.Format("{0} file(s) imported", added), spinning: false);
         }
+        catch (OperationCanceledException) when (operation.IsCancellationRequested) { }
         catch (Exception ex)
         {
             DebugConsole.Exception("Local import failed", ex);
@@ -115,14 +122,15 @@ public partial class MainWindow
         }
         finally
         {
-            SetImportBusy(false);
+            _importCts = null;
+            if (!_shuttingDown) SetImportBusy(false);
         }
     }
 
     // ============ DRAG & DROP ============
     private void LocalList_DragOver(object sender, DragEventArgs e)
     {
-        var accepted = _connected && _section is Section.LocalAudio or Section.LocalVideo
+        var accepted = _importCts == null && _connected && _section is Section.LocalAudio or Section.LocalVideo
             && e.Data.GetDataPresent(DataFormats.FileDrop);
         e.Effects = accepted ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
@@ -130,45 +138,35 @@ public partial class MainWindow
 
     private async void LocalList_Drop(object sender, DragEventArgs e)
     {
-        if (!_connected || _section is not (Section.LocalAudio or Section.LocalVideo)) return;
+        if (_importCts != null || !_connected || _section is not (Section.LocalAudio or Section.LocalVideo)) return;
         if (e.Data.GetData(DataFormats.FileDrop) is not string[] dropped) return;
         e.Handled = true;
 
-        // Expand any dropped folders, then route each file to the right library
-        // by extension so a single drop can carry both music and video.
-        var files = new List<string>();
-        foreach (var path in dropped)
-        {
-            if (Directory.Exists(path))
-                files.AddRange(Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories));
-            else if (File.Exists(path))
-                files.Add(path);
-        }
-        var audioFiles = files.Where(LocalLibraryService.IsAudio).ToList();
-        var videoFiles = files.Where(LocalLibraryService.IsVideo).ToList();
-        if (audioFiles.Count == 0 && videoFiles.Count == 0)
-        {
-            ShowOverlay("No recognized audio or video files", spinning: false);
-            return;
-        }
-
+        using var operation = new CancellationTokenSource();
+        _importCts = operation;
+        var originalSection = _section;
         SetImportBusy(true);
         try
         {
-            var progress = MakeImportProgress();
+            var files = await Task.Run(() => LocalLibraryService.DiscoverFiles(dropped, operation.Token).ToList(), operation.Token);
+            var audioFiles = files.Where(LocalLibraryService.IsAudio).ToList();
+            var videoFiles = files.Where(LocalLibraryService.IsVideo).ToList();
+            if (files.Count == 0) { ShowOverlay("No recognized audio or video files", spinning: false); return; }
+            var progress = MakeImportProgress(operation);
             var added = 0;
             if (audioFiles.Count > 0)
-                added += ApplyImportedItems(await _localLibrary.ImportFilesAsync(audioFiles, true, progress), true);
+                added += ApplyImportedItems(await _localLibrary.ImportFilesAsync(audioFiles, true, progress, operation.Token), true);
             if (videoFiles.Count > 0)
-                added += ApplyImportedItems(await _localLibrary.ImportFilesAsync(videoFiles, false, progress), false);
+                added += ApplyImportedItems(await _localLibrary.ImportFilesAsync(videoFiles, false, progress, operation.Token), false);
+            operation.Token.ThrowIfCancellationRequested();
+            if (_shuttingDown) return;
             SaveLocalLibrary();
 
-            // Stay in the current section if it received something; otherwise
-            // switch to whichever kind was actually dropped.
-            var showAudio = _section == Section.LocalAudio ? audioFiles.Count > 0 : videoFiles.Count == 0;
-            ShowSection(showAudio ? Section.LocalAudio : Section.LocalVideo);
+            // A completed import must not undo navigation made during scanning.
+            if (_connected && _section == originalSection) ShowSection(_section);
             ShowOverlay(LocalizationService.Format("{0} file(s) imported", added), spinning: false);
         }
+        catch (OperationCanceledException) when (operation.IsCancellationRequested) { }
         catch (Exception ex)
         {
             DebugConsole.Exception("Drag-and-drop import failed", ex);
@@ -176,7 +174,8 @@ public partial class MainWindow
         }
         finally
         {
-            SetImportBusy(false);
+            _importCts = null;
+            if (!_shuttingDown) SetImportBusy(false);
         }
     }
 
@@ -205,7 +204,8 @@ public partial class MainWindow
         var query = SearchBox.Text?.Trim();
         var filtered = string.IsNullOrWhiteSpace(query)
             ? _musicGroups
-            : _musicGroups.Where(g => g.Matches(query)).ToList();
+            : _musicGroups.Where(g => _catalogSearch.Matches(g.Name, g.Subtitle)
+                || g.Tracks.Any(t => _catalogSearch.Matches(t.Name, t.Artist, t.Album, g.Name))).ToList();
         MusicGroupList.ItemsSource = filtered;
         if (_section == Section.LocalAudio && IsAudioGroupMode)
             CountText.Text = filtered.Count.ToString();
@@ -273,15 +273,16 @@ public partial class MainWindow
 
     private bool MusicTrackFilter(object obj)
     {
-        var query = MusicTrackSearch.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(query)) return true;
         if (obj is not PlayItem track) return false;
-        return track.Name.Contains(query, StringComparison.OrdinalIgnoreCase)
-            || (track.Artist?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
-            || (track.Album?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false);
+        return _trackSearch.Matches(track.Name, track.Artist, track.Album);
     }
 
-    private void MusicTrackSearch_TextChanged(object sender, TextChangedEventArgs e) => _musicTrackView?.Refresh();
+    private readonly MediaSearch _trackSearch = new();
+    private void MusicTrackSearch_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        _trackSearch.SetQuery(MusicTrackSearch.Text);
+        _musicTrackView?.Refresh();
+    }
 
     private void CloseMusic_Click(object sender, RoutedEventArgs e) => CloseMusicPanel();
 
@@ -319,10 +320,11 @@ public partial class MainWindow
     private void GroupQueue_Click(object sender, RoutedEventArgs e)
     {
         if (ContextMusicGroup(sender) is not { } group) return;
+        var before = _audioQueue.Count;
         foreach (var track in group.Tracks)
             if (!_audioQueue.Any(q => q.SameAs(track))) _audioQueue.Add(track);
         UpdateQueueLabel();
-        ShowOverlay(LocalizationService.Format("{0} track(s) added to the queue", group.Tracks.Count), spinning: false);
+        ShowOverlay(LocalizationService.Format("{0} track(s) added to the queue", _audioQueue.Count - before), spinning: false);
     }
 
     private void PlayGroupTracks(IReadOnlyList<PlayItem> tracks, bool shuffle)
@@ -354,9 +356,8 @@ public partial class MainWindow
 
     private void PrepareMusicGroupTrackPlayback(PlayItem track)
     {
-        _audioPlayContext = _openMusicGroup?.Tracks.ToList();
-        if (_openMusicGroup is not { } group) return;
-        _audioAutoIndex = group.Tracks.FindIndex(item => item.SameAs(track));
+        _audioPlayContext = _musicTrackView?.Cast<PlayItem>().ToList() ?? _openMusicGroup?.Tracks.ToList();
+        _audioAutoIndex = _audioPlayContext?.FindIndex(item => item.SameAs(track)) ?? -1;
         _audioPlayingManualQueue = false;
     }
 
@@ -378,6 +379,11 @@ public partial class MainWindow
     {
         var name = PlaylistNameBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(name)) return;
+        if (StateStore.Current.LocalPlaylists.Any(p => string.Equals(p.Name, name, StringComparison.CurrentCultureIgnoreCase)))
+        {
+            ShowOverlay("A playlist with this name already exists.", spinning: false);
+            PlaylistNameBox.Focus(); PlaylistNameBox.SelectAll(); return;
+        }
         StateStore.Current.LocalPlaylists.Add(new LocalPlaylist { Name = name });
         PlaylistNameBox.Clear();
         StateStore.Save();
@@ -454,13 +460,20 @@ public partial class MainWindow
         playlist.TrackPaths.RemoveAll(entry => string.Equals(entry, path, StringComparison.OrdinalIgnoreCase));
         StateStore.Save();
         group.Tracks.RemoveAll(t => t.SameAs(track));
-        MusicTrackList.ItemsSource = null;
-        MusicTrackList.ItemsSource = group.Tracks;
+        RefreshMusicTrackView(group);
         MusicPanelDetail.Text = LocalizationService.T(group.DetailLine);
         RebuildMusicGroups();
     }
 
     // ============ CONTEXT MENUS ============
+    private void RefreshMusicTrackView(MusicGroup group)
+    {
+        for (var i = 0; i < group.Tracks.Count; i++)
+            group.Tracks[i].DisplayTrackNumberLabel = group.Kind == MusicGroupKind.Playlist ? (i + 1).ToString() : group.Tracks[i].TrackNumberLabel;
+        _musicTrackView = new System.Windows.Data.ListCollectionView(group.Tracks) { Filter = MusicTrackFilter };
+        MusicTrackList.ItemsSource = _musicTrackView;
+    }
+
     private PlayItem? ContextAudioItem(object sender) =>
         (sender as FrameworkElement)?.DataContext as PlayItem
         ?? (MusicPanel.Visibility == Visibility.Visible ? MusicTrackList.SelectedItem as PlayItem : null)
@@ -493,6 +506,7 @@ public partial class MainWindow
     private void PlayNow_Click(object sender, RoutedEventArgs e)
     {
         if (ContextAudioItem(sender) is not { } item) return;
+        if (item.Kind == PlayItemKind.Series) { OpenSeries(item); return; }
         if (IsAudioOnlyItem(item)) PrepareVisibleAudioPlayback(item);
         Play(item);
     }
@@ -523,8 +537,7 @@ public partial class MainWindow
             if (group.Tracks.Count == 0) CloseMusicPanel();
             else
             {
-                MusicTrackList.ItemsSource = null;
-                MusicTrackList.ItemsSource = group.Tracks;
+                RefreshMusicTrackView(group);
                 MusicPanelDetail.Text = LocalizationService.T(group.DetailLine);
             }
         }
@@ -599,17 +612,24 @@ public partial class MainWindow
 
     private bool TryPlayNextAudio()
     {
-        if (_audioQueue.Count > 0)
+        if (TryPlayQueuedAudio()) return true;
+        if (_audioRepeat && _current != null) { Play(_current); return true; }
+        return PlayAdjacentAudio(1);
+    }
+
+    private bool TryPlayQueuedAudio()
+    {
+        while (_audioQueue.Count > 0)
         {
             var next = _audioQueue[0];
             _audioQueue.RemoveAt(0);
             UpdateQueueLabel();
+            if (!File.Exists(LocalLibraryService.PathOf(next))) continue;
             _audioPlayingManualQueue = true;
             Play(next);
             return true;
         }
-        if (_audioRepeat && _current != null) { Play(_current); return true; }
-        return PlayAdjacentAudio(1);
+        return false;
     }
 
     private bool PlayAdjacentAudio(int direction)
@@ -629,5 +649,5 @@ public partial class MainWindow
         return true;
     }
 
-    private void UpdateQueueLabel() => QueueCountText.Text = $"File : {_audioQueue.Count}";
+    private void UpdateQueueLabel() => QueueCountText.Text = LocalizationService.Format("Queue: {0}", _audioQueue.Count);
 }

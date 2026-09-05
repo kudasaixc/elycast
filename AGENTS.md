@@ -298,6 +298,19 @@ The debug console maps the whole domain: playback (`now`, `pause`, `resume`, `st
 
 ## 9. Safe-change checklist
 
+### September 2026 reliability update
+
+- MainWindow publishes an IPTV connection only after its own request succeeds. Each sign-in owns a separate `IptvService`; cancellation, local-only entry and sign-out must not reuse another account's mutable service. Authenticated Xtream accounts may have no live channels and still expose VOD/series.
+- `PlaylistParser` owns cancellable M3U parsing, quoted attribute/title handling, bare entries and relative URL/path resolution. `FlexibleStringConverter` handles numeric/string Xtream identifiers and EPG timestamps. Keep credentials encoded as individual playback URL segments and keep playlist/request locations out of logs.
+- `PlayItem.IdentityKey` is shared by `SameAs` and favourite marking: local paths compare without case; M3U live entries use their direct address, not their changing row number. No persisted ID migration is required.
+- `LocalLibraryService.DiscoverFiles` is the shared worker-thread discovery path for folder import and drag-and-drop. It skips inaccessible directories and reparse points, checks cancellation and deduplicates paths. Imports have one UI-owned cancellation source, reject overlap and never redirect a user who navigated during scanning. Album identity includes album artist (artist fallback).
+- `MediaSearch` supplies word-based, accent-insensitive matching across metadata fields. The main catalogue uses a 160 ms debounce; music detail panels retain their filtered view after removals. Ctrl+F focuses the relevant search; editable controls keep their normal keyboard input.
+- `ProtectedJsonStore<T>` owns both stores' DPAPI and atomic replacement. It keeps one encrypted `.bak`, recovers it when the primary cannot be decoded, protects backups during plaintext migration, and refuses to overwrite unreadable originals with defaults when neither copy is recoverable. Normalization must repair null nested entries before enumeration.
+- Backend subscriptions in `MainWindow.VideoHost.cs` capture the backend instance and marshal asynchronously to WPF, with a playback-generation check at delivery. Never synchronously wait for the UI from a native callback. Backend replacement is coalesced and preserves position/pause; delayed restoration checks generation and backend identity.
+- The standard settings UI no longer exposes the debug-console boot delay or a speculative feature roadmap. The `BootSeconds` persistence field remains for compatibility. User-facing engine descriptions explain choices; detailed renderer terminology belongs in diagnostics.
+- `tests/ElyCast.CoreRegression` references production code and uses synthetic HTTP fixtures and disposable temporary files, including real DPAPI recovery checks. CI runs it after the existing regression runner. Run with `dotnet run --project tests/ElyCast.CoreRegression/ElyCast.CoreRegression.csproj -c Release -p:Platform=x64`.
+- `ELYCAST_DIAGNOSTIC_CLEAN=1`, together with an existing `ELYCAST_DIAGNOSTIC_FILE`, starts a muted local-only session with default settings and suppressed saves; profiles and persisted state are not loaded. This is for smoke validation, never a normal startup preference.
+
 Before committing:
 
 1. Keep changes inside the owning component; avoid expanding `MainWindow` when a service/backend owns the behavior.

@@ -35,3 +35,6 @@ jobs:
 
       - name: Run regression checks
         run: dotnet run --project tests/ElyCast.Regression/ElyCast.Regression.csproj -c Release
+
+      - name: Run catalog and persistence regression checks
+        run: dotnet run --project tests/ElyCast.CoreRegression/ElyCast.CoreRegression.csproj -c Release -p:Platform=x64

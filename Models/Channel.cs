@@ -18,6 +18,7 @@ public class Channel
     public string? StreamIcon { get; set; }
 
     [JsonPropertyName("category_id")]
+    [JsonConverter(typeof(Elysium_Cast_IPTV.Services.FlexibleStringConverter))]
     public string? CategoryId { get; set; }
 
     /// <summary>Resolved category label (country / theme), e.g. "WORLD CUP 2026".</summary>
@@ -38,6 +39,7 @@ public class Channel
 public class Category
 {
     [JsonPropertyName("category_id")]
+    [JsonConverter(typeof(Elysium_Cast_IPTV.Services.FlexibleStringConverter))]
     public string CategoryId { get; set; } = "";
 
     [JsonPropertyName("category_name")]

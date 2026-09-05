@@ -82,7 +82,6 @@ public partial class MainWindow
         // that pre-date validation and fall outside the slider range.
         if (s.DefaultVolume < 0 || s.DefaultVolume > 100) s.DefaultVolume = 75;
         DefaultVolSlider.Value = s.DefaultVolume;
-        BootSlider.Value = s.BootSeconds;
         VolumeSlider.Value = s.DefaultVolume;
         StatsOverlay.Visibility = s.ShowStats ? Visibility.Visible : Visibility.Collapsed;
         ResetSubtitleChoices();
@@ -251,12 +250,17 @@ public partial class MainWindow
         InstallMpvBtn.Content = LocalizationService.T(string.IsNullOrWhiteSpace(dll) ? "Install mpv" : "Reinstall");
     }
 
+    private bool _backendReplacementPending;
     private void RecreateVideoBackend(bool replayCurrent)
     {
+        if (_shuttingDown || _backendReplacementPending) return;
+        _backendReplacementPending = true;
+        var replacementGeneration = Interlocked.Increment(ref _playbackGeneration);
         DebugConsole.Step("Backend change requested: tearing down the old backend...");
 
         var current = _current;
         var hadMedia = _videoBackend?.HasMedia == true;
+        var wasPlaying = _videoBackend?.IsPlaying == true;
         var resumePosition = _videoBackend?.PositionMs ?? 0;
         var volume = (int)VolumeSlider.Value;
 
@@ -301,6 +305,8 @@ public partial class MainWindow
         //    resource frees complete before a new backend is created.
         Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
         {
+            _backendReplacementPending = false;
+            if (_shuttingDown) return;
             try
             {
                 DebugConsole.Step("Backend: creating the new backend...");
@@ -315,17 +321,23 @@ public partial class MainWindow
                 return;
             }
 
-            if (!replayCurrent || !hadMedia || current == null) return;
+            if (!replayCurrent || !hadMedia || current == null || !_connected ||
+                replacementGeneration != _playbackGeneration || !ReferenceEquals(current, _current)) return;
 
             Play(current);
-            if (resumePosition <= 2500 || current.Kind == PlayItemKind.Live) return;
-
-            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1400) };
+            var expectedBackend = _videoBackend;
+            var generation = _playbackGeneration;
+            var attempts = 0;
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
             timer.Tick += (_, _) =>
             {
+                if (_shuttingDown || generation != _playbackGeneration || !ReferenceEquals(expectedBackend, _videoBackend) || ++attempts > 50)
+                { timer.Stop(); return; }
+                if (expectedBackend?.HasMedia != true || (current.Kind != PlayItemKind.Live && expectedBackend.LengthMs <= 0)) return;
                 timer.Stop();
-                if (_current == current && _videoBackend?.LengthMs > resumePosition)
-                    _videoBackend.PositionMs = resumePosition;
+                if (current.Kind != PlayItemKind.Live && resumePosition > 0)
+                    expectedBackend.PositionMs = Math.Min(resumePosition, expectedBackend.LengthMs);
+                if (!wasPlaying) expectedBackend.Pause();
             };
             timer.Start();
         }));
@@ -335,7 +347,6 @@ public partial class MainWindow
     {
         if (_initializing) return;
         StateStore.Settings.DefaultVolume = (int)DefaultVolSlider.Value;
-        StateStore.Settings.BootSeconds = Math.Round(BootSlider.Value, 1);
         StateStore.Save();
     }
 

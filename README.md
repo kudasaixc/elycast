@@ -38,6 +38,8 @@ The first-run wizard detects the CPU and GPU, downloads missing dependencies, be
 
 ## Features
 
+The September reliability update adds accent-insensitive, multiword search (`Ctrl+F`), more tolerant M3U/Xtream imports, encrypted backup recovery, and safer playback transitions. Imports keep your current navigation, the Next button respects manually queued tracks, and playlists retain their search after removals. Settings descriptions now focus on playback choices and no longer include the developer boot-delay control or a planned-feature list. See the [GPT 6 ASTRA audit](docs/AUDIT-GPT-6-ASTRA.md) for changes, tests and remaining validation limits.
+
 ### Sources and libraries
 
 - IPTV through Xtream Codes or M3U playlists, with live categories and EPG.

@@ -28,7 +28,7 @@ public partial class MainWindow : Window
 {
     private enum Section { Live, Movies, Series, LocalAudio, LocalVideo, Fav }
 
-    private readonly IptvService _iptv = new();
+    private IptvService _iptv = new();
     private readonly MagpieUpscalerService _magpie = new();
     private readonly MpvNativeInstaller _mpvInstaller = new();
     private IVideoBackend? _videoBackend;
@@ -231,6 +231,11 @@ public partial class MainWindow : Window
     private void EnterLocalOnlyMode()
     {
         DebugConsole.Info("Local-only mode: opening the library directly.");
+        _connectCts?.Cancel();
+        _sectionCts?.Cancel();
+        _iptv = new IptvService();
+        _liveItems.Clear();
+        _movieItems = null; _seriesItems = null;
         _connected = true;
         _state = StateStore.ForProfile("local-only");
         MarkFavorites(_localAudioItems);
@@ -362,7 +367,8 @@ public partial class MainWindow : Window
     private void LoadProfiles()
     {
         _profiles.Clear();
-        foreach (var p in ProfileStore.Load()) _profiles.Add(p);
+        if (!(StateStore.SuppressSaves && Environment.GetEnvironmentVariable("ELYCAST_DIAGNOSTIC_CLEAN") == "1"))
+            foreach (var p in ProfileStore.Load()) _profiles.Add(p);
         ProfilesItems.ItemsSource = _profiles;
         ProfilesSection.Visibility = _profiles.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -384,6 +390,11 @@ public partial class MainWindow : Window
     {
         if (((FrameworkElement)sender).Tag is not Profile p) return;
         _profiles.Remove(p);
+        if (StateStore.Settings.AutoConnectProfile == p.Name)
+        {
+            StateStore.Settings.AutoConnectProfile = "";
+            StateStore.Save();
+        }
         ProfileStore.Save(_profiles.ToList());
         ProfilesSection.Visibility = _profiles.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -454,25 +465,27 @@ public partial class MainWindow : Window
         StatusText.Text = "";
         try
         {
+            var candidate = new IptvService();
             List<Channel> channels;
             if (_m3uMode)
             {
                 var path = M3uPathBox.Text.Trim();
                 if (string.IsNullOrWhiteSpace(path)) { StatusText.Text = LocalizationService.T("Enter an M3U file or URL."); SetConnecting(false); return; }
-                (_, channels) = await _iptv.LoadM3uAsync(path, ct);
+                (_, channels) = await candidate.LoadM3uAsync(path, ct);
             }
             else
             {
                 var url = UrlBox.Text.Trim(); var user = UserBox.Text.Trim(); var pass = PassBox.Password;
                 if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(pass))
                 { StatusText.Text = LocalizationService.T("Enter the URL, username, and password."); SetConnecting(false); return; }
-                (_, channels) = await _iptv.ConnectAsync(url, user, pass, ct);
+                (_, channels) = await candidate.ConnectAsync(url, user, pass, ct);
             }
 
             ct.ThrowIfCancellationRequested();
 
-            if (channels.Count == 0) { StatusText.Text = LocalizationService.T("Connection succeeded, but no channels were found."); SetConnecting(false); return; }
+            if (channels.Count == 0 && !candidate.IsXtream) { StatusText.Text = LocalizationService.T("Connection succeeded, but no channels were found."); return; }
 
+            _iptv = candidate;
             _state = StateStore.ForProfile(_iptv.ProfileKey);
             _liveItems = channels.Select(PlayItem.FromChannel).ToList();
             _movieItems = null; _seriesItems = null;
@@ -491,6 +504,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            if (ct.IsCancellationRequested || _shuttingDown) return;
             StatusText.Text = LocalizationService.T("Connection failed: ") + ex.Message;
             DebugConsole.Error("Connection: " + ex.Message);
         }
@@ -508,6 +522,8 @@ public partial class MainWindow : Window
     private void SetConnecting(bool busy)
     {
         ConnectBtn.IsEnabled = !busy;
+        UrlBox.IsEnabled = UserBox.IsEnabled = PassBox.IsEnabled = M3uPathBox.IsEnabled = !busy;
+        XtreamTabBtn.IsEnabled = M3uTabBtn.IsEnabled = !busy;
         ConnectLabel.Text = LocalizationService.T(busy ? "Connecting..." : "Sign in");
         LoginIcon.Visibility = busy ? Visibility.Collapsed : Visibility.Visible;
         LoginSpinner.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
@@ -521,6 +537,7 @@ public partial class MainWindow : Window
         // Defer so VideoStage has been laid out and has a real size to anchor to.
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
         {
+            if (!_connected || _shuttingDown) return;
             var overlay = EnsureOverlayWindow();
             UpdateOsdSafeArea();
             SyncOverlaySize();
@@ -529,7 +546,7 @@ public partial class MainWindow : Window
             ReanchorOverlay();
         }));
         var outFade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(280));
-        outFade.Completed += (_, _) => LoginView.Visibility = Visibility.Collapsed;
+        outFade.Completed += (_, _) => { if (_connected) LoginView.Visibility = Visibility.Collapsed; };
         LoginView.BeginAnimation(OpacityProperty, outFade);
         PlayerView.BeginAnimation(OpacityProperty,
             new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(420))
@@ -551,6 +568,11 @@ public partial class MainWindow : Window
         HideAudioVisualizer();
         _mediaTransport.Clear();
         _connected = false;
+        _iptv = new IptvService();
+        _movieItems = null; _seriesItems = null;
+        _audioQueue.Clear(); _audioPlayContext = null; _audioAutoIndex = -1;
+        _audioPlayingManualQueue = false;
+        UpdateQueueLabel();
         _current = null;
         _overlayWindow?.Hide();
         ShowOverlay("Select a channel to start playback", spinning: false);
@@ -564,7 +586,7 @@ public partial class MainWindow : Window
         LoginView.Visibility = Visibility.Visible;
         LoginView.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(380)));
         var outFade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(260));
-        outFade.Completed += (_, _) => PlayerView.Visibility = Visibility.Collapsed;
+        outFade.Completed += (_, _) => { if (!_connected) PlayerView.Visibility = Visibility.Collapsed; };
         PlayerView.BeginAnimation(OpacityProperty, outFade);
     }
 
@@ -790,7 +812,12 @@ public partial class MainWindow : Window
         if (e.Key == Key.Escape && _isFullscreen) { ToggleFullscreen(); return; }
         if (e.Key == Key.F11) { ToggleFullscreen(); return; }
         if (!PlayerView.IsVisible || SettingsPanel.Visibility == Visibility.Visible) return;
-        if (SearchBox.IsKeyboardFocusWithin) return;
+        if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.F)
+        {
+            var search = MusicPanel.Visibility == Visibility.Visible ? MusicTrackSearch : SearchBox;
+            search.Focus(); search.SelectAll(); e.Handled = true; return;
+        }
+        if (Keyboard.FocusedElement is TextBoxBase or PasswordBox or ComboBox || Keyboard.Modifiers != ModifierKeys.None) return;
 
         if (e.Key == Key.Space) { PlayPause_Click(this, new RoutedEventArgs()); e.Handled = true; }
         else if (SeekArea.Visibility == Visibility.Visible && e.Key == Key.Left) { SeekRelative(-15_000); ShowOsd(); e.Handled = true; }
@@ -799,7 +826,8 @@ public partial class MainWindow : Window
         else if (StateStore.Settings.ZapWithArrows && e.Key == Key.Down) { Zap(1); e.Handled = true; }
         else if (e.Key == Key.Enter && ItemList.Visibility == Visibility.Visible && ItemList.SelectedItem is PlayItem c)
         {
-            if (c.Kind == PlayItemKind.Series) OpenSeries(c); else Play(c);
+            ItemList_DoubleClick(sender, new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left));
+            e.Handled = true;
         }
     }
 
@@ -892,11 +920,17 @@ public partial class MainWindow : Window
     {
         if (StateStore.Settings.ConfirmExit && _connected)
         {
-            var r = MessageBox.Show("Quitter ElyCast ?", "ElyCast", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            var r = MessageBox.Show(LocalizationService.T("Quit ElyCast?"), "ElyCast", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (r != MessageBoxResult.Yes) { e.Cancel = true; return; }
         }
         // Let the owned overlay window close with us instead of cancelling.
         _shuttingDown = true;
+        _connectCts?.Cancel(); _sectionCts?.Cancel(); _seriesCts?.Cancel(); _importCts?.Cancel();
+        CancelEpgRequest();
+        _searchTimer?.Stop(); _reconnectTimer?.Stop();
+        _progressTimer.Stop(); _statsTimer.Stop(); _osdTimer.Stop();
+        Interlocked.Increment(ref _playbackGeneration);
+        HideAudioVisualizer();
         try { _audioEngine.Dispose(); }
         catch (Exception ex) { DebugConsole.Exception("Shutdown: stopping audio analysis", ex); }
         try { _mediaTransport.Dispose(); } catch { }
