@@ -6,16 +6,41 @@ All notable ElyCast changes are documented here. This project follows
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-09-10
+
 ### Added
 
 - Instant English and French interface switching, persisted in the protected application state.
 - Language selection in the first-run wizard and in Settings > Interface.
+- Accent-insensitive multiword search across titles, artists, albums, and categories, with Ctrl+F focusing the relevant search field.
+- Automatic recovery from the last valid encrypted state or profile backup.
 
 ### Changed
 
 - English is now the default application, repository, documentation, and release-note language.
 - Static and dynamic UI text, diagnostics, installers, backend messages, and native renderer messages now use the shared localization catalog.
 - Em dashes were removed from tracked text and public release notes.
+- Folder and drag-and-drop imports now run through one cancellable background discovery path and preserve navigation changes made while scanning.
+- Settings descriptions focus on user choices, and the developer boot-delay control and planned-feature list have been removed from the interface.
+- Switching playback backends preserves the current position and paused state.
+
+### Fixed
+
+- Xtream authentication is validated explicitly, numeric identifiers are accepted, duplicate categories no longer abort loading, and credentials are encoded safely in playback URLs.
+- Authenticated accounts without live channels can still open their movie and series catalogues.
+- M3U playlists now support bare entries, relative local or remote paths, quoted commas, and stable favourites after playlist reordering.
+- Invalid EPG rows no longer discard valid programme entries.
+- Local imports skip inaccessible folders and directory links instead of freezing or failing before feedback can be shown.
+- Removing local media also clears stale resume entries, playlists, queues, favourites, and playback context.
+- Albums with the same name but different artists remain separate.
+- The Next action now honours manually queued tracks and skips missing files.
+- Late catalogue, track, backend, and playback callbacks can no longer update a newer session.
+- Corrupt saved data is preserved when neither the primary file nor its backup can be read, preventing silent replacement with defaults.
+
+### Internal
+
+- Added a 33-check production-code regression suite for M3U, Xtream, search, local discovery, identity, normalization, DPAPI migration, backup recovery, and corruption handling.
+- Backend callbacks are marshalled asynchronously to WPF with backend identity and playback-generation checks.
 
 ## [1.3.0-canary] - 2026-07-12
 
@@ -76,5 +101,6 @@ All notable ElyCast changes are documented here. This project follows
 - Application identity with `ElyCast.exe`, icon, AppUserModelID, and Shell shortcut.
 
 [1.3.0]: https://github.com/kudasaixc/elycast/releases/tag/v1.3.0
+[1.3.1]: https://github.com/kudasaixc/elycast/releases/tag/v1.3.1
 [1.2.0]: https://github.com/kudasaixc/elycast/releases/tag/v1.2.0
 [1.1]: https://github.com/kudasaixc/elycast/releases/tag/v1.1

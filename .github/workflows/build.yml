@@ -38,3 +38,18 @@ jobs:
 
       - name: Run catalog and persistence regression checks
         run: dotnet run --project tests/ElyCast.CoreRegression/ElyCast.CoreRegression.csproj -c Release -p:Platform=x64
+
+      - name: Publish Windows x64 application
+        run: dotnet publish "ElyCast TV Player.csproj" -c Release -r win-x64 --self-contained false -p:Platform=x64 -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=false -p:DebugType=None -o artifacts/publish
+
+      - name: Upload release components
+        uses: actions/upload-artifact@v4
+        with:
+          name: ElyCast-release-components-${{ github.sha }}
+          path: |
+            artifacts/publish/ElyCast.exe
+            artifacts/publish/ElyCastLogo.png
+            artifacts/publish/glfw3.dll
+            native/ElyFlow.Native/bin/Release/ElyFlow.Native.dll
+          if-no-files-found: error
+          retention-days: 7

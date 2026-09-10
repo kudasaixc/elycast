@@ -21,7 +21,7 @@
 <p align="center">
   <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0078D4?logo=windows11&logoColor=white">
   <img alt=".NET 8" src="https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white">
-  <img alt="ElyCast 1.3" src="https://img.shields.io/badge/ElyCast-1.3-27c4e8">
+  <img alt="ElyCast 1.3.1" src="https://img.shields.io/badge/ElyCast-1.3.1-27c4e8">
   <a href="LICENSE"><img alt="License MPL-2.0" src="https://img.shields.io/github/license/kudasaixc/elycast?color=2ea44f"></a>
   <a href="https://github.com/kudasaixc/elycast"><img alt="Open source" src="https://img.shields.io/badge/Open%20Source-GitHub-181717?logo=github"></a>
 </p>
