@@ -161,10 +161,10 @@
                                         </Grid.ColumnDefinitions>
                                         <Border x:Name="TabHighlight" Grid.Column="0" CornerRadius="9"
                                                 Background="{DynamicResource AccentBrush}"/>
-                                        <Button x:Name="XtreamTabBtn" Grid.Column="0" Content="Xtream Codes"
+                                        <Button x:Name="XtreamTabBtn" IsEnabled="{Binding IsLoginEnabled}" Grid.Column="0" Content="Xtream Codes"
                                                 Background="Transparent" Foreground="White" FontWeight="SemiBold"
                                                 BorderThickness="0" Cursor="Hand" Click="XtreamTab_Click"/>
-                                        <Button x:Name="M3uTabBtn" Grid.Column="1" Content="M3U playlist"
+                                        <Button x:Name="M3uTabBtn" IsEnabled="{Binding IsLoginEnabled}" Grid.Column="1" Content="M3U playlist"
                                                 Background="Transparent" Foreground="{DynamicResource MutedBrush}"
                                                 FontWeight="SemiBold" BorderThickness="0" Cursor="Hand" Click="M3uTab_Click"/>
                                     </Grid>
@@ -173,14 +173,14 @@
                                 <StackPanel x:Name="XtreamPanel">
                                     <TextBlock Text="SERVER URL" Margin="0,20,0,8" FontSize="11"
                                                FontWeight="SemiBold" Foreground="{DynamicResource MutedBrush}"/>
-                                    <TextBox x:Name="UrlBox" Style="{StaticResource FieldBox}" Tag="http://example.com:8080"/>
+                                    <TextBox x:Name="UrlBox" IsEnabled="{Binding IsLoginEnabled}" Style="{StaticResource FieldBox}" Tag="http://example.com:8080"/>
                                     <TextBlock Text="USERNAME" Margin="0,16,0,8" FontSize="11"
                                                FontWeight="SemiBold" Foreground="{DynamicResource MutedBrush}"/>
-                                    <TextBox x:Name="UserBox" Style="{StaticResource FieldBox}" Tag="username"/>
+                                    <TextBox x:Name="UserBox" IsEnabled="{Binding IsLoginEnabled}" Style="{StaticResource FieldBox}" Tag="username"/>
                                     <TextBlock Text="PASSWORD" Margin="0,16,0,8" FontSize="11"
                                                FontWeight="SemiBold" Foreground="{DynamicResource MutedBrush}"/>
                                     <Grid>
-                                        <PasswordBox x:Name="PassBox" Foreground="{DynamicResource TextBrush}"
+                                        <PasswordBox x:Name="PassBox" IsEnabled="{Binding IsLoginEnabled}" Foreground="{DynamicResource TextBrush}"
                                                      CaretBrush="{DynamicResource AccentBBrush}" FontSize="14" Height="48"
                                                      VerticalContentAlignment="Center" PasswordChanged="PassBox_PasswordChanged">
                                             <PasswordBox.Template>
@@ -207,7 +207,7 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="M3uPathBox" Style="{StaticResource FieldBox}"
+                                        <TextBox x:Name="M3uPathBox" IsEnabled="{Binding IsLoginEnabled}" Style="{StaticResource FieldBox}"
                                                  Tag="C:\playlist.m3u or http://…/list.m3u"/>
                                         <Button Grid.Column="1" Content="Browse..." Style="{StaticResource GhostButton}"
                                                 Height="48" Width="110" Margin="8,0,0,0" Click="Browse_Click"/>
@@ -221,23 +221,23 @@
                                              Margin="0,10,0,0" Tag="Profile name"/>
                                 </StackPanel>
 
-                                <Button x:Name="ConnectBtn" Style="{StaticResource PrimaryButton}"
+                                <Button x:Name="ConnectBtn" Style="{StaticResource PrimaryButton}" IsEnabled="{Binding IsLoginEnabled}"
                                         Margin="0,24,0,0" Click="Connect_Click">
                                     <StackPanel Orientation="Horizontal">
                                         <Grid Width="18" Height="18" Margin="0,0,8,0">
                                             <Ellipse x:Name="LoginSpinner" Width="16" Height="16" Stroke="White"
-                                                     StrokeThickness="2" StrokeDashArray="3 2" Visibility="Collapsed"
+                                                     StrokeThickness="2" StrokeDashArray="3 2" Visibility="{Binding IsConnecting, Converter={StaticResource BoolToVisibility}}"
                                                      RenderTransformOrigin="0.5,0.5">
                                                 <Ellipse.RenderTransform><RotateTransform/></Ellipse.RenderTransform>
                                             </Ellipse>
-                                            <Path x:Name="LoginIcon" Data="M 0,4 L 8,4 M 5,1 L 8,4 L 5,7" Stroke="White"
+                                            <Path x:Name="LoginIcon" Data="M 0,4 L 8,4 M 5,1 L 8,4 L 5,7" Stroke="White" Visibility="{Binding IsConnecting, Converter={StaticResource InverseBoolToVisibility}}"
                                                   StrokeThickness="1.6" Stretch="Uniform" Width="14" Height="14"/>
                                         </Grid>
-                                        <TextBlock x:Name="ConnectLabel" Text="Sign in"/>
+                                        <TextBlock x:Name="ConnectLabel" Text="{Binding ConnectLabel}"/>
                                     </StackPanel>
                                 </Button>
 
-                                <TextBlock x:Name="StatusText" Margin="0,14,0,0" FontSize="12" TextWrapping="Wrap"
+                                <TextBlock x:Name="StatusText" Text="{Binding LoginStatus}" Margin="0,14,0,0" FontSize="12" TextWrapping="Wrap"
                                            HorizontalAlignment="Center" TextAlignment="Center" Foreground="#FFFF8A8A"/>
 
                                 <!-- No IPTV account needed: jump straight into the local library. -->
@@ -371,21 +371,21 @@
                             </Grid.RowDefinitions>
 
                             <StackPanel Grid.Row="0" Orientation="Horizontal">
-                                <TextBlock x:Name="SectionTitle" Text="Channels" FontSize="18" FontWeight="Bold"
+                                <TextBlock x:Name="SectionTitle" Text="{Binding SectionTitle}" FontSize="18" FontWeight="Bold"
                                            Foreground="{DynamicResource TextBrush}"/>
                                 <Border Margin="10,0,0,0" Padding="8,2" CornerRadius="9" VerticalAlignment="Center"
                                         Background="#3A8B5CF6">
-                                    <TextBlock x:Name="CountText" Text="0" FontSize="11" FontWeight="SemiBold"
+                                    <TextBlock x:Name="CountText" Text="{Binding ItemCount}" FontSize="11" FontWeight="SemiBold"
                                                Foreground="#FFCBB8FF"/>
                                 </Border>
                             </StackPanel>
 
-                            <Button x:Name="ResumeButton" Grid.Row="1" Margin="0,12,0,0" Visibility="Collapsed"
+                            <Button x:Name="ResumeButton" Grid.Row="1" Margin="0,12,0,0" Visibility="{Binding IsResumeVisible, Converter={StaticResource BoolToVisibility}}"
                                     Style="{StaticResource GhostButton}" Height="44" Click="Resume_Click">
                                 <StackPanel Orientation="Horizontal">
                                     <Path Data="M3,8 A5,5 0 1 1 8,13 M3,8 L1,6 M3,8 L5,6" Stretch="Uniform" Width="15" Height="15"
                                           Stroke="{DynamicResource AccentBBrush}" StrokeThickness="1.4" Margin="0,0,8,0"/>
-                                    <TextBlock x:Name="ResumeText" Text="Resume" TextTrimming="CharacterEllipsis" MaxWidth="220"/>
+                                    <TextBlock x:Name="ResumeText" Text="{Binding ResumeText}" TextTrimming="CharacterEllipsis" MaxWidth="220"/>
                                 </StackPanel>
                             </Button>
 
@@ -421,7 +421,7 @@
                                                       Style="{StaticResource AudioActionToggle}" Checked="Shuffle_Checked" Unchecked="Shuffle_Checked"/>
                                         <ToggleButton x:Name="RepeatToggle" Grid.Column="1" Content="Repeat"
                                                       Style="{StaticResource AudioActionToggle}" Checked="Repeat_Checked" Unchecked="Repeat_Checked"/>
-                                        <TextBlock x:Name="QueueCountText" Grid.Column="2" Text="Queue: 0" FontSize="11" Margin="10,0,6,0"
+                                        <TextBlock x:Name="QueueCountText" Grid.Column="2" Text="{Binding QueueText}" FontSize="11" Margin="10,0,6,0"
                                                    Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
                                         <Button Grid.Column="3" Content="Clear" Height="28" FontSize="11" Padding="8,0"
                                                 Style="{StaticResource GhostButton}" ToolTip="Clear queue" Click="ClearQueue_Click"/>
@@ -588,22 +588,22 @@
                                       PreviewMouseLeftButtonUp="OverlayRoot_MouseLeftButtonUp">
 
                                 <!-- idle / loading -->
-                                <Grid x:Name="VideoOverlay" Background="#FF060309">
+                                <Grid x:Name="VideoOverlay" Background="#FF060309" Visibility="{Binding IsOverlayVisible, Converter={StaticResource BoolToVisibility}}">
                                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                         <Grid Width="64" Height="64">
                                             <Ellipse Width="64" Height="64" Stroke="#22FFFFFF" StrokeThickness="3"/>
                                             <Ellipse x:Name="BigSpinner" Width="64" Height="64" Stroke="{DynamicResource AccentBBrush}"
-                                                     StrokeThickness="3" StrokeDashArray="20 60" Visibility="Collapsed"
+                                                     StrokeThickness="3" StrokeDashArray="20 60" Visibility="{Binding IsOverlaySpinning, Converter={StaticResource BoolToVisibility}}"
                                                      RenderTransformOrigin="0.5,0.5">
                                                 <Ellipse.RenderTransform><RotateTransform/></Ellipse.RenderTransform>
                                             </Ellipse>
-                                            <Path x:Name="IdlePlay" Data="M 5,3 L 12,8 L 5,13 Z" Fill="#55FFFFFF"
+                                            <Path x:Name="IdlePlay" Data="M 5,3 L 12,8 L 5,13 Z" Fill="#55FFFFFF" Visibility="{Binding IsOverlaySpinning, Converter={StaticResource InverseBoolToVisibility}}"
                                                   Stretch="Uniform" Width="22" Height="22"
                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         </Grid>
                                         <TextBlock x:Name="OverlayText" Margin="0,18,0,0" FontSize="14"
                                                    HorizontalAlignment="Center" Foreground="{DynamicResource MutedBrush}"
-                                                   Text="Select a channel to start playback"/>
+                                                   Text="{Binding OverlayMessage}"/>
                                     </StackPanel>
                                 </Grid>
 
@@ -735,14 +735,14 @@
                                 </Grid>
 
                                 <!-- stats -->
-                                <Border x:Name="StatsOverlay" Visibility="Collapsed" HorizontalAlignment="Left"
+                                <Border x:Name="StatsOverlay" Visibility="{Binding IsStatsOverlayVisible, Converter={StaticResource BoolToVisibility}}" HorizontalAlignment="Left"
                                         VerticalAlignment="Top" Margin="14" Padding="12,10" CornerRadius="10"
                                         Background="#CC000000" BorderBrush="{DynamicResource CardStroke}" BorderThickness="1">
                                     <StackPanel>
                                         <TextBlock Text="LIVE STATS" FontSize="10" FontWeight="Bold"
                                                    Foreground="{DynamicResource AccentBBrush}" Margin="0,0,0,6"/>
                                         <TextBlock x:Name="StatsText" FontFamily="Consolas, monospace" FontSize="12"
-                                                   Foreground="{DynamicResource TextBrush}" Text="-"/>
+                                                   Foreground="{DynamicResource TextBrush}" Text="{Binding StatsText}"/>
                                     </StackPanel>
                                 </Border>
 
@@ -757,9 +757,9 @@
                                             </LinearGradientBrush>
                                         </Border.Background>
                                         <StackPanel>
-                                            <TextBlock x:Name="TopTitle" FontSize="20" FontWeight="Bold"
+                                            <TextBlock x:Name="TopTitle" Text="{Binding NowPlayingTitle}" FontSize="20" FontWeight="Bold"
                                                        Foreground="White" TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock x:Name="TopSubtitle" FontSize="12" Margin="0,3,0,0"
+                                            <TextBlock x:Name="TopSubtitle" Text="{Binding NowPlayingSubtitle}" FontSize="12" Margin="0,3,0,0"
                                                        Foreground="#FFCBB8FF" TextTrimming="CharacterEllipsis"/>
                                         </StackPanel>
                                     </Border>
@@ -821,8 +821,8 @@
                                             </StackPanel>
 
                                             <!-- epg (live) -->
-                                            <ProgressBar x:Name="EpgProgress" Height="4" Minimum="0" Maximum="100" Value="0"
-                                                         Margin="0,0,0,10" Visibility="Collapsed"
+                                            <ProgressBar x:Name="EpgProgress" Height="4" Minimum="0" Maximum="100" Value="{Binding EpgPercent, Mode=OneWay}"
+                                                         Margin="0,0,0,10" Visibility="{Binding IsEpgVisible, Converter={StaticResource BoolToVisibility}}"
                                                          Foreground="{DynamicResource AccentABrush}"
                                                          Background="#33FFFFFF" BorderThickness="0"/>
 
@@ -843,11 +843,11 @@
                                                         <Rectangle Width="12" Height="12" Fill="White" RadiusX="2" RadiusY="2"/>
                                                     </Button>
                                                     <Button x:Name="SkipBackBtn" Style="{StaticResource IconButton}" Margin="8,0,0,0"
-                                                            Click="SkipBack_Click" ToolTip="Skip back 15 seconds (left arrow)" Visibility="Collapsed">
+                                                            Click="SkipBack_Click" ToolTip="Skip back 15 seconds (left arrow)" Visibility="{Binding IsSkipBackVisible, Converter={StaticResource BoolToVisibility}}">
                                                         <TextBlock Text="-15" FontSize="11" FontWeight="Bold" Foreground="White"/>
                                                     </Button>
                                                     <Button x:Name="SkipFwdBtn" Style="{StaticResource IconButton}" Margin="8,0,0,0"
-                                                            Click="SkipFwd_Click" ToolTip="Skip forward 15 seconds (right arrow)" Visibility="Collapsed">
+                                                            Click="SkipFwd_Click" ToolTip="Skip forward 15 seconds (right arrow)" Visibility="{Binding IsSkipForwardVisible, Converter={StaticResource BoolToVisibility}}">
                                                         <TextBlock Text="+15" FontSize="11" FontWeight="Bold" Foreground="White"/>
                                                     </Button>
                                                 </StackPanel>
@@ -862,7 +862,7 @@
                                                     </Button>
                                                     <Button x:Name="PlayPauseBtn" Style="{StaticResource IconButton}" Margin="10,0"
                                                             Width="52" Height="52" Click="PlayPause_Click" ToolTip="Play / pause">
-                                                        <Path x:Name="PlayPauseIcon" Data="M 5,3 L 12,8 L 5,13 Z" Fill="White"
+                                                        <Path x:Name="PlayPauseIcon" Data="{Binding ShowPlayGlyph, Converter={StaticResource PlayPauseGlyph}}" Fill="White"
                                                               Stretch="Uniform" Width="17" Height="17"/>
                                                     </Button>
                                                     <Button x:Name="NextMediaBtn" Style="{StaticResource IconButton}"
@@ -902,7 +902,7 @@
                                                     <Slider x:Name="VolumeSlider" Width="120" Minimum="0" Maximum="100" Value="75"
                                                             VerticalAlignment="Center" Style="{StaticResource VolumeSlider}"
                                                             ValueChanged="Volume_Changed"/>
-                                                    <TextBlock x:Name="VolumePct" Text="75%" Width="40" Margin="8,0,0,0"
+                                                    <TextBlock x:Name="VolumePct" Text="{Binding VolumeText}" Width="40" Margin="8,0,0,0"
                                                                VerticalAlignment="Center" TextAlignment="Right" FontSize="12"
                                                                FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
                                                     <Button x:Name="FullscreenBtn" Style="{StaticResource IconButton}" Margin="16,0,0,0"
@@ -914,18 +914,18 @@
                                             </Grid>
 
                                             <!-- seek (vod / episodes) - pinned to the very bottom of the chrome -->
-                                            <Grid x:Name="SeekArea" Visibility="Collapsed" Margin="0,10,0,0">
+                                            <Grid x:Name="SeekArea" Visibility="{Binding IsSeekVisible, Converter={StaticResource BoolToVisibility}}" Margin="0,10,0,0">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock x:Name="CurTime" Text="0:00" FontSize="11" VerticalAlignment="Center"
+                                                <TextBlock x:Name="CurTime" Text="{Binding CurrentTimeText}" FontSize="11" VerticalAlignment="Center"
                                                            Foreground="{DynamicResource TextBrush}" Width="58"/>
-                                                <Slider x:Name="SeekSlider" Grid.Column="1" Minimum="0" Maximum="100" Value="0"
+                                                <Slider x:Name="SeekSlider" Grid.Column="1" Minimum="0" Maximum="{Binding SeekMaximum}" Value="{Binding SeekPosition, Mode=TwoWay}"
                                                         VerticalAlignment="Center" Style="{StaticResource VolumeSlider}"
                                                         IsMoveToPointEnabled="True"/>
-                                                <TextBlock x:Name="TotTime" Grid.Column="2" Text="0:00" FontSize="11"
+                                                <TextBlock x:Name="TotTime" Grid.Column="2" Text="{Binding TotalTimeText}" FontSize="11"
                                                            VerticalAlignment="Center" TextAlignment="Right"
                                                            Foreground="{DynamicResource TextBrush}" Width="58"/>
                                             </Grid>

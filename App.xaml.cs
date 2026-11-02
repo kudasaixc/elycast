@@ -1,11 +1,16 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using Elysium_Cast_IPTV.Infrastructure;
 using Elysium_Cast_IPTV.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elysium_Cast_IPTV;
 
 public partial class App : Application
 {
+    private ServiceProvider? _services;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -77,7 +82,9 @@ public partial class App : Application
             }
         }
 
-        var window = new MainWindow();
+        _services = AppServices.Build();
+        BindingErrorListener.Attach();
+        var window = _services.GetRequiredService<MainWindow>();
         MainWindow = window;
         ShutdownMode = ShutdownMode.OnMainWindowClose;
         window.Show();
@@ -88,9 +95,14 @@ public partial class App : Application
 
     private void OnUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        try { System.IO.File.WriteAllText(
-            System.IO.Path.Combine(System.IO.Path.GetTempPath(), "elycast_error.txt"),
-            e.Exception.ToString()); } catch { }
+        try
+        {
+            File.WriteAllText(Path.Combine(Path.GetTempPath(), "elycast_error.txt"), e.Exception.ToString());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DebugConsole.Trace("Could not write elycast_error.txt: " + ex.Message);
+        }
         DebugConsole.Error("Unhandled exception: " + e.Exception);
         MessageBox.Show(e.Exception.Message, LocalizationService.T("ElyCast: Error"),
             MessageBoxButton.OK, MessageBoxImage.Error);

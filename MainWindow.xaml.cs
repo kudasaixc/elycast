@@ -1,816 +1,160 @@
-using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Diagnostics;
-using System.Globalization;
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using System.Windows.Data;
 using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Animation;
-using System.Windows.Media.Imaging;
 using System.Windows.Interop;
-using System.Windows.Shapes;
-using System.Windows.Threading;
+using System.Windows.Media;
+using Elysium_Cast_IPTV.Infrastructure;
 using Elysium_Cast_IPTV.Models;
 using Elysium_Cast_IPTV.Services;
-using Elysium_Cast_IPTV.Services.Audio;
-using Elysium_Cast_IPTV.Services.ElySmart;
-using Elysium_Cast_IPTV.Services.Video;
-using Microsoft.Win32;
-using NAudio.Wave;
+using Elysium_Cast_IPTV.Shell;
+using Elysium_Cast_IPTV.Shell.Panels;
 
 namespace Elysium_Cast_IPTV;
 
+/// <summary>
+/// The player shell view. It composes the feature controllers (see
+/// <c>Shell/</c>), routes XAML events to them, handles keyboard/pointer input
+/// that spans features, and orders the shutdown. It holds no feature state.
+/// </summary>
 public partial class MainWindow : Window
 {
-    private enum Section { Live, Movies, Series, LocalAudio, LocalVideo, Fav }
-
-    private IptvService _iptv = new();
-    private readonly MagpieUpscalerService _magpie = new();
-    private readonly MpvNativeInstaller _mpvInstaller = new();
-    private IVideoBackend? _videoBackend;
-
-    private readonly BulkObservableCollection<PlayItem> _items = new();
-    private readonly ObservableCollection<SubtitleOption> _subtitleOptions = new();
-    private readonly ObservableCollection<AudioOption> _audioOptions = new();
-    private ListCollectionView? _view;
-
-    private List<PlayItem> _liveItems = new();
-    private List<PlayItem>? _movieItems;
-    private List<PlayItem>? _seriesItems;
-    private List<PlayItem> _localAudioItems = new();
-    private List<PlayItem> _localVideoItems = new();
-    private readonly LocalLibraryService _localLibrary = new();
-    private readonly ObservableCollection<PlayItem> _audioQueue = new();
-    private readonly Random _queueRandom = new();
-    private bool _audioShuffle;
-    private bool _audioRepeat;
-
-    private PlayItem? _current;
-    private Section _section = Section.Live;
-    private Section _sectionBeforeSettings = Section.Live;
-    private bool _suppressNav;
-    private bool _connected;
-    private bool _isFullscreen, _m3uMode, _initializing;
-    private string _selectedCategory = "";
-
-    private readonly ObservableCollection<Profile> _profiles = new();
-    private ProfileState _state = new();
-
-    private SeriesInfo? _seriesInfo;
-    private string _seriesName = "";
-
-    private readonly DispatcherTimer _statsTimer = new() { Interval = TimeSpan.FromSeconds(1) };
-    private readonly DispatcherTimer _epgTimer = new() { Interval = TimeSpan.FromSeconds(15) };
-    // Render priority (not the default Background): the AudioCore+ visualizer floods
-    // the UI thread with CompositionTarget.Rendering work at Render priority, which
-    // would otherwise starve a Background-priority timer and freeze the seek bar for
-    // seconds at a time. 250 ms keeps the position readout feeling real-time.
-    private readonly DispatcherTimer _progressTimer =
-        new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(250) };
-    private readonly DispatcherTimer _osdTimer = new() { Interval = TimeSpan.FromSeconds(2.8) };
-    private readonly DispatcherTimer _elySoundApplyTimer = new() { Interval = TimeSpan.FromMilliseconds(140) };
-    // Audio visualizer: analysis runs on a background thread (AudioVisualEngine),
-    // rendering happens every displayed frame via CompositionTarget.Rendering.
-    private readonly AudioVisualEngine _audioEngine = new();
+    private readonly ShellServices _services;
+    private readonly OsdController _osd;
+    private readonly OverlayWindowHost _overlay;
+    private readonly AudioVisualizerController _visualizer;
+    private readonly PlaybackController _playback;
+    private readonly BackendHost _backendHost;
+    private readonly CatalogController _catalog;
+    private readonly MusicLibraryController _music;
+    private readonly ConnectionController _connection;
+    private readonly UpscalingPanel _upscaling;
+    private readonly ElyColorPanel _elyColor;
+    private readonly ElySoundPanel _elySound;
+    private readonly ElyFlowPanel _elyFlow;
+    private readonly ElySmartPanel _elySmart;
+    private readonly MagpiePanel _magpie;
+    private readonly SettingsController _settings;
+    private readonly WindowChromeController _chrome;
+    private readonly PlayerConsoleCommands _console;
+    private readonly DiagnosticRunner _diagnostics;
     private readonly WindowsMediaTransportService _mediaTransport;
-    private readonly double[] _audioSpectrumSnapshot = new double[AudioVisualEngine.Bands];
-    private readonly Random _audioVisualRandom = new();
-    private readonly System.Diagnostics.Stopwatch _audioVisualStopwatch = new();
-    private bool _audioRenderHooked;
-    private ImageSource? _audioDefaultDisc;
-    private double _audioLastTickSeconds;
-    private double _audioBassEnergy;
-    private double _audioFullEnergy;
-    private double _audioBeatPulse;
-    private DispatcherTimer? _reconnectTimer;
-    private CancellationTokenSource? _connectCts;
-    private CancellationTokenSource? _sectionCts;
-    private CancellationTokenSource? _seriesCts;
-    private CancellationTokenSource? _epgCts;
-    private int _playbackGeneration;
-    private bool _userSeeking;
-    private bool _loadingSubtitleChoices;
-    private bool _loadingAudioChoices;
-    private bool _upscalerBusy;
-    private bool _mpvInstallBusy;
-    private bool _upscalerActive;
-    private int _magpieScalingChangedMessage;
+    private readonly bool _composed;
 
-    // fullscreen restore state
-    private double _prevLeft, _prevTop, _prevW, _prevH;
-    private WindowState _prevState = WindowState.Normal;
-
-    // Airspace overlay host: a transparent borderless Window owned by this one,
-    // glued over VideoStage. A Popup cannot be used: WPF clamps popups to the
-    // monitor edges, so it detached from the window whenever the window was
-    // dragged partially off-screen.
-    private Window? _overlayWindow;
-    private bool _shuttingDown;
-    private bool _osdVisible;
-
-    private const string AllCategories = "All categories";
-
-    private sealed record SubtitleOption(int Id, string Name, string Key, bool IsAuto = false)
+    public MainWindow(ShellServices services)
     {
-        public override string ToString() => Name;
-    }
+        _services = services;
+        var vm = services.ViewModel;
+        var session = services.Session;
+        var store = services.Store;
 
-    private sealed record AudioOption(int Id, string Name, string Key, bool IsAuto = false)
-    {
-        public override string ToString() => Name;
-    }
-
-    public MainWindow()
-    {
-        _initializing = true;
         InitializeComponent();
         LocalizationService.Attach(this);
+        // OverlayRoot is later reparented into the airspace overlay window; it
+        // carries its own DataContext so its bindings survive the move.
+        DataContext = vm;
+        OverlayRoot.DataContext = vm;
+
         _mediaTransport = new WindowsMediaTransportService(
-            play: () => Dispatcher.BeginInvoke(() => ResumeFromSystemControls()),
-            pause: () => Dispatcher.BeginInvoke(() => PauseFromSystemControls()),
+            play: () => Dispatcher.BeginInvoke(ResumeFromSystemControls),
+            pause: () => Dispatcher.BeginInvoke(PauseFromSystemControls),
             next: () => Dispatcher.BeginInvoke(() => Zap(1)),
             previous: () => Dispatcher.BeginInvoke(() => Zap(-1)));
         SourceInitialized += (_, _) => _mediaTransport.Initialize(new WindowInteropHelper(this).Handle);
-        _initializing = false;
-        SubtitleCombo.ItemsSource = _subtitleOptions;
-        AudioCombo.ItemsSource = _audioOptions;
-        Loaded += OnLoaded;
-        Activated += OnWindowActivated;
-        KeyDown += OnKeyDown;
-        _statsTimer.Tick += (_, _) => UpdateStats();
-        _epgTimer.Tick += (_, _) => UpdateEpgProgress();
-        _progressTimer.Tick += (_, _) => UpdateSeek();
-        _osdTimer.Tick += (_, _) => HideOsd();
-        _elySoundApplyTimer.Tick += (_, _) => FlushPendingElySound();
 
-        SeekSlider.AddHandler(Thumb.DragStartedEvent, new DragStartedEventHandler((_, _) => _userSeeking = true));
-        SeekSlider.AddHandler(Thumb.DragCompletedEvent, new DragCompletedEventHandler((_, _) => { SeekToSlider(); _userSeeking = false; }));
-        SeekSlider.AddHandler(PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler((_, _) => SeekToSlider()), true);
+        var gate = new UiLoadGate();
+        _osd = new OsdController(this, vm, session);
+        _overlay = new OverlayWindowHost(this, session, _osd, OnKeyDown);
+        _visualizer = new AudioVisualizerController(this, vm, session, store, _osd, services.AudioEngine, _mediaTransport);
+        _playback = new PlaybackController(this, vm, session, services.Library, services.Queue, store, services.Pipeline,
+            _visualizer, _osd, _mediaTransport);
+        _backendHost = new BackendHost(this, session, store, services.Pipeline, _osd, _playback);
+        _catalog = new CatalogController(this, vm, session, services.Library, services.Queue, _playback, _osd);
+        _music = new MusicLibraryController(this, vm, session, services.Library, services.Queue, store, _playback, _osd,
+            _catalog, services.LocalLibrary, gate);
+        _connection = new ConnectionController(this, vm, session, services.Library, store, _playback, _catalog, _music, _overlay);
+        _upscaling = new UpscalingPanel(this, session, store, services.Pipeline, gate);
+        _elyColor = new ElyColorPanel(this, session, store, services.Pipeline, gate, _backendHost, _upscaling);
+        _elySound = new ElySoundPanel(this, session, store, services.Pipeline, gate);
+        _elyFlow = new ElyFlowPanel(this, store, services.Pipeline, gate);
+        _elySmart = new ElySmartPanel(this, session, store, _visualizer, services.Benchmark, services.PerformanceHistory,
+            services.HealthAnalyzer, services.Notifications, services.Optimizer);
+        _magpie = new MagpiePanel(this, store, services.Magpie);
+        _settings = new SettingsController(this, vm, session, store, gate, services.Pipeline, _playback, _visualizer,
+            _backendHost, _catalog, _music, _connection, _upscaling, _elyColor, _elySound, _elyFlow, _elySmart, _magpie,
+            services.MpvInstaller, _osd);
+        _chrome = new WindowChromeController(this, vm, session, _osd, _overlay);
+        _console = new PlayerConsoleCommands(Dispatcher, session, services.Library, store, _catalog, _playback, _connection,
+            _settings, _upscaling, _elyColor, _elySound, _elyFlow, _magpie, _chrome, Zap,
+            visibility => Visibility = visibility, text => SearchBox.Text = text,
+            () => (int)VolumeSlider.Value, volume => VolumeSlider.Value = volume);
+        _diagnostics = new DiagnosticRunner(Dispatcher, session, _playback, _connection);
+
+        _backendHost.Playing += _playback.OnBackendPlaying;
+        _backendHost.Failed += _playback.OnBackendFailed;
+        _backendHost.Ended += _playback.OnBackendEnded;
+        _backendHost.Paused += _playback.OnBackendPaused;
+        _backendHost.SurfaceClicked += OnNativeSurfaceClicked;
+        _playback.MediaStateChanged += () =>
+        {
+            _upscaling.RefreshOsdRow();
+            _elyColor.RefreshOsdRow();
+            _elySound.RefreshOsdRow();
+        };
+
+        _composed = true;
+        Loaded += OnLoaded;
+        Activated += (_, _) => _overlay.OnOwnerActivated();
+        KeyDown += OnKeyDown;
     }
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
-        AnimateLoginIn();
-        InitVideoBackend();
-        InitMagpieMessages();
-        LoadProfiles();
-        RegisterConsoleCommands();
-        LoadSettingsIntoUi();
-        LoadLocalLibrary();
-        ApplyOnboardingPreferences();
-        StartDiagnosticPlaybackIfRequested();
-        InitializeElySmart();
+        _connection.AnimateLoginIn();
+        _backendHost.Initialize();
+        _magpie.HookWindowMessages();
+        _connection.LoadProfiles();
+        _console.Register();
+        _settings.LoadIntoUi();
+        _music.LoadAsync().Forget("Local library load");
+        _connection.ApplyOnboardingPreferences();
+        _diagnostics.StartIfRequested();
+        _elySmart.Initialize();
 
         // Keep the airspace overlay (owned window) glued to the video area as the
         // window moves or resizes. An owned window follows the main window
         // anywhere - including partially off-screen - minimises/restores with it
         // and never floats above other applications, so no activation juggling
         // is needed.
-        LocationChanged += (_, _) => ReanchorOverlay();
-        SizeChanged += (_, _) => { UpdateOsdSafeArea(); RefreshOverlayLayout(); };
-        DpiChanged += (_, _) => RefreshOverlayLayout();
-        StateChanged += (_, _) => { UpdateOsdSafeArea(); UpdateOverlayVisibility(); RefreshOverlayLayout(); };
+        LocationChanged += (_, _) => _overlay.Reanchor();
+        SizeChanged += (_, _) => { _osd.UpdateSafeArea(); _overlay.RefreshLayout(); };
+        DpiChanged += (_, _) => _overlay.RefreshLayout();
+        StateChanged += (_, _) => { _osd.UpdateSafeArea(); _overlay.UpdateVisibility(); _overlay.RefreshLayout(); };
     }
 
-    /// <summary>
-    /// Applies the choices made in the first-run wizard: personalised welcome,
-    /// preselected connection tab, and direct entry into the local library for
-    /// the "local only" mode (no IPTV account required).
-    /// </summary>
-    private void ApplyOnboardingPreferences()
+    protected override void OnSourceInitialized(EventArgs e)
     {
-        var s = StateStore.Settings;
-        if (!string.IsNullOrWhiteSpace(s.UserDisplayName))
-            WelcomeTitle.Text = LocalizationService.Format("Welcome {0} 👋", s.UserDisplayName);
-
-        switch (s.PreferredConnection)
-        {
-            case "m3u":
-                SwitchTab(true);
-                break;
-            case "local":
-                EnterLocalOnlyMode();
-                return;
-        }
-
-        // Credentials entered during onboarding are stored as a normal saved
-        // profile; connect with it right away instead of showing the login.
-        if (!string.IsNullOrWhiteSpace(s.AutoConnectProfile))
-        {
-            var profile = _profiles.FirstOrDefault(p => p.Name == s.AutoConnectProfile);
-            if (profile == null)
-            {
-                // The profile was deleted: stop trying at every launch.
-                s.AutoConnectProfile = "";
-                StateStore.Save();
-                return;
-            }
-
-            DebugConsole.Info(LocalizationService.Format("Connecting automatically with profile “{0}”...", profile.Name));
-            if (profile.Kind == ProfileKind.Xtream)
-            {
-                SwitchTab(false);
-                UrlBox.Text = profile.Url;
-                UserBox.Text = profile.Username;
-                PassBox.Password = ProfileStore.Unprotect(profile.ProtectedPassword);
-            }
-            else
-            {
-                SwitchTab(true);
-                M3uPathBox.Text = profile.M3uPath;
-            }
-            Connect_Click(this, new RoutedEventArgs());
-        }
+        base.OnSourceInitialized(e);
+        _chrome.Attach();
     }
 
-    /// <summary>Local-only mode: straight to the local library, no IPTV login.</summary>
-    private void EnterLocalOnlyMode()
+    // ============ CROSS-FEATURE INPUT ============
+    private void Zap(int direction)
     {
-        DebugConsole.Info("Local-only mode: opening the library directly.");
-        _connectCts?.Cancel();
-        _sectionCts?.Cancel();
-        _iptv = new IptvService();
-        _liveItems.Clear();
-        _movieItems = null; _seriesItems = null;
-        _connected = true;
-        _state = StateStore.ForProfile("local-only");
-        MarkFavorites(_localAudioItems);
-        MarkFavorites(_localVideoItems);
-        _suppressNav = true;
-        NavLocalAudio.IsChecked = true;
-        _suppressNav = false;
-        ShowSection(Section.LocalAudio);
-        ShowOverlay("Add local files, then start playback", spinning: false);
-        GoToPlayer();
+        if (!_playback.TryZapAudio(direction)) _catalog.ZapList(direction);
     }
 
-    private void LocalOnly_Click(object sender, RoutedEventArgs e) => EnterLocalOnlyMode();
+    private void ResumeFromSystemControls() => _playback.ResumeFromSystemControls();
+    private void PauseFromSystemControls() => _playback.PauseFromSystemControls();
 
-    private void StartDiagnosticPlaybackIfRequested()
-    {
-        var path = Environment.GetEnvironmentVariable("ELYCAST_DIAGNOSTIC_FILE");
-        if (string.IsNullOrWhiteSpace(path)) return;
-        if (!File.Exists(path))
-        {
-            DebugConsole.Warn("Diagnostic playback: file not found.");
-            return;
-        }
-
-        // Opt-in test hook used by automated renderer smoke/performance tests.
-        // A short dispatcher delay lets backend creation settle before opening
-        // the media.
-        _connected = true;
-        GoToPlayer();
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        timer.Tick += (_, _) =>
-        {
-            timer.Stop();
-            if (_videoBackend == null) return;
-            DebugConsole.Info("Diagnostic playback: local file.");
-            var item = PlayItem.FromLocalFile(path);
-            Play(item, persistHistory: false);
-            StartDiagnosticElySoundSweepIfRequested();
-            StartDiagnosticPipelineSweepIfRequested();
-            _ = LogDiagnosticPlaybackStatsAsync(_videoBackend);
-        };
-        timer.Start();
-    }
-
-    private async void StartDiagnosticPipelineSweepIfRequested()
-    {
-        if (!string.Equals(Environment.GetEnvironmentVariable("ELYCAST_DIAGNOSTIC_PIPELINE_SWEEP"), "1", StringComparison.Ordinal))
-            return;
-        if (_videoBackend is not MpvHwndBackend { IsElyCoreRenderer: true } backend) return;
-
-        await Task.Delay(1800);
-        static string Snapshot(MpvHwndBackend current, ElyFlowRendererInterop.RendererState state) =>
-            current.GetElyCoreVsrAuditSnapshot() + Environment.NewLine +
-            $"ELYCORE target rebuilds: {state.TargetRebuilds}{Environment.NewLine}" +
-            $"ELYCORE FRUC effective: {state.FrucInitialized != 0}{Environment.NewLine}" +
-            $"ELYCORE frames presented: {state.FramesPresented}";
-
-        DebugConsole.Info("Diagnostic pipeline initial:\n" + Snapshot(backend, ElyFlowRendererInterop.GetState()));
-        backend.ConfigureElyCoreVsr(false);
-        await Task.Delay(700);
-        DebugConsole.Info("Diagnostic pipeline VSR off:\n" + Snapshot(backend, ElyFlowRendererInterop.GetState()));
-        backend.ConfigureElyCoreVsr(true);
-        await Task.Delay(900);
-        DebugConsole.Info("Diagnostic pipeline VSR on:\n" + Snapshot(backend, ElyFlowRendererInterop.GetState()));
-        backend.ConfigureElyCoreVsr(false);
-        await Task.Delay(700);
-        DebugConsole.Info("Diagnostic pipeline VSR off #2:\n" + Snapshot(backend, ElyFlowRendererInterop.GetState()));
-        backend.ConfigureElyCoreVsr(true);
-        await Task.Delay(900);
-        DebugConsole.Info("Diagnostic pipeline VSR on #2:\n" + Snapshot(backend, ElyFlowRendererInterop.GetState()));
-        backend.ConfigureElyCoreFruc(false);
-        await Task.Delay(500);
-        DebugConsole.Info("Diagnostic pipeline FRUC off:\n" + Snapshot(backend, ElyFlowRendererInterop.GetState()));
-        backend.ConfigureElyCoreFruc(true);
-        await Task.Delay(3600);
-        DebugConsole.Info("Diagnostic pipeline VSR+FRUC:\n" + Snapshot(backend, ElyFlowRendererInterop.GetState()));
-    }
-
-    private async void StartDiagnosticElySoundSweepIfRequested()
-    {
-        if (!string.Equals(Environment.GetEnvironmentVariable("ELYCAST_DIAGNOSTIC_ELYSOUND_SWEEP"), "1", StringComparison.Ordinal))
-            return;
-        if (_videoBackend is not IElySoundBackend dsp) return;
-
-        await Task.Delay(1200);
-        foreach (var profile in ElySoundCatalog.BuiltIn)
-        {
-            if (_videoBackend is not IElySoundBackend current || !ReferenceEquals(current, dsp)) return;
-            var before = _videoBackend.PositionMs;
-            var stopwatch = Stopwatch.StartNew();
-            var result = dsp.ApplyElySound(profile, enabled: true, virtualSurround: true);
-            stopwatch.Stop();
-            var after = _videoBackend.PositionMs;
-            DebugConsole.Info($"Diagnostic ELYSOUND+ {profile.Id}: applied={result.Applied}, pending={result.Pending}, " +
-                              $"commande={stopwatch.Elapsed.TotalMilliseconds:0.0} ms, position {before}->{after} ms (delta={after - before} ms), {result.Message}");
-            await Task.Delay(350);
-        }
-
-        if (_videoBackend?.HasMedia == true)
-        {
-            _videoBackend.Pause();
-            var pausedAt = _videoBackend.PositionMs;
-            await Task.Delay(300);
-            var pausedApply = dsp.ApplyElySound(ElySoundCatalog.BuiltIn[1], enabled: true, virtualSurround: false);
-            var pausedAfter = _videoBackend.PositionMs;
-            DebugConsole.Info($"Diagnostic ELYSOUND+ pause: applied={pausedApply.Applied}, position {pausedAt}->{pausedAfter} ms");
-            _videoBackend.Resume();
-            await Task.Delay(300);
-            var beforeSeek = _videoBackend.PositionMs;
-            _videoBackend.SeekRelative(1000);
-            await Task.Delay(300);
-            DebugConsole.Info($"Playback pause/resume/seek diagnostic: before={beforeSeek} ms, after={_videoBackend.PositionMs} ms");
-        }
-    }
-
-    private async Task LogDiagnosticPlaybackStatsAsync(IVideoBackend expectedBackend)
-    {
-        await Task.Delay(TimeSpan.FromSeconds(5));
-        await Dispatcher.InvokeAsync(() =>
-        {
-            if (!ReferenceEquals(_videoBackend, expectedBackend)) return;
-            var stats = expectedBackend.GetStats();
-            DebugConsole.Info(string.Create(CultureInfo.InvariantCulture,
-                $"Renderer diagnostic: source={stats.SourceWidth}x{stats.SourceHeight}, output={stats.OutputWidth}x{stats.OutputHeight}, FPS={stats.Fps:0.###}, displayed={stats.DisplayedFrames}, dropped={stats.DroppedFrames}, pipeline={stats.Shaders}"));
-        });
-    }
-
-    // ============ PROFILES (login) ============
-    private void LoadProfiles()
-    {
-        _profiles.Clear();
-        if (!(StateStore.SuppressSaves && Environment.GetEnvironmentVariable("ELYCAST_DIAGNOSTIC_CLEAN") == "1"))
-            foreach (var p in ProfileStore.Load()) _profiles.Add(p);
-        ProfilesItems.ItemsSource = _profiles;
-        ProfilesSection.Visibility = _profiles.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    private void LoadProfile_Click(object sender, RoutedEventArgs e)
-    {
-        if (((FrameworkElement)sender).Tag is not Profile p) return;
-        if (p.Kind == ProfileKind.Xtream)
-        {
-            SwitchTab(false);
-            UrlBox.Text = p.Url; UserBox.Text = p.Username;
-            PassBox.Password = ProfileStore.Unprotect(p.ProtectedPassword);
-        }
-        else { SwitchTab(true); M3uPathBox.Text = p.M3uPath; }
-        Connect_Click(this, new RoutedEventArgs());
-    }
-
-    private void DeleteProfile_Click(object sender, RoutedEventArgs e)
-    {
-        if (((FrameworkElement)sender).Tag is not Profile p) return;
-        _profiles.Remove(p);
-        if (StateStore.Settings.AutoConnectProfile == p.Name)
-        {
-            StateStore.Settings.AutoConnectProfile = "";
-            StateStore.Save();
-        }
-        ProfileStore.Save(_profiles.ToList());
-        ProfilesSection.Visibility = _profiles.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    private void SaveCurrentProfileIfRequested()
-    {
-        if (SaveProfileCheck.IsChecked != true) return;
-        var name = ProfileNameBox.Text.Trim();
-        if (string.IsNullOrEmpty(name))
-            name = _m3uMode ? "Playlist M3U" : (UserBox.Text.Trim() + " @ " + UrlBox.Text.Trim());
-
-        var profile = _m3uMode
-            ? new Profile { Name = name, Kind = ProfileKind.M3u, M3uPath = M3uPathBox.Text.Trim() }
-            : new Profile
-            {
-                Name = name, Kind = ProfileKind.Xtream, Url = UrlBox.Text.Trim(),
-                Username = UserBox.Text.Trim(), ProtectedPassword = ProfileStore.Protect(PassBox.Password)
-            };
-        var existing = _profiles.FirstOrDefault(p => p.Name == name);
-        if (existing != null) _profiles.Remove(existing);
-        _profiles.Add(profile);
-        ProfileStore.Save(_profiles.ToList());
-    }
-
-    // ============ TABS ============
-    private void XtreamTab_Click(object sender, RoutedEventArgs e) => SwitchTab(false);
-    private void M3uTab_Click(object sender, RoutedEventArgs e) => SwitchTab(true);
-
-    private void SwitchTab(bool m3u)
-    {
-        _m3uMode = m3u;
-        XtreamPanel.Visibility = m3u ? Visibility.Collapsed : Visibility.Visible;
-        M3uPanel.Visibility = m3u ? Visibility.Visible : Visibility.Collapsed;
-        Grid.SetColumn(TabHighlight, m3u ? 1 : 0);
-        XtreamTabBtn.Foreground = m3u ? (Brush)FindResource("MutedBrush") : Brushes.White;
-        M3uTabBtn.Foreground = m3u ? Brushes.White : (Brush)FindResource("MutedBrush");
-    }
-
-    private void Browse_Click(object sender, RoutedEventArgs e)
-    {
-        var dlg = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = LocalizationService.T("Choose an M3U playlist"),
-            Filter = LocalizationService.T("M3U playlists (*.m3u;*.m3u8)|*.m3u;*.m3u8|All files (*.*)|*.*")
-        };
-        if (dlg.ShowDialog() == true) M3uPathBox.Text = dlg.FileName;
-    }
-
-    private void SaveProfile_Toggle(object sender, RoutedEventArgs e) =>
-        ProfileNamePanel.Visibility = SaveProfileCheck.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
-
-    // ============ CONNECT ============
-    private void AnimateLoginIn()
-    {
-        LoginView.BeginAnimation(OpacityProperty,
-            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(450)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
-        LoginCardT.BeginAnimation(TranslateTransform.YProperty,
-            new DoubleAnimation(24, 0, TimeSpan.FromMilliseconds(550)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
-    }
-
-    private async void Connect_Click(object sender, RoutedEventArgs e)
-    {
-        _connectCts?.Cancel();
-        var cts = new CancellationTokenSource();
-        _connectCts = cts;
-        var ct = cts.Token;
-        SetConnecting(true);
-        StatusText.Text = "";
-        try
-        {
-            var candidate = new IptvService();
-            List<Channel> channels;
-            if (_m3uMode)
-            {
-                var path = M3uPathBox.Text.Trim();
-                if (string.IsNullOrWhiteSpace(path)) { StatusText.Text = LocalizationService.T("Enter an M3U file or URL."); SetConnecting(false); return; }
-                (_, channels) = await candidate.LoadM3uAsync(path, ct);
-            }
-            else
-            {
-                var url = UrlBox.Text.Trim(); var user = UserBox.Text.Trim(); var pass = PassBox.Password;
-                if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(pass))
-                { StatusText.Text = LocalizationService.T("Enter the URL, username, and password."); SetConnecting(false); return; }
-                (_, channels) = await candidate.ConnectAsync(url, user, pass, ct);
-            }
-
-            ct.ThrowIfCancellationRequested();
-
-            if (channels.Count == 0 && !candidate.IsXtream) { StatusText.Text = LocalizationService.T("Connection succeeded, but no channels were found."); return; }
-
-            _iptv = candidate;
-            _state = StateStore.ForProfile(_iptv.ProfileKey);
-            _liveItems = channels.Select(PlayItem.FromChannel).ToList();
-            _movieItems = null; _seriesItems = null;
-            MarkFavorites(_liveItems);
-
-            SaveCurrentProfileIfRequested();
-            _connected = true;
-            NavLive.IsChecked = true;
-            ShowSection(Section.Live);
-            UpdateResumeButton();
-            GoToPlayer();
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            DebugConsole.Info("Connection canceled.");
-        }
-        catch (Exception ex)
-        {
-            if (ct.IsCancellationRequested || _shuttingDown) return;
-            StatusText.Text = LocalizationService.T("Connection failed: ") + ex.Message;
-            DebugConsole.Error("Connection: " + ex.Message);
-        }
-        finally
-        {
-            if (ReferenceEquals(_connectCts, cts))
-            {
-                _connectCts = null;
-                SetConnecting(false);
-            }
-            cts.Dispose();
-        }
-    }
-
-    private void SetConnecting(bool busy)
-    {
-        ConnectBtn.IsEnabled = !busy;
-        UrlBox.IsEnabled = UserBox.IsEnabled = PassBox.IsEnabled = M3uPathBox.IsEnabled = !busy;
-        XtreamTabBtn.IsEnabled = M3uTabBtn.IsEnabled = !busy;
-        ConnectLabel.Text = LocalizationService.T(busy ? "Connecting..." : "Sign in");
-        LoginIcon.Visibility = busy ? Visibility.Collapsed : Visibility.Visible;
-        LoginSpinner.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
-        if (busy) StartSpin(LoginSpinner); else StopSpin(LoginSpinner);
-    }
-
-    private void GoToPlayer()
-    {
-        PlayerView.Visibility = Visibility.Visible;
-        // Show the airspace overlay (OSD/menus) now that the player is visible.
-        // Defer so VideoStage has been laid out and has a real size to anchor to.
-        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
-        {
-            if (!_connected || _shuttingDown) return;
-            var overlay = EnsureOverlayWindow();
-            UpdateOsdSafeArea();
-            SyncOverlaySize();
-            overlay.Show();
-            SyncOverlaySize();
-            ReanchorOverlay();
-        }));
-        var outFade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(280));
-        outFade.Completed += (_, _) => { if (_connected) LoginView.Visibility = Visibility.Collapsed; };
-        LoginView.BeginAnimation(OpacityProperty, outFade);
-        PlayerView.BeginAnimation(OpacityProperty,
-            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(420))
-            { BeginTime = TimeSpan.FromMilliseconds(160), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
-    }
-
-    private void Disconnect_Click(object sender, RoutedEventArgs e)
-    {
-        CloseSeriesPanel();
-        CloseMusicPanel();
-        _connectCts?.Cancel();
-        _sectionCts?.Cancel();
-        _seriesCts?.Cancel();
-        CancelEpgRequest();
-        Interlocked.Increment(ref _playbackGeneration);
-        _reconnectTimer?.Stop();
-        try { _videoBackend?.Stop(PlaybackEndReason.Teardown); } catch { }
-        _statsTimer.Stop(); _epgTimer.Stop(); _progressTimer.Stop();
-        HideAudioVisualizer();
-        _mediaTransport.Clear();
-        _connected = false;
-        _iptv = new IptvService();
-        _movieItems = null; _seriesItems = null;
-        _audioQueue.Clear(); _audioPlayContext = null; _audioAutoIndex = -1;
-        _audioPlayingManualQueue = false;
-        UpdateQueueLabel();
-        _current = null;
-        _overlayWindow?.Hide();
-        ShowOverlay("Select a channel to start playback", spinning: false);
-        TopTitle.Text = LocalizationService.T("Nothing playing"); TopSubtitle.Text = LocalizationService.T("Waiting...");
-        SeekArea.Visibility = Visibility.Collapsed;
-        SkipBackBtn.Visibility = Visibility.Collapsed;
-        SkipFwdBtn.Visibility = Visibility.Collapsed;
-        EpgProgress.Visibility = Visibility.Collapsed;
-        LoadProfiles();
-
-        LoginView.Visibility = Visibility.Visible;
-        LoginView.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(380)));
-        var outFade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(260));
-        outFade.Completed += (_, _) => { if (!_connected) PlayerView.Visibility = Visibility.Collapsed; };
-        PlayerView.BeginAnimation(OpacityProperty, outFade);
-    }
-
-
-
-    // ============ FULLSCREEN / KEYS ============
-    private void Fullscreen_Click(object sender, RoutedEventArgs e) => ToggleFullscreen();
-
-    private void ToggleFullscreen()
-    {
-        _isFullscreen = !_isFullscreen;
-        if (_isFullscreen)
-        {
-            UpdateOsdSafeArea();
-            _videoBackend?.SetFullscreen(true);
-            // remember windowed bounds
-            _prevState = WindowState;
-            _prevLeft = Left; _prevTop = Top; _prevW = Width; _prevH = Height;
-
-            // hide chrome
-            NavRail.Visibility = Visibility.Collapsed;
-            Sidebar.Visibility = Visibility.Collapsed;
-            NavColumn.Width = new GridLength(0);
-            SidebarColumn.Width = new GridLength(0);
-            TitleRow.Height = new GridLength(0);
-            TitleBar.Visibility = Visibility.Collapsed;
-            VideoArea.Margin = new Thickness(0);
-
-            // cover the whole monitor (incl. taskbar)
-            WindowState = WindowState.Normal;
-            var r = GetMonitorRectDip();
-            if (r.HasValue) { Left = r.Value.X; Top = r.Value.Y; Width = r.Value.Width; Height = r.Value.Height; }
-            else WindowState = WindowState.Maximized;
-            ResizeMode = ResizeMode.NoResize;
-            Topmost = false;
-            if (_overlayWindow != null) _overlayWindow.Topmost = false;
-            UpdateOsdSafeArea();
-        }
-        else
-        {
-            UpdateOsdSafeArea();
-            _videoBackend?.SetFullscreen(false);
-            Topmost = false;
-            if (_overlayWindow != null) _overlayWindow.Topmost = false;
-            ResizeMode = ResizeMode.CanResize;
-            NavRail.Visibility = Visibility.Visible;
-            Sidebar.Visibility = Visibility.Visible;
-            NavColumn.Width = new GridLength(76);
-            SidebarColumn.Width = new GridLength(330);
-            TitleRow.Height = new GridLength(44);
-            TitleBar.Visibility = Visibility.Visible;
-            VideoArea.Margin = new Thickness(7, 0, 14, 14);
-
-            if (_prevState == WindowState.Maximized) WindowState = WindowState.Maximized;
-            else { WindowState = WindowState.Normal; Left = _prevLeft; Top = _prevTop; Width = _prevW; Height = _prevH; }
-            UpdateOsdSafeArea();
-            VideoStage.Cursor = Cursors.Arrow;
-        }
-    }
-
-    // ============ OSD (auto-hide controls) ============
-    private void Stage_MouseMove(object sender, MouseEventArgs e)
-    {
-        if (IsPanelOpen()) return;
-        ShowOsd();
-    }
-    private void Stage_MouseLeave(object sender, MouseEventArgs e) => SchedulePointerLeaveCheck();
-
-    private void OnVideoSurfacePointerActivity()
-    {
-        if (Dispatcher.CheckAccess()) ShowOsd();
-        else Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(ShowOsd));
-    }
-
-    private void OnVideoSurfacePointerLeft()
-    {
-        if (Dispatcher.CheckAccess()) SchedulePointerLeaveCheck();
-        else Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(SchedulePointerLeaveCheck));
-    }
-
-    private void SchedulePointerLeaveCheck()
-    {
-        // Crossing between the child HWND and its WPF overlay emits a native
-        // MouseLeave even though the pointer never left the player. Recheck the
-        // real screen position after Windows has completed the HWND transition.
-        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
-        {
-            if (!IsCursorOverVideoStage() && _videoBackend?.IsPlaying == true)
-                HideOsd();
-        }));
-    }
-
-    private bool IsCursorOverVideoStage()
-    {
-        if (!VideoStage.IsVisible || VideoStage.ActualWidth <= 0 || VideoStage.ActualHeight <= 0)
-            return false;
-        try
-        {
-            if (!GetCursorPos(out var cursor)) return false;
-            var point = VideoStage.PointFromScreen(new Point(cursor.X, cursor.Y));
-            return point.X >= 0 && point.Y >= 0 &&
-                   point.X < VideoStage.ActualWidth && point.Y < VideoStage.ActualHeight;
-        }
-        catch { return false; }
-    }
-
-    // Click-to-pause when the native surface (AudioCore+ / video swapchain) captured
-    // the click instead of the WPF overlay. Mirrors OverlayRoot_MouseLeftButtonUp but
-    // works in VideoStage coordinates since there is no WPF hit here.
-    private void OnNativeSurfaceClicked()
-    {
-        if (_videoBackend?.HasMedia != true || IsPanelOpen()) return;
-        if (_osdVisible && IsCursorOverOsdControls()) return;
-        try
-        {
-            if (!GetCursorPos(out var cursor)) return;
-            var p = VideoStage.PointFromScreen(new Point(cursor.X, cursor.Y));
-            if (p.X < VideoStage.ActualWidth * 0.2 || p.X > VideoStage.ActualWidth * 0.8
-                || p.Y < VideoStage.ActualHeight * 0.15 || p.Y > VideoStage.ActualHeight * 0.78) return;
-        }
-        catch { return; }
-
-        var wasPlaying = _videoBackend.IsPlaying;
-        PlayPause_Click(this, new RoutedEventArgs());
-        ShowCenterTransportFeedback(showPause: wasPlaying);
-    }
-
-    private bool IsCursorOverOsdControls()
-    {
-        try
-        {
-            if (!GetCursorPos(out var cursor)) return false;
-            var p = OsdBottomChrome.PointFromScreen(new Point(cursor.X, cursor.Y));
-            return p.X >= 0 && p.Y >= 0 && p.X < OsdBottomChrome.ActualWidth && p.Y < OsdBottomChrome.ActualHeight;
-        }
-        catch { return false; }
-    }
-
-    private bool IsPanelOpen() =>
-        SettingsPanel.Visibility == Visibility.Visible || SeriesPanel.Visibility == Visibility.Visible
-        || MusicPanel.Visibility == Visibility.Visible;
-
-    private void ShowOsd()
-    {
-        if (IsPanelOpen()) return;
-        UpdateOsdSafeArea();
-        if (!_osdVisible)
-        {
-            _osdVisible = true;
-            Osd.IsHitTestVisible = true;
-            Osd.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(90)));
-        }
-        VideoStage.Cursor = Cursors.Arrow;
-        _osdTimer.Stop(); _osdTimer.Start();
-    }
-
-    private void HideOsd() => HideOsd(force: false);
-
-    private void HideOsd(bool force)
-    {
-        _osdTimer.Stop();
-        // keep the controls visible whenever we're not actively playing
-        if (!force && (_videoBackend == null || !_videoBackend.IsPlaying)) return;
-        if (!force && Osd.IsMouseOver) { _osdTimer.Start(); return; }
-        if (!_osdVisible) return;
-        _osdVisible = false;
-        Osd.IsHitTestVisible = false;
-        Osd.BeginAnimation(OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(220)));
-        VideoStage.Cursor = IsPanelOpen() ? Cursors.Arrow : Cursors.None;
-    }
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MonitorInfo mi);
-    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
-    private static extern int RegisterWindowMessage(string lpString);
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern bool GetCursorPos(out PointInt point);
-    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
-    private static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
-    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
-    private static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr newValue);
-
-    private const int GWL_EXSTYLE = -20;
-    private const long WS_EX_TOOLWINDOW = 0x00000080L;
-    private const long WS_EX_NOACTIVATE = 0x08000000L;
-    private const int WM_MOUSEACTIVATE = 0x0021;
-    private const int MA_NOACTIVATE = 3;
-
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-    private struct Rect { public int Left, Top, Right, Bottom; }
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-    private struct MonitorInfo { public int cbSize; public Rect rcMonitor; public Rect rcWork; public uint dwFlags; }
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-    private struct PointInt { public int X, Y; }
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-    private struct MinMaxInfo
-    {
-        public PointInt ptReserved, ptMaxSize, ptMaxPosition, ptMinTrackSize, ptMaxTrackSize;
-    }
-
-    private System.Windows.Rect? GetMonitorRectDip()
-    {
-        try
-        {
-            var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-            var mon = MonitorFromWindow(hwnd, 2 /*NEAREST*/);
-            var mi = new MonitorInfo { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<MonitorInfo>() };
-            if (!GetMonitorInfo(mon, ref mi)) return null;
-            var src = System.Windows.Interop.HwndSource.FromHwnd(hwnd);
-            var m = src?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
-            var tl = m.Transform(new Point(mi.rcMonitor.Left, mi.rcMonitor.Top));
-            var br = m.Transform(new Point(mi.rcMonitor.Right, mi.rcMonitor.Bottom));
-            return new System.Windows.Rect(tl.X, tl.Y, br.X - tl.X, br.Y - tl.Y);
-        }
-        catch { return null; }
-    }
+    private void TogglePlayPause() => _playback.PlayPause(_catalog.SelectedPlayable);
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape && IsPanelOpen()) { CloseOverlay_Click(this, new RoutedEventArgs()); e.Handled = true; return; }
-        if (e.Key == Key.Escape && _isFullscreen) { ToggleFullscreen(); return; }
-        if (e.Key == Key.F11) { ToggleFullscreen(); return; }
+        if (e.Key == Key.Escape && _osd.IsPanelOpen) { _settings.CloseAllPanels(); e.Handled = true; return; }
+        if (e.Key == Key.Escape && _chrome.IsFullscreen) { _chrome.ToggleFullscreen(); return; }
+        if (e.Key == Key.F11) { _chrome.ToggleFullscreen(); return; }
         if (!PlayerView.IsVisible || SettingsPanel.Visibility == Visibility.Visible) return;
         if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.F)
         {
@@ -819,33 +163,53 @@ public partial class MainWindow : Window
         }
         if (Keyboard.FocusedElement is TextBoxBase or PasswordBox or ComboBox || Keyboard.Modifiers != ModifierKeys.None) return;
 
-        if (e.Key == Key.Space) { PlayPause_Click(this, new RoutedEventArgs()); e.Handled = true; }
-        else if (SeekArea.Visibility == Visibility.Visible && e.Key == Key.Left) { SeekRelative(-15_000); ShowOsd(); e.Handled = true; }
-        else if (SeekArea.Visibility == Visibility.Visible && e.Key == Key.Right) { SeekRelative(15_000); ShowOsd(); e.Handled = true; }
-        else if (StateStore.Settings.ZapWithArrows && e.Key == Key.Up) { Zap(-1); e.Handled = true; }
-        else if (StateStore.Settings.ZapWithArrows && e.Key == Key.Down) { Zap(1); e.Handled = true; }
-        else if (e.Key == Key.Enter && ItemList.Visibility == Visibility.Visible && ItemList.SelectedItem is PlayItem c)
+        var seekable = SeekArea.Visibility == Visibility.Visible;
+        if (e.Key == Key.Space) { TogglePlayPause(); e.Handled = true; }
+        else if (seekable && e.Key == Key.Left) { _playback.SeekRelative(-15_000); _osd.Show(); e.Handled = true; }
+        else if (seekable && e.Key == Key.Right) { _playback.SeekRelative(15_000); _osd.Show(); e.Handled = true; }
+        else if (_services.Store.Settings.ZapWithArrows && e.Key == Key.Up) { Zap(-1); e.Handled = true; }
+        else if (_services.Store.Settings.ZapWithArrows && e.Key == Key.Down) { Zap(1); e.Handled = true; }
+        else if (e.Key == Key.Enter && ItemList.Visibility == Visibility.Visible && ItemList.SelectedItem is PlayItem)
         {
-            ItemList_DoubleClick(sender, new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left));
+            _catalog.ActivateSelected();
             e.Handled = true;
         }
     }
 
+    // Click-to-pause in the middle of the picture (WPF overlay hit).
     private void OverlayRoot_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (_videoBackend?.HasMedia != true || IsPanelOpen()) return;
-        if (FindInteractiveAncestor(e.OriginalSource as DependencyObject)) return;
-        var point = e.GetPosition(OverlayRoot);
-        if (point.X < OverlayRoot.ActualWidth * 0.2 || point.X > OverlayRoot.ActualWidth * 0.8
-            || point.Y < OverlayRoot.ActualHeight * 0.15 || point.Y > OverlayRoot.ActualHeight * 0.78) return;
-
-        var wasPlaying = _videoBackend.IsPlaying;
-        PlayPause_Click(this, new RoutedEventArgs());
-        ShowCenterTransportFeedback(showPause: wasPlaying);
+        if (!_services.Session.HasMedia || _osd.IsPanelOpen) return;
+        if (IsInteractive(e.OriginalSource as DependencyObject)) return;
+        if (!OsdController.IsInPlayPauseZone(e.GetPosition(OverlayRoot), OverlayRoot.ActualWidth, OverlayRoot.ActualHeight)) return;
+        ClickToPause();
         e.Handled = true;
     }
 
-    private static bool FindInteractiveAncestor(DependencyObject? source)
+    // Same gesture when the native surface (AudioCore+ / video swapchain)
+    // captured the click instead of the WPF overlay; VideoStage coordinates.
+    private void OnNativeSurfaceClicked()
+    {
+        if (!_services.Session.HasMedia || _osd.IsPanelOpen) return;
+        if (_osd.IsVisible && _osd.IsCursorOverOsdControls()) return;
+        if (NativeMethods.CursorScreenPosition() is not { } cursor) return;
+        try
+        {
+            var p = VideoStage.PointFromScreen(cursor);
+            if (!OsdController.IsInPlayPauseZone(p, VideoStage.ActualWidth, VideoStage.ActualHeight)) return;
+        }
+        catch (InvalidOperationException) { return; }
+        ClickToPause();
+    }
+
+    private void ClickToPause()
+    {
+        var wasPlaying = _services.Session.IsPlaying;
+        TogglePlayPause();
+        _osd.ShowCenterTransportFeedback(showPause: wasPlaying);
+    }
+
+    private static bool IsInteractive(DependencyObject? source)
     {
         for (var current = source; current != null; current = VisualTreeHelper.GetParent(current))
             // ComboBoxItem is hosted in a separate Popup visual tree, so walking
@@ -854,100 +218,199 @@ public partial class MainWindow : Window
         return false;
     }
 
-    private void ShowCenterTransportFeedback(bool showPause)
+    private void Stage_MouseMove(object sender, MouseEventArgs e)
     {
-        CenterTransportIcon.Data = Geometry.Parse(showPause
-            ? "M 4,2 L 11,2 L 11,18 L 4,18 Z M 15,2 L 22,2 L 22,18 L 15,18 Z"
-            : "M 5,2 L 21,10 L 5,18 Z");
-        CenterTransportFeedback.BeginAnimation(OpacityProperty, null);
-        CenterTransportScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
-        CenterTransportScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
-        CenterTransportFeedback.Opacity = 1;
-        CenterTransportScale.ScaleX = CenterTransportScale.ScaleY = 0.82;
-
-        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
-        var scale = new DoubleAnimation(0.82, 1.08, TimeSpan.FromMilliseconds(420)) { EasingFunction = easing };
-        CenterTransportScale.BeginAnimation(ScaleTransform.ScaleXProperty, scale);
-        CenterTransportScale.BeginAnimation(ScaleTransform.ScaleYProperty, scale);
-        CenterTransportFeedback.BeginAnimation(OpacityProperty,
-            new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(520))
-            { BeginTime = TimeSpan.FromMilliseconds(180), EasingFunction = easing });
+        if (_osd.IsPanelOpen) return;
+        _osd.Show();
     }
 
-    // ============ OVERLAY / SPINNER ============
-    private void ShowOverlay(string text, bool spinning)
-    {
-        VideoOverlay.Visibility = Visibility.Visible;
-        OverlayText.Text = LocalizationService.T(text);
-        BigSpinner.Visibility = spinning ? Visibility.Visible : Visibility.Collapsed;
-        IdlePlay.Visibility = spinning ? Visibility.Collapsed : Visibility.Visible;
-        if (spinning) StartSpin(BigSpinner); else StopSpin(BigSpinner);
-    }
+    private void Stage_MouseLeave(object sender, MouseEventArgs e) => _osd.SchedulePointerLeaveCheck();
 
-    private void HideOverlay() { StopSpin(BigSpinner); VideoOverlay.Visibility = Visibility.Collapsed; }
-
-    private void SetPlayIcon(bool showPlay) =>
-        PlayPauseIcon.Data = showPlay
-            ? Geometry.Parse("M 5,3 L 12,8 L 5,13 Z")
-            : Geometry.Parse("M 4,3 L 6.5,3 L 6.5,13 L 4,13 Z M 9.5,3 L 12,3 L 12,13 L 9.5,13 Z");
-
-    private static void StartSpin(UIElement target)
-    {
-        if (target.RenderTransform is not RotateTransform rt)
-        {
-            rt = new RotateTransform(); target.RenderTransform = rt; target.RenderTransformOrigin = new Point(0.5, 0.5);
-        }
-        rt.BeginAnimation(RotateTransform.AngleProperty,
-            new DoubleAnimation(0, 360, TimeSpan.FromSeconds(1.1)) { RepeatBehavior = RepeatBehavior.Forever });
-    }
-
-    private static void StopSpin(UIElement target)
-    {
-        if (target.RenderTransform is RotateTransform rt) rt.BeginAnimation(RotateTransform.AngleProperty, null);
-    }
-
-    private void PassBox_PasswordChanged(object sender, RoutedEventArgs e) =>
-        PassPlaceholder.Visibility = string.IsNullOrEmpty(PassBox.Password) ? Visibility.Visible : Visibility.Collapsed;
-
-
-    // ============ WINDOW CHROME ============
+    // ============ WINDOW ============
     private void Min_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
-    private void Max_Click(object sender, RoutedEventArgs e) =>
-        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    private void Max_Click(object sender, RoutedEventArgs e) => _chrome.ToggleMaximize();
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+    private void Fullscreen_Click(object sender, RoutedEventArgs e) => _chrome.ToggleFullscreen();
+    private void Console_Click(object sender, RoutedEventArgs e) => DebugConsole.Toggle();
 
     protected override void OnClosing(CancelEventArgs e)
     {
-        if (StateStore.Settings.ConfirmExit && _connected)
+        var session = _services.Session;
+        if (_services.Store.Settings.ConfirmExit && session.Connected)
         {
             var r = MessageBox.Show(LocalizationService.T("Quit ElyCast?"), "ElyCast", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (r != MessageBoxResult.Yes) { e.Cancel = true; return; }
         }
         // Let the owned overlay window close with us instead of cancelling.
-        _shuttingDown = true;
-        _connectCts?.Cancel(); _sectionCts?.Cancel(); _seriesCts?.Cancel(); _importCts?.Cancel();
-        CancelEpgRequest();
-        _searchTimer?.Stop(); _reconnectTimer?.Stop();
-        _progressTimer.Stop(); _statsTimer.Stop(); _osdTimer.Stop();
-        Interlocked.Increment(ref _playbackGeneration);
-        HideAudioVisualizer();
-        try { _audioEngine.Dispose(); }
-        catch (Exception ex) { DebugConsole.Exception("Shutdown: stopping audio analysis", ex); }
-        try { _mediaTransport.Dispose(); } catch { }
-        try { DisposeElySmart(); } catch { }
-        FlushPendingElySound();
+        session.ShuttingDown = true;
+        _connection.CancelConnect();
+        _catalog.CancelPendingLoads();
+        _music.CancelImport();
+        _playback.Shutdown();
+        _catalog.StopSearchTimer();
+        _osd.StopTimer();
+        session.NextGeneration();
+        _visualizer.Hide();
+        Shutdown("stopping audio analysis", _visualizer.Dispose);
+        Shutdown("releasing the Windows media controls", _mediaTransport.Dispose);
+        Shutdown("stopping ELYSMART", _elySmart.Dispose);
+        _elySound.FlushPending();
         base.OnClosing(e);
-        try { StateStore.Save(); } catch (Exception ex) { DebugConsole.Exception("Shutdown: failed to save state", ex); }
-
-        var backend = _videoBackend;
-        _videoBackend = null;
-        if (backend != null)
-        {
-            try { DetachBackendEvents(backend); } catch (Exception ex) { DebugConsole.Exception("Shutdown: failed to detach events", ex); }
-            try { DebugConsole.Step("Shutdown: stopping playback..."); backend.Stop(PlaybackEndReason.Teardown); }
-            catch (Exception ex) { DebugConsole.Exception("Shutdown: failed to stop playback", ex); }
-            try { DebugConsole.Step("Closing: disposing the backend..."); backend.Dispose(); }
-            catch (Exception ex) { DebugConsole.Exception("Shutdown: failed to dispose backend", ex); }
-        }
+        Shutdown("failed to save state", _services.Store.Save);
+        _backendHost.DisposeBackend();
     }
+
+    private static void Shutdown(string step, Action action)
+    {
+        try { action(); }
+        catch (Exception ex) { DebugConsole.Exception("Shutdown: " + step, ex); }
+    }
+
+    // ============ SIGN-IN ============
+    private void XtreamTab_Click(object sender, RoutedEventArgs e) => _connection.SwitchTab(m3u: false);
+    private void M3uTab_Click(object sender, RoutedEventArgs e) => _connection.SwitchTab(m3u: true);
+    private void Browse_Click(object sender, RoutedEventArgs e) => _connection.BrowsePlaylist();
+    private void SaveProfile_Toggle(object sender, RoutedEventArgs e) { if (_composed) _connection.OnSaveProfileToggled(); }
+    private void PassBox_PasswordChanged(object sender, RoutedEventArgs e) { if (_composed) _connection.OnPasswordChanged(); }
+    private void Connect_Click(object sender, RoutedEventArgs e) => AsyncExtensions.FireAndLog(_connection.ConnectAsync, "Connection");
+    private void LocalOnly_Click(object sender, RoutedEventArgs e) => _connection.EnterLocalOnlyMode();
+    private void Disconnect_Click(object sender, RoutedEventArgs e) => _connection.SignOut();
+
+    private void LoadProfile_Click(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).Tag is Profile p) _connection.ConnectWith(p);
+    }
+
+    private void DeleteProfile_Click(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).Tag is Profile p) _connection.DeleteProfile(p);
+    }
+
+    // ============ CATALOGUE ============
+    private void Nav_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_composed && sender is RadioButton button)
+            AsyncExtensions.FireAndLog(() => _catalog.OnNavigationAsync(button), "Navigation");
+    }
+
+    private void Category_Changed(object sender, SelectionChangedEventArgs e) { if (_composed) _catalog.OnCategoryChanged(); }
+    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e) { if (_composed) _catalog.OnSearchTextChanged(); }
+    private void ItemList_DoubleClick(object sender, MouseButtonEventArgs e) => _catalog.ActivateSelected();
+    private void Resume_Click(object sender, RoutedEventArgs e) => _catalog.Resume();
+    private void Season_Changed(object sender, SelectionChangedEventArgs e) { if (_composed) _catalog.OnSeasonChanged(); }
+    private void Episode_DoubleClick(object sender, MouseButtonEventArgs e) => _catalog.PlaySelectedEpisode();
+    private void CloseSeries_Click(object sender, RoutedEventArgs e) => _catalog.CloseSeriesPanel();
+
+    private void Fav_Toggle(object sender, RoutedEventArgs e)
+    {
+        if (_composed && ((FrameworkElement)sender).DataContext is PlayItem item) _catalog.OnFavoriteToggled(item);
+    }
+
+    // ============ LOCAL LIBRARY ============
+    private void ImportLocalFolder_Click(object sender, RoutedEventArgs e) => AsyncExtensions.FireAndLog(_music.ImportFolderAsync, "Local import");
+    private void ImportLocalFiles_Click(object sender, RoutedEventArgs e) => AsyncExtensions.FireAndLog(_music.ImportFilesAsync, "Local import");
+    private void LocalList_DragOver(object sender, DragEventArgs e) => _music.OnDragOver(e);
+    private void LocalList_Drop(object sender, DragEventArgs e) => AsyncExtensions.FireAndLog(() => _music.OnDropAsync(e), "Drag-and-drop import");
+    private void RemoveLocalFile_Click(object sender, RoutedEventArgs e) => _music.RemoveSelectedListItem();
+    private void ResetAudioLibrary_Click(object sender, RoutedEventArgs e) => _music.ResetAudioLibrary();
+    private void AudioBrowse_Changed(object sender, SelectionChangedEventArgs e) { if (_composed) _music.OnBrowseModeChanged(); }
+    private void MusicGroupList_Click(object sender, MouseButtonEventArgs e) => _music.OnGroupListClick(e);
+    private void MusicTrackSearch_TextChanged(object sender, TextChangedEventArgs e) { if (_composed) _music.OnTrackSearchChanged(); }
+    private void CloseMusic_Click(object sender, RoutedEventArgs e) => _music.ClosePanel();
+    private void GroupPlay_Click(object sender, RoutedEventArgs e) => _music.PlayGroup(sender, shuffle: false);
+    private void GroupShuffle_Click(object sender, RoutedEventArgs e) => _music.PlayGroup(sender, shuffle: true);
+    private void GroupQueue_Click(object sender, RoutedEventArgs e) => _music.QueueGroup(sender);
+    private void MusicTrack_DoubleClick(object sender, MouseButtonEventArgs e) => _music.PlaySelectedTrack();
+    private void MusicTrackPlay_Click(object sender, RoutedEventArgs e) => _music.PlayTrack(sender);
+    private void PlaylistNameBox_KeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Enter) _music.CreatePlaylist(); }
+    private void CreatePlaylist_Click(object sender, RoutedEventArgs e) => _music.CreatePlaylist();
+    private void DeletePlaylist_Click(object sender, RoutedEventArgs e) => _music.DeletePlaylist(sender);
+    private void MusicGroupMenu_Opened(object sender, RoutedEventArgs e) => _music.OnGroupMenuOpened();
+    private void RemoveMusicGroup_Click(object sender, RoutedEventArgs e) => _music.RemoveGroup(sender);
+    private void RemoveFromPlaylist_Click(object sender, RoutedEventArgs e) => _music.RemoveFromPlaylist(sender);
+    private void LocalItemMenu_Opened(object sender, RoutedEventArgs e) => _music.OnLocalItemMenuOpened();
+    private void MusicTrackMenu_Opened(object sender, RoutedEventArgs e) => _music.OnTrackMenuOpened();
+    private void PlayNow_Click(object sender, RoutedEventArgs e) => _music.PlayNow(sender);
+    private void PlayNext_Click(object sender, RoutedEventArgs e) => _music.PlayNext(sender);
+    private void AddToQueue_Click(object sender, RoutedEventArgs e) => _music.AddToQueue(sender);
+    private void RemoveTrack_Click(object sender, RoutedEventArgs e) => _music.RemoveTrack(sender);
+    private void EditMetadata_Click(object sender, RoutedEventArgs e) => _music.EditMetadata(sender);
+    private void ClearQueue_Click(object sender, RoutedEventArgs e) => _services.Queue.ClearManual();
+    private void Shuffle_Checked(object sender, RoutedEventArgs e) { if (_composed) _services.Queue.Shuffle = ShuffleToggle.IsChecked == true; }
+    private void Repeat_Checked(object sender, RoutedEventArgs e) { if (_composed) _services.Queue.Repeat = RepeatToggle.IsChecked == true; }
+
+    private void ItemList_RightClick(object sender, MouseButtonEventArgs e)
+    {
+        if (MusicLibraryController.FindListItem(e.OriginalSource) is { } row) row.IsSelected = true;
+    }
+
+    // ============ PLAYER ============
+    private void PlayPause_Click(object sender, RoutedEventArgs e) => TogglePlayPause();
+    private void Stop_Click(object sender, RoutedEventArgs e) => _playback.Stop();
+    private void PreviousMedia_Click(object sender, RoutedEventArgs e) => Zap(-1);
+    private void NextMedia_Click(object sender, RoutedEventArgs e) => Zap(1);
+    private void SkipBack_Click(object sender, RoutedEventArgs e) => _playback.SeekRelative(-15_000);
+    private void SkipFwd_Click(object sender, RoutedEventArgs e) => _playback.SeekRelative(15_000);
+    private void Volume_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { if (_composed) _playback.OnVolumeChanged(e.NewValue); }
+    private void Subtitle_Changed(object sender, SelectionChangedEventArgs e) { if (_composed) _playback.OnSubtitleSelectionChanged(); }
+    private void Audio_Changed(object sender, SelectionChangedEventArgs e) { if (_composed) _playback.OnAudioSelectionChanged(); }
+    private void StatsBtn_Click(object sender, RoutedEventArgs e) => _playback.ToggleStats();
+    private void CloseOverlay_Click(object sender, RoutedEventArgs e) => _settings.CloseAllPanels();
+
+    // ============ SETTINGS ============
+    private void Language_Changed(object sender, SelectionChangedEventArgs e) { if (_composed) _settings.OnLanguageChanged(); }
+    private void Setting_Changed(object sender, RoutedEventArgs e) { if (_composed) _settings.OnGeneralSettingChanged(sender); }
+    private void SliderSetting_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { if (_composed) _settings.OnDefaultVolumeChanged(); }
+    private void AudioVisualizerSetting_Changed(object sender, RoutedEventArgs e) { if (_composed) _settings.OnAudioVisualizerSettingChanged(); }
+    private void AudioVisualizerSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { if (_composed) _settings.OnAudioVisualizerSettingChanged(); }
+    private void AudioRenderer_Changed(object sender, SelectionChangedEventArgs e) { if (_composed) _settings.OnAudioRendererChanged(); }
+    private void BackendSetting_Changed(object sender, SelectionChangedEventArgs e) { if (_composed) _settings.OnBackendChanged(); }
+    private void UpscalerSetting_Changed(object sender, SelectionChangedEventArgs e) { if (_composed) _settings.OnUpscalerEngineChanged(); }
+    private void InstallMpv_Click(object sender, RoutedEventArgs e) => AsyncExtensions.FireAndLog(_settings.InstallMpvAsync, "mpv installation");
+    private void ResetSettings_Click(object sender, RoutedEventArgs e) => _settings.Reset();
+    private void OpenDataFolder_Click(object sender, RoutedEventArgs e) => _settings.OpenDataFolder();
+    private void ApplyHex_Click(object sender, RoutedEventArgs e) => _settings.ApplyAccent(AccentHexBox.Text.Trim(), updateBox: false);
+
+    private void AccentSwatch_Click(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).Tag is string hex) _settings.ApplyAccent(hex, updateBox: true);
+    }
+
+    private void SettingsCategory_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string category }) _settings.ShowCategory(category);
+    }
+
+    private void UpscaleSetting_Changed(object sender, SelectionChangedEventArgs e) { if (_composed) _upscaling.OnSettingChanged(); }
+    private void OsdUpscale_Changed(object sender, SelectionChangedEventArgs e) { if (_composed) _upscaling.OnOsdSelectionChanged(); }
+
+    private void ElyColorFilter_Changed(object sender, SelectionChangedEventArgs e) { if (_composed && sender is ComboBox combo) _elyColor.OnFilterSelected(combo); }
+    private void OsdElyColor_Changed(object sender, SelectionChangedEventArgs e) { if (_composed) _elyColor.OnFilterSelected(OsdElyColorCombo); }
+    private void ElyColorCustom_Changed(object sender, SelectionChangedEventArgs e) { if (_composed) _elyColor.OnCustomSelected(); }
+    private void ElyColorSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { if (_composed) _elyColor.OnSliderChanged(); }
+    private void CaptureElyColor_Click(object sender, RoutedEventArgs e) => _elyColor.Capture();
+    private void SaveElyColor_Click(object sender, RoutedEventArgs e) => _elyColor.Save();
+    private void DeleteElyColor_Click(object sender, RoutedEventArgs e) => _elyColor.Delete();
+
+    private void ElySoundEnabled_Changed(object sender, RoutedEventArgs e) { if (_composed && sender is CheckBox box) _elySound.OnEnabledChanged(box); }
+    private void ElySoundSetting_Changed(object sender, RoutedEventArgs e) { if (_composed) _elySound.OnVirtualSurroundChanged(); }
+    private void ElySoundPreset_Changed(object sender, SelectionChangedEventArgs e) { if (_composed && sender is ComboBox combo) _elySound.OnPresetSelected(combo); }
+    private void OsdElySound_Changed(object sender, SelectionChangedEventArgs e) => ElySoundPreset_Changed(sender, e);
+    private void ElySoundSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { if (_composed) _elySound.OnSliderChanged(); }
+
+    private void ElyFlowSetting_Changed(object sender, RoutedEventArgs e) { if (_composed) _elyFlow.OnSettingChanged(); }
+    private void ElyFlowCombo_Changed(object sender, SelectionChangedEventArgs e) { if (_composed) _elyFlow.OnSettingChanged(); }
+    private void ElyFlowSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { if (_composed) _elyFlow.OnBufferChanged(); }
+
+    private void ElySmartRun_Click(object sender, RoutedEventArgs e) => AsyncExtensions.FireAndLog(_elySmart.RunBenchmarkAsync, "ELYSMART benchmark");
+    private void ElySmartCancel_Click(object sender, RoutedEventArgs e) => _elySmart.CancelBenchmark();
+    private void ElySmartAutoSwitch_Click(object sender, RoutedEventArgs e) => _elySmart.OnAutoOptimizeToggled();
+    private void ElySmartNotificationsSwitch_Click(object sender, RoutedEventArgs e) => _elySmart.OnNotificationsToggled();
+    private void ElySmartApply_Click(object sender, RoutedEventArgs e) => _elySmart.ApplyRecommendation();
+    private void ElySmartExport_Click(object sender, RoutedEventArgs e) => _elySmart.ExportReport();
+
+    private void BrowseMagpie_Click(object sender, RoutedEventArgs e) => _magpie.Browse();
+    private void InstallMagpie_Click(object sender, RoutedEventArgs e) => AsyncExtensions.FireAndLog(_magpie.InstallAsync, "Magpie installation");
+    private void ActivateUpscaler_Click(object sender, RoutedEventArgs e) => AsyncExtensions.FireAndLog(_magpie.ToggleScalingAsync, "Magpie toggle");
+    private void UpscalerBtn_Click(object sender, RoutedEventArgs e) => AsyncExtensions.FireAndLog(_magpie.ToggleScalingAsync, "Magpie toggle");
 }

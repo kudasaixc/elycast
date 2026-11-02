@@ -6,6 +6,9 @@
         <ResourceDictionary>
 
             <local:StringToBrushConverter x:Key="HexToBrush"/>
+            <local:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+            <local:BoolToVisibilityConverter x:Key="InverseBoolToVisibility" Invert="True"/>
+            <local:PlayPauseGlyphConverter x:Key="PlayPauseGlyph"/>
 
             <!-- ============ PALETTE : straight black ============ -->
             <Color x:Key="BgTop">#FF000000</Color>
