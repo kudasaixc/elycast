@@ -27,6 +27,17 @@ public static class DebugConsole
     private static readonly object _lock = new();
     private static bool _consoleAvailable;
     private static bool _visible = true;
+
+    /// <summary>True when cursor positioning and clearing are supported.</summary>
+    private static bool CanDrawInteractive
+    {
+        get
+        {
+            if (!_consoleAvailable) return false;
+            try { return !Console.IsOutputRedirected; }
+            catch (IOException) { return false; }
+        }
+    }
     private static readonly Dictionary<string, (string desc, Func<string[], string?> handler)> _commands = new();
 
     // Persistent log file so crashes can be diagnosed after the fact even when
@@ -99,7 +110,10 @@ public static class DebugConsole
     /// </summary>
     public static void RunBootSequence(double seconds, Action initializationWork)
     {
-        if (!_consoleAvailable)
+        // A redirected stdout (CI, automated smoke runs, launch from a shell
+        // pipe) has no screen buffer: Console.Clear/SetCursorPosition throw
+        // "invalid handle" and used to abort startup before any window opened.
+        if (!CanDrawInteractive)
         {
             try { initializationWork(); }
             catch (Exception ex) { Error(ex.Message); }
@@ -423,7 +437,7 @@ public static class DebugConsole
                     sb.AppendLine($"    {kv.Key,-14} {LocalizationService.T(kv.Value.desc)}");
             return sb.ToString();
         });
-        RegisterCommand("clear", "Clear the console", _ => { Console.Clear(); return null; });
+        RegisterCommand("clear", "Clear the console", _ => { if (CanDrawInteractive) Console.Clear(); return null; });
         RegisterCommand("banner", "Show the ElyCast banner again", _ =>
         {
             Console.ForegroundColor = AccentColor;
@@ -433,6 +447,7 @@ public static class DebugConsole
         });
         RegisterCommand("cube", "Replay the 3D cube animation (3s)", _ =>
         {
+            if (!CanDrawInteractive) return null;
             Console.Clear();
             var sw = Stopwatch.StartNew();
             double a = 0;
@@ -451,7 +466,8 @@ public static class DebugConsole
             }
             return null;
         });
-        RegisterCommand("version", "Show version", _ => "ElyCast v1.1 - WPF / IVideoBackend / mpv+VLC");
+        RegisterCommand("version", "Show version", _ =>
+            $"ElyCast v{typeof(DebugConsole).Assembly.GetName().Version?.ToString(3)} - WPF / IVideoBackend / mpv+VLC");
         RegisterCommand("time", "Current time", _ => DateTime.Now.ToString("F"));
         RegisterCommand("console", "console hide | show | front", args =>
         {
