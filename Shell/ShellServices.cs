@@ -11,6 +11,7 @@ namespace Elysium_Cast_IPTV.Shell;
 /// <summary>Services resolved from the DI container for the player shell.</summary>
 public sealed record ShellServices(
     IAppStateStore Store,
+    IProfileStore Profiles,
     PlaybackSession Session,
     MediaLibrary Library,
     AudioQueue Queue,

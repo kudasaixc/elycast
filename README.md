@@ -141,9 +141,14 @@ Without the NVIDIA SDK, ELYCORE still builds and runs, but its FRUC adapter is u
 
 ```text
 App.xaml(.cs)                 Startup, global resources, theme, and language initialization
-MainWindow.xaml               Main shell, player, settings, and overlays
-MainWindow.*.cs               Domain-specific window coordination
+MainWindow.xaml(.cs)          Player shell view: composes controllers and forwards UI events
+Shell/                        Feature controllers (playback, catalogue, library, settings...)
+ViewModels/                   Data-bound player state (CommunityToolkit.Mvvm)
+Infrastructure/               Dependency injection, Win32 interop, async helpers
 Models/                       Settings, profiles, and media models
+Services/Playback/            Playback session, audio queue, track choices (WPF-free)
+Services/Library/             Catalogue, favourites, and local library rules
+Services/Pipeline/            Upscaling, ELYCOLOR, ELYSOUND+, and ELYFLOW application
 Services/Localization*.cs     Fast English/French runtime localization
 Services/Audio/               Metadata, FFT analysis, artwork, and ELYSOUND+
 Services/ElySmart/            Benchmarks, scoring, recommendations, and monitoring
@@ -151,7 +156,7 @@ Services/Video/               mpv/VLC backends, HWND hosting, shaders, and nativ
 native/ElyFlow.Native/        ELYCORE C++20 renderer and AudioCore+ scene
 Assets/                       Application visuals
 scripts/                      Reproducible build commands
-tests/                        Playback regressions and RTX VSR probes
+tests/                        xUnit suite, playback regressions, and RTX VSR probes
 AGENTS.md                     Architecture map and engineering invariants
 ```
 
@@ -159,7 +164,7 @@ Read [`AGENTS.md`](AGENTS.md) before making architectural changes.
 
 ## Quality, security, and privacy
 
-- Windows x64 builds run on every push and pull request.
+- Windows x64 builds and the xUnit and regression suites run on every push and pull request.
 - CodeQL covers C# and C++.
 - SonarQube Cloud tracks quality, security, and maintainability.
 - Profiles and application state are protected with Windows DPAPI and written atomically.
@@ -172,7 +177,7 @@ Local profiles, favorites, settings, and library entries stay under `%APPDATA%\E
 
 1. Read [`AGENTS.md`](AGENTS.md) before substantial changes.
 2. Preserve fallbacks when mpv, NVIDIA, FRUC, shaders, or Magpie are absent.
-3. Build the native renderer, then the Release x64 application.
+3. Build the native renderer, then the Release x64 application, and run `dotnet test tests/ElyCast.UnitTests/ElyCast.UnitTests.csproj -c Release -p:Platform=x64`.
 4. Test resizing, fullscreen, HUD, language switching, and focus behavior for renderer or UI changes.
 5. Never publish IPTV credentials or complete stream URLs.
 

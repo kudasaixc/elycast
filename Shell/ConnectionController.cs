@@ -24,6 +24,7 @@ internal sealed class ConnectionController
     private readonly PlaybackSession _session;
     private readonly MediaLibrary _library;
     private readonly IAppStateStore _store;
+    private readonly IProfileStore _profiles;
     private readonly PlaybackController _playback;
     private readonly CatalogController _catalog;
     private readonly MusicLibraryController _music;
@@ -32,7 +33,7 @@ internal sealed class ConnectionController
     private bool _m3uMode;
 
     public ConnectionController(MainWindow view, PlayerViewModel vm, PlaybackSession session, MediaLibrary library,
-        IAppStateStore store, PlaybackController playback, CatalogController catalog, MusicLibraryController music,
+        IAppStateStore store, IProfileStore profiles, PlaybackController playback, CatalogController catalog, MusicLibraryController music,
         OverlayWindowHost overlay)
     {
         _view = view;
@@ -40,6 +41,7 @@ internal sealed class ConnectionController
         _session = session;
         _library = library;
         _store = store;
+        _profiles = profiles;
         _playback = playback;
         _catalog = catalog;
         _music = music;
@@ -53,8 +55,8 @@ internal sealed class ConnectionController
     public void LoadProfiles()
     {
         Profiles.Clear();
-        if (!(StateStore.SuppressSaves && Environment.GetEnvironmentVariable("ELYCAST_DIAGNOSTIC_CLEAN") == "1"))
-            foreach (var p in ProfileStore.Load()) Profiles.Add(p);
+        if (!(_store.SuppressSaves && Environment.GetEnvironmentVariable("ELYCAST_DIAGNOSTIC_CLEAN") == "1"))
+            foreach (var p in _profiles.Load()) Profiles.Add(p);
         _view.ProfilesItems.ItemsSource = Profiles;
         _view.ProfilesSection.Visibility = Profiles.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -73,7 +75,7 @@ internal sealed class ConnectionController
             SwitchTab(m3u: false);
             _view.UrlBox.Text = profile.Url;
             _view.UserBox.Text = profile.Username;
-            _view.PassBox.Password = ProfileStore.Unprotect(profile.ProtectedPassword);
+            _view.PassBox.Password = _profiles.Unprotect(profile.ProtectedPassword);
         }
         else
         {
@@ -90,7 +92,7 @@ internal sealed class ConnectionController
             _store.Settings.AutoConnectProfile = "";
             _store.Save();
         }
-        ProfileStore.Save(Profiles.ToList());
+        _profiles.Save(Profiles.ToList());
         _view.ProfilesSection.Visibility = Profiles.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -106,12 +108,12 @@ internal sealed class ConnectionController
             : new Profile
             {
                 Name = name, Kind = ProfileKind.Xtream, Url = _view.UrlBox.Text.Trim(),
-                Username = _view.UserBox.Text.Trim(), ProtectedPassword = ProfileStore.Protect(_view.PassBox.Password)
+                Username = _view.UserBox.Text.Trim(), ProtectedPassword = _profiles.Protect(_view.PassBox.Password)
             };
         var existing = Profiles.FirstOrDefault(p => p.Name == name);
         if (existing != null) Profiles.Remove(existing);
         Profiles.Add(profile);
-        ProfileStore.Save(Profiles.ToList());
+        _profiles.Save(Profiles.ToList());
     }
 
     // ============ FORM ============

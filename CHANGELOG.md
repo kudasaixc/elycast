@@ -6,6 +6,25 @@ All notable ElyCast changes are documented here. This project follows
 
 ## [Unreleased]
 
+### Changed
+
+- Accent-tinted surfaces (side panels, video stage, dialogs, the now-playing subtitle and the list counter) now follow the chosen accent colour instead of staying violet.
+- The French interface now says "Direct" for live channels.
+
+### Fixed
+
+- Changing the interface language no longer reconnects the auto-connect profile or reopens the local library in the middle of playback.
+- English sessions no longer show French messages for VLC playback errors, the onboarding installation status, the accent label, and the RTX VSR test.
+- A saved password that cannot be decrypted (for example, a profile copied from another Windows account) is now reported instead of silently emptied.
+- Exporting the ELYSMART report to a locked or protected location shows a status message instead of the generic error dialog.
+- ElyCast no longer fails to start when its console output is redirected.
+
+### Internal
+
+- `MainWindow` (12 partial files, about 6,000 lines and 128 shared fields) became a thin view composing feature controllers under `Shell/`, with WPF-free services under `Services/Playback`, `Services/Library` and `Services/Pipeline`, a data-bound `PlayerViewModel` (CommunityToolkit.Mvvm) and a dependency-injection composition root. Playback behaviour and the mpv, ELYCORE and VLC backends are unchanged.
+- New xUnit suite (65 tests) for the playback queue, track preferences, HUD text, media library, pipeline catalogs and playback generations, plus source guards for French coverage, literal colours and undefined XAML resources. CI runs it.
+- Silent catch-all blocks were replaced with typed handling or logging; the remaining `async void` handlers go through a single logged helper; WPF binding errors are written to the ElyCast log.
+
 ## [1.3.1] - 2026-09-10
 
 ### Added

@@ -17,6 +17,7 @@ public static class AppServices
     {
         var services = new ServiceCollection();
         services.AddSingleton<IAppStateStore, StateStoreAdapter>();
+        services.AddSingleton<IProfileStore, ProfileStoreAdapter>();
         services.AddSingleton<PlaybackSession>();
         services.AddSingleton<MediaLibrary>();
         services.AddSingleton<AudioQueue>(_ => new AudioQueue());

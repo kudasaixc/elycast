@@ -73,7 +73,7 @@ public partial class MainWindow : Window
         _catalog = new CatalogController(this, vm, session, services.Library, services.Queue, _playback, _osd);
         _music = new MusicLibraryController(this, vm, session, services.Library, services.Queue, store, _playback, _osd,
             _catalog, services.LocalLibrary, gate);
-        _connection = new ConnectionController(this, vm, session, services.Library, store, _playback, _catalog, _music, _overlay);
+        _connection = new ConnectionController(this, vm, session, services.Library, store, services.Profiles, _playback, _catalog, _music, _overlay);
         _upscaling = new UpscalingPanel(this, session, store, services.Pipeline, gate);
         _elyColor = new ElyColorPanel(this, session, store, services.Pipeline, gate, _backendHost, _upscaling);
         _elySound = new ElySoundPanel(this, session, store, services.Pipeline, gate);

@@ -33,4 +33,6 @@ internal sealed class InMemoryStateStore : IAppStateStore
     }
 
     public void Save() => SaveCount++;
+    public bool SuppressSaves => false;
+    public string FolderPath => Path.GetTempPath();
 }

@@ -206,7 +206,7 @@ internal sealed class SettingsController
 
     public void OpenDataFolder()
     {
-        try { Process.Start("explorer.exe", StateStore.FolderPath); }
+        try { Process.Start("explorer.exe", _store.FolderPath); }
         catch (Exception ex) { DebugConsole.Exception("Could not open the data folder", ex); }
     }
 
