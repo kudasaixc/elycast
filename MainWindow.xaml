@@ -238,7 +238,7 @@
                                 </Button>
 
                                 <TextBlock x:Name="StatusText" Text="{Binding LoginStatus}" Margin="0,14,0,0" FontSize="12" TextWrapping="Wrap"
-                                           HorizontalAlignment="Center" TextAlignment="Center" Foreground="#FFFF8A8A"/>
+                                           HorizontalAlignment="Center" TextAlignment="Center" Foreground="{StaticResource ErrorTextBrush}"/>
 
                                 <!-- No IPTV account needed: jump straight into the local library. -->
                                 <Button Style="{StaticResource GhostButton}" Margin="0,16,0,0" Height="44"
@@ -374,9 +374,9 @@
                                 <TextBlock x:Name="SectionTitle" Text="{Binding SectionTitle}" FontSize="18" FontWeight="Bold"
                                            Foreground="{DynamicResource TextBrush}"/>
                                 <Border Margin="10,0,0,0" Padding="8,2" CornerRadius="9" VerticalAlignment="Center"
-                                        Background="#3A8B5CF6">
+                                        Background="{DynamicResource SelectionBrush}">
                                     <TextBlock x:Name="CountText" Text="{Binding ItemCount}" FontSize="11" FontWeight="SemiBold"
-                                               Foreground="#FFCBB8FF"/>
+                                               Foreground="{DynamicResource AccentSoftBrush}"/>
                                 </Border>
                             </StackPanel>
 
@@ -470,7 +470,7 @@
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <Grid Width="34" Height="34">
-                                                <Border CornerRadius="9" Background="#33000000">
+                                                <Border CornerRadius="9" Background="{StaticResource Black20Brush}">
                                                     <TextBlock Text="{Binding Initial}" FontWeight="Bold" FontSize="14"
                                                                Foreground="{DynamicResource AccentSoftBrush}" HorizontalAlignment="Center"
                                                                VerticalAlignment="Center"/>
@@ -535,7 +535,7 @@
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <Grid Width="46" Height="46">
-                                                <Border CornerRadius="10" Background="#33000000">
+                                                <Border CornerRadius="10" Background="{StaticResource Black20Brush}">
                                                     <TextBlock Text="{Binding Initial}" FontWeight="Bold" FontSize="17"
                                                                Foreground="{DynamicResource AccentSoftBrush}" HorizontalAlignment="Center"
                                                                VerticalAlignment="Center"/>
@@ -554,7 +554,7 @@
                                                            FontSize="10" Foreground="{DynamicResource FaintBrush}"/>
                                             </StackPanel>
                                             <Border Grid.Column="2" Padding="7,2" CornerRadius="8" VerticalAlignment="Center"
-                                                    Background="#26FFFFFF">
+                                                    Background="{StaticResource White15Brush}">
                                                 <TextBlock Text="{Binding CountLabel}" FontSize="10" FontWeight="SemiBold"
                                                            Foreground="{DynamicResource MutedBrush}"/>
                                             </Border>
@@ -567,7 +567,7 @@
 
                     <!-- MAIN AREA -->
                     <Grid x:Name="VideoArea" Grid.Column="2" Margin="7,0,14,14">
-                        <Border x:Name="VideoStage" CornerRadius="18" Background="#FF030305"
+                        <Border x:Name="VideoStage" CornerRadius="18" Background="{DynamicResource StageBrush}"
                                 BorderBrush="{DynamicResource CardStroke}" BorderThickness="1" ClipToBounds="True"
                                 MouseMove="Stage_MouseMove" MouseLeave="Stage_MouseLeave">
                             <Grid>
@@ -588,16 +588,16 @@
                                       PreviewMouseLeftButtonUp="OverlayRoot_MouseLeftButtonUp">
 
                                 <!-- idle / loading -->
-                                <Grid x:Name="VideoOverlay" Background="#FF060309" Visibility="{Binding IsOverlayVisible, Converter={StaticResource BoolToVisibility}}">
+                                <Grid x:Name="VideoOverlay" Background="{DynamicResource VideoIdleBrush}" Visibility="{Binding IsOverlayVisible, Converter={StaticResource BoolToVisibility}}">
                                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                         <Grid Width="64" Height="64">
-                                            <Ellipse Width="64" Height="64" Stroke="#22FFFFFF" StrokeThickness="3"/>
+                                            <Ellipse Width="64" Height="64" Stroke="{StaticResource White13Brush}" StrokeThickness="3"/>
                                             <Ellipse x:Name="BigSpinner" Width="64" Height="64" Stroke="{DynamicResource AccentBBrush}"
                                                      StrokeThickness="3" StrokeDashArray="20 60" Visibility="{Binding IsOverlaySpinning, Converter={StaticResource BoolToVisibility}}"
                                                      RenderTransformOrigin="0.5,0.5">
                                                 <Ellipse.RenderTransform><RotateTransform/></Ellipse.RenderTransform>
                                             </Ellipse>
-                                            <Path x:Name="IdlePlay" Data="M 5,3 L 12,8 L 5,13 Z" Fill="#55FFFFFF" Visibility="{Binding IsOverlaySpinning, Converter={StaticResource InverseBoolToVisibility}}"
+                                            <Path x:Name="IdlePlay" Data="M 5,3 L 12,8 L 5,13 Z" Fill="{StaticResource White33Brush}" Visibility="{Binding IsOverlaySpinning, Converter={StaticResource InverseBoolToVisibility}}"
                                                   Stretch="Uniform" Width="22" Height="22"
                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         </Grid>
@@ -612,9 +612,9 @@
                                          translating it would reveal the layer edge. -->
                                     <Grid.Background>
                                         <RadialGradientBrush Center="0.5,0.45" GradientOrigin="0.5,0.45" RadiusX="0.82" RadiusY="0.82">
-                                            <GradientStop Color="#FF220B18" Offset="0"/>
-                                            <GradientStop Color="#FF08070D" Offset="0.58"/>
-                                            <GradientStop Color="#FF000000" Offset="1"/>
+                                            <GradientStop Color="{StaticResource AudioSceneCenterColor}" Offset="0"/>
+                                            <GradientStop Color="{StaticResource AudioSceneMiddleColor}" Offset="0.58"/>
+                                            <GradientStop Color="{StaticResource ShadowColor}" Offset="1"/>
                                         </RadialGradientBrush>
                                     </Grid.Background>
 
@@ -635,7 +635,7 @@
                                         </Image.RenderTransform>
                                         <Image.Effect><BlurEffect x:Name="AudioBackgroundBlurEffect" Radius="45.6" KernelType="Gaussian"/></Image.Effect>
                                     </Image>
-                                    <Border x:Name="AudioBackgroundDimmer" Background="#D9000000" IsHitTestVisible="False"/>
+                                    <Border x:Name="AudioBackgroundDimmer" Background="{StaticResource Black85Brush}" IsHitTestVisible="False"/>
 
                                     <Grid>
                                         <Grid.RenderTransform>
@@ -660,15 +660,15 @@
                                                     <Grid.RenderTransform>
                                                         <ScaleTransform x:Name="AudioVisualizerScale" ScaleX="1" ScaleY="1"/>
                                                     </Grid.RenderTransform>
-                                                    <Ellipse Width="516" Height="516" Stroke="#22FFFFFF" StrokeThickness="1.5"/>
-                                                    <Ellipse x:Name="AudioOuterRing" Width="472" Height="472" Stroke="#AAFFFFFF"
+                                                    <Ellipse Width="516" Height="516" Stroke="{StaticResource White13Brush}" StrokeThickness="1.5"/>
+                                                    <Ellipse x:Name="AudioOuterRing" Width="472" Height="472" Stroke="{StaticResource White67Brush}"
                                                              StrokeThickness="2" StrokeDashArray="4 11" RenderTransformOrigin="0.5,0.5"
                                                              CacheMode="BitmapCache">
                                                         <Ellipse.RenderTransform>
                                                             <RotateTransform x:Name="AudioOuterRingRotate"/>
                                                         </Ellipse.RenderTransform>
                                                     </Ellipse>
-                                                    <Ellipse x:Name="AudioGlowRing" Width="388" Height="388" Stroke="#FFFFC46B"
+                                                    <Ellipse x:Name="AudioGlowRing" Width="388" Height="388" Stroke="{StaticResource ElySoundAccentBrush}"
                                                              StrokeThickness="4" Opacity="0.7" CacheMode="BitmapCache">
                                                         <Ellipse.Effect>
                                                             <BlurEffect Radius="15"/>
@@ -677,7 +677,7 @@
                                                     <!-- The center image fills the circle (UniformToFill) and pulses through
                                                          AudioCenterScale. BitmapCache rasterizes the wide shadow only once. -->
                                                     <Ellipse x:Name="AudioCenterDisc" Width="336" Height="336"
-                                                             Stroke="#44FFFFFF" StrokeThickness="2"
+                                                             Stroke="{StaticResource White27Brush}" StrokeThickness="2"
                                                              RenderTransformOrigin="0.5,0.5" CacheMode="BitmapCache">
                                                         <Ellipse.Fill>
                                                             <ImageBrush x:Name="AudioDiscBrush" ImageSource="/Assets/FleweastAudio.png"
@@ -688,7 +688,7 @@
                                                             <ScaleTransform x:Name="AudioCenterScale" ScaleX="1" ScaleY="1"/>
                                                         </Ellipse.RenderTransform>
                                                         <Ellipse.Effect>
-                                                            <DropShadowEffect BlurRadius="46" ShadowDepth="0" Opacity="0.9" Color="#FF000000"/>
+                                                            <DropShadowEffect BlurRadius="46" ShadowDepth="0" Opacity="0.9" Color="{StaticResource ShadowColor}"/>
                                                         </Ellipse.Effect>
                                                     </Ellipse>
                                                 </Grid>
@@ -700,7 +700,7 @@
                                                            FontWeight="Bold" Foreground="White" TextAlignment="Center"
                                                            TextTrimming="CharacterEllipsis" MaxWidth="620"/>
                                                 <TextBlock Text="ELYCAST AUDIO" FontSize="11" Margin="0,5,0,0"
-                                                           Foreground="#AAFFFFFF" HorizontalAlignment="Center"/>
+                                                           Foreground="{StaticResource White67Brush}" HorizontalAlignment="Center"/>
                                             </StackPanel>
                                         </Grid>
 
@@ -717,17 +717,17 @@
                                                                     RenderOptions.BitmapScalingMode="HighQuality"/>
                                                     </Border.Background>
                                                     <Border.Effect>
-                                                        <DropShadowEffect BlurRadius="42" ShadowDepth="0" Opacity="0.85" Color="#FF000000"/>
+                                                        <DropShadowEffect BlurRadius="42" ShadowDepth="0" Opacity="0.85" Color="{StaticResource ShadowColor}"/>
                                                     </Border.Effect>
                                                 </Border>
                                                 <TextBlock x:Name="AudioMetaTitle" Margin="0,26,0,0" FontSize="26"
                                                            FontWeight="Bold" Foreground="White" TextAlignment="Center"
                                                            TextWrapping="Wrap" MaxHeight="96"/>
                                                 <TextBlock x:Name="AudioMetaArtist" Margin="0,8,0,0" FontSize="16"
-                                                           Foreground="#FFCBB8FF" TextAlignment="Center"
+                                                           Foreground="{DynamicResource AccentSoftBrush}" TextAlignment="Center"
                                                            TextTrimming="CharacterEllipsis"/>
                                                 <TextBlock x:Name="AudioMetaAlbum" Margin="0,4,0,0" FontSize="12"
-                                                           Foreground="#AAFFFFFF" TextAlignment="Center"
+                                                           Foreground="{StaticResource White67Brush}" TextAlignment="Center"
                                                            TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
                                         </Viewbox>
@@ -737,7 +737,7 @@
                                 <!-- stats -->
                                 <Border x:Name="StatsOverlay" Visibility="{Binding IsStatsOverlayVisible, Converter={StaticResource BoolToVisibility}}" HorizontalAlignment="Left"
                                         VerticalAlignment="Top" Margin="14" Padding="12,10" CornerRadius="10"
-                                        Background="#CC000000" BorderBrush="{DynamicResource CardStroke}" BorderThickness="1">
+                                        Background="{StaticResource Black80Brush}" BorderBrush="{DynamicResource CardStroke}" BorderThickness="1">
                                     <StackPanel>
                                         <TextBlock Text="LIVE STATS" FontSize="10" FontWeight="Bold"
                                                    Foreground="{DynamicResource AccentBBrush}" Margin="0,0,0,6"/>
@@ -752,15 +752,15 @@
                                     <Border VerticalAlignment="Top" Padding="24,16,24,32" IsHitTestVisible="False">
                                         <Border.Background>
                                             <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                <GradientStop Color="#D9000000" Offset="0"/>
-                                                <GradientStop Color="#00000000" Offset="1"/>
+                                                <GradientStop Color="{StaticResource Black85Color}" Offset="0"/>
+                                                <GradientStop Color="{StaticResource TransparentBlackColor}" Offset="1"/>
                                             </LinearGradientBrush>
                                         </Border.Background>
                                         <StackPanel>
                                             <TextBlock x:Name="TopTitle" Text="{Binding NowPlayingTitle}" FontSize="20" FontWeight="Bold"
                                                        Foreground="White" TextTrimming="CharacterEllipsis"/>
                                             <TextBlock x:Name="TopSubtitle" Text="{Binding NowPlayingSubtitle}" FontSize="12" Margin="0,3,0,0"
-                                                       Foreground="#FFCBB8FF" TextTrimming="CharacterEllipsis"/>
+                                                       Foreground="{DynamicResource AccentSoftBrush}" TextTrimming="CharacterEllipsis"/>
                                         </StackPanel>
                                     </Border>
 
@@ -769,9 +769,9 @@
                                             >
                                         <Border.Background>
                                             <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                <GradientStop Color="#00000000" Offset="0"/>
-                                                <GradientStop Color="#B8000000" Offset="0.38"/>
-                                                <GradientStop Color="#F0000000" Offset="1"/>
+                                                <GradientStop Color="{StaticResource TransparentBlackColor}" Offset="0"/>
+                                                <GradientStop Color="{StaticResource Black72Color}" Offset="0.38"/>
+                                                <GradientStop Color="{StaticResource Black94Color}" Offset="1"/>
                                             </LinearGradientBrush>
                                         </Border.Background>
                                         <Border.RenderTransform>
@@ -795,10 +795,10 @@
                                             <StackPanel x:Name="OsdElyColorRow" Orientation="Horizontal" VerticalAlignment="Center"
                                                         Margin="18,0,0,0" Visibility="Collapsed">
                                                 <Path Data="M 7,0 C 10.8,0 14,3.2 14,7 C 14,10.8 10.8,14 7,14 C 3.2,14 0,10.8 0,7 C 0,3.2 3.2,0 7,0 Z M 7,2 L 7,12"
-                                                      Stroke="#FFFFC46B" StrokeThickness="1.25" Stretch="Uniform"
+                                                      Stroke="{StaticResource ElySoundAccentBrush}" StrokeThickness="1.25" Stretch="Uniform"
                                                       Width="14" Height="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                                 <TextBlock Text="ELYCOLOR" FontSize="11" FontWeight="SemiBold"
-                                                           VerticalAlignment="Center" Foreground="#FFFFE0B0" Margin="0,0,10,0"/>
+                                                           VerticalAlignment="Center" Foreground="{StaticResource ElySoundTextBrush}" Margin="0,0,10,0"/>
                                                 <ComboBox x:Name="OsdElyColorCombo" Width="220" Height="30"
                                                           Style="{StaticResource FieldCombo}"
                                                           SelectionChanged="OsdElyColor_Changed"
@@ -807,7 +807,7 @@
                                             <StackPanel x:Name="OsdElySoundRow" Orientation="Horizontal" VerticalAlignment="Center"
                                                         Margin="18,0,0,0" Visibility="Collapsed">
                                                 <Path Data="M 1,8 L 4,8 L 8,4 L 8,12 L 4,8 M 11,5 Q 14,8 11,11"
-                                                      Stroke="#FF7DF9FF" StrokeThickness="1.35" Stretch="Uniform"
+                                                      Stroke="{StaticResource ElyFlowAccentBrush}" StrokeThickness="1.35" Stretch="Uniform"
                                                       Width="15" Height="15" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                                 <CheckBox x:Name="OsdElySoundEnableSwitch" Style="{StaticResource Switch}"
                                                           Content="ELYSOUND+" Margin="0,0,10,0"
@@ -824,7 +824,7 @@
                                             <ProgressBar x:Name="EpgProgress" Height="4" Minimum="0" Maximum="100" Value="{Binding EpgPercent, Mode=OneWay}"
                                                          Margin="0,0,0,10" Visibility="{Binding IsEpgVisible, Converter={StaticResource BoolToVisibility}}"
                                                          Foreground="{DynamicResource AccentABrush}"
-                                                         Background="#33FFFFFF" BorderThickness="0"/>
+                                                         Background="{StaticResource White20Brush}" BorderThickness="0"/>
 
                                             <Grid x:Name="OsdTransportRow">
                                                 <Grid.RowDefinitions>
@@ -939,8 +939,8 @@
                                       Opacity="0" IsHitTestVisible="False" Panel.ZIndex="40"
                                       RenderTransformOrigin="0.5,0.5">
                                     <Grid.RenderTransform><ScaleTransform x:Name="CenterTransportScale" ScaleX="0.82" ScaleY="0.82"/></Grid.RenderTransform>
-                                    <Ellipse Fill="#C9000000" Stroke="#55FFFFFF" StrokeThickness="1">
-                                        <Ellipse.Effect><DropShadowEffect Color="#FF000000" BlurRadius="28" ShadowDepth="0" Opacity="0.95"/></Ellipse.Effect>
+                                    <Ellipse Fill="{StaticResource Black79Brush}" Stroke="{StaticResource White33Brush}" StrokeThickness="1">
+                                        <Ellipse.Effect><DropShadowEffect Color="{StaticResource ShadowColor}" BlurRadius="28" ShadowDepth="0" Opacity="0.95"/></Ellipse.Effect>
                                     </Ellipse>
                                     <Path x:Name="CenterTransportIcon" Fill="White" Stretch="Uniform" Width="34" Height="34"
                                           Data="M 4,2 L 11,2 L 11,18 L 4,18 Z M 15,2 L 22,2 L 22,18 L 15,18 Z"/>
@@ -956,7 +956,7 @@
                                 </Button>
 
                                 <!-- SERIES EPISODES PANEL -->
-                                <Border x:Name="SeriesPanel" Visibility="Collapsed" Background="#F2070309"
+                                <Border x:Name="SeriesPanel" Visibility="Collapsed" Background="{DynamicResource PanelBrush}"
                                         Cursor="Arrow"
                                         CornerRadius="18">
                                     <Grid Margin="24">
@@ -989,7 +989,7 @@
                                                             <ColumnDefinition Width="Auto"/>
                                                             <ColumnDefinition Width="*"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <Border Width="30" Height="30" CornerRadius="8" Background="#33000000">
+                                                        <Border Width="30" Height="30" CornerRadius="8" Background="{StaticResource Black20Brush}">
                                                             <TextBlock Text="{Binding EpisodeNum}" FontWeight="Bold"
                                                                        Foreground="{DynamicResource AccentSoftBrush}" HorizontalAlignment="Center"
                                                                        VerticalAlignment="Center"/>
@@ -1005,7 +1005,7 @@
                                 </Border>
 
                                 <!-- MUSIC DETAIL PANEL (album / artist / genre / playlist drill-down) -->
-                                <Border x:Name="MusicPanel" Visibility="Collapsed" Background="#F2070309"
+                                <Border x:Name="MusicPanel" Visibility="Collapsed" Background="{DynamicResource PanelBrush}"
                                         Cursor="Arrow" CornerRadius="18">
                                     <Grid Margin="28,24">
                                         <Grid.RowDefinitions>
@@ -1027,7 +1027,7 @@
                                                       Stretch="Uniform" Width="16" Height="16"/>
                                             </Button>
                                             <Grid Grid.Column="1" Width="164" Height="164" Margin="18,0,0,0">
-                                                <Border CornerRadius="14" Background="#33000000">
+                                                <Border CornerRadius="14" Background="{StaticResource Black20Brush}">
                                                     <TextBlock x:Name="MusicPanelInitial" Text="♪" FontWeight="Bold" FontSize="56"
                                                                Foreground="{DynamicResource AccentSoftBrush}"
                                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -1107,7 +1107,7 @@
                                                             <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
                                                         <Grid Width="36" Height="36">
-                                                            <Border CornerRadius="9" Background="#33000000">
+                                                            <Border CornerRadius="9" Background="{StaticResource Black20Brush}">
                                                                 <TextBlock Text="{Binding DisplayTrackNumberLabel}" FontWeight="Bold" FontSize="13"
                                                                            Foreground="{DynamicResource AccentSoftBrush}"
                                                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -1141,7 +1141,7 @@
                                 </Border>
 
                                 <!-- SETTINGS PANEL -->
-                                <Border x:Name="SettingsPanel" Visibility="Collapsed" Background="#F2070309" CornerRadius="18"
+                                <Border x:Name="SettingsPanel" Visibility="Collapsed" Background="{DynamicResource PanelBrush}" CornerRadius="18"
                                         Cursor="Arrow">
                                     <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="28,24">
                                         <StackPanel MaxWidth="820" HorizontalAlignment="Left">
@@ -1763,11 +1763,11 @@
                                                                 <RowDefinition Height="*"/>
                                                                 <RowDefinition Height="*"/>
                                                             </Grid.RowDefinitions>
-                                                            <Border BorderBrush="#18FFFFFF" BorderThickness="0,1,0,0"/>
-                                                            <Border Grid.Row="1" BorderBrush="#18FFFFFF" BorderThickness="0,1,0,0"/>
-                                                            <Border Grid.Row="2" BorderBrush="#55FFFFFF" BorderThickness="0,1,0,0"/>
-                                                            <Border Grid.Row="3" BorderBrush="#18FFFFFF" BorderThickness="0,1,0,0"/>
-                                                            <Border Grid.Row="4" BorderBrush="#18FFFFFF" BorderThickness="0,1,0,1"/>
+                                                            <Border BorderBrush="{StaticResource White10Brush}" BorderThickness="0,1,0,0"/>
+                                                            <Border Grid.Row="1" BorderBrush="{StaticResource White10Brush}" BorderThickness="0,1,0,0"/>
+                                                            <Border Grid.Row="2" BorderBrush="{StaticResource White33Brush}" BorderThickness="0,1,0,0"/>
+                                                            <Border Grid.Row="3" BorderBrush="{StaticResource White10Brush}" BorderThickness="0,1,0,0"/>
+                                                            <Border Grid.Row="4" BorderBrush="{StaticResource White10Brush}" BorderThickness="0,1,0,1"/>
                                                         </Grid>
                                                         <UniformGrid Grid.RowSpan="3" Columns="7" HorizontalAlignment="Left">
                                                             <StackPanel Width="82" HorizontalAlignment="Center">
@@ -1934,7 +1934,7 @@
                                                 </Grid>
 
                                                 <Border Margin="0,18,0,0" Padding="14,12" CornerRadius="8"
-                                                        Background="#22000000" BorderBrush="{DynamicResource CardStroke}" BorderThickness="1">
+                                                        Background="{StaticResource Black13Brush}" BorderBrush="{DynamicResource CardStroke}" BorderThickness="1">
                                                     <StackPanel>
                                                         <TextBlock Text="NVIDIA FRUC status" FontSize="11" FontWeight="SemiBold"
                                                                    Foreground="{DynamicResource TextBrush}"/>
@@ -1972,7 +1972,7 @@
                                             </StackPanel>
                                             <ProgressBar x:Name="ElySmartProgress" Height="7" Margin="0,14,0,0" Minimum="0" Maximum="100" Visibility="Collapsed"/>
                                             <TextBlock x:Name="ElySmartStatusText" Margin="0,10,0,0" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Text="No analysis has been run."/>
-                                            <Border Margin="0,12,0,8" Padding="14" CornerRadius="8" Background="#22000000" BorderBrush="{DynamicResource CardStroke}" BorderThickness="1">
+                                            <Border Margin="0,12,0,8" Padding="14" CornerRadius="8" Background="{StaticResource Black13Brush}" BorderBrush="{DynamicResource CardStroke}" BorderThickness="1">
                                                 <TextBlock x:Name="ElySmartReportText" FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource FaintBrush}" TextWrapping="Wrap" Text="The detailed report will appear here."/>
                                             </Border>
                                             <TextBlock Text="REAL-TIME DIAGNOSTICS: 5 MINUTES" Margin="0,18,0,7" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource MutedBrush}"/>

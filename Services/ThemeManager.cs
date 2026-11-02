@@ -33,7 +33,10 @@ public static class ThemeManager
             var c = (Color)ColorConverter.ConvertFromString(hex);
             Apply(c);
         }
-        catch { /* invalid hex – ignore */ }
+        catch (Exception ex) when (ex is FormatException or NotSupportedException or ArgumentException)
+        {
+            DebugConsole.Warn("Ignored invalid accent colour: " + hex);
+        }
     }
 
     public static void Apply(Color c)
@@ -82,6 +85,13 @@ public static class ThemeManager
         // Solid dark surfaces: combo popup and the login-card glow.
         res["PopupBrush"] = new SolidColorBrush(Mix(Colors.Black, c, 0.11));
         res["GlowColor"] = Mix(Colors.Black, c, 0.16);
+
+        // Near-black surfaces with a whisper of accent: side panels, video
+        // stage, idle video card and dialogs.
+        res["PanelBrush"] = new SolidColorBrush(WithAlpha(Mix(Colors.Black, c, 0.04), 0xF2));
+        res["StageBrush"] = new SolidColorBrush(Mix(Colors.Black, c, 0.02));
+        res["VideoIdleBrush"] = new SolidColorBrush(Mix(Colors.Black, c, 0.035));
+        res["DialogBrush"] = new SolidColorBrush(Mix(Colors.Black, c, 0.08));
 
         // App background: near-black with a whisper of accent, fading to pure black.
         var bg = new LinearGradientBrush

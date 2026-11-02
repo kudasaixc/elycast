@@ -8,7 +8,7 @@
     <Border x:Name="Card" Margin="12" Padding="18" CornerRadius="18"
             Background="{DynamicResource PopupBrush}" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1">
         <Border.Effect>
-            <DropShadowEffect BlurRadius="28" ShadowDepth="7" Opacity="0.65" Color="#D0000000"/>
+            <DropShadowEffect BlurRadius="28" ShadowDepth="7" Opacity="0.65" Color="{StaticResource Black82Color}"/>
         </Border.Effect>
         <Grid>
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>

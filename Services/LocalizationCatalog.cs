@@ -915,6 +915,15 @@ internal static class LocalizationCatalog
             ["🎵 Music"] = "🎵 Musique",
             ["💻  Local only"] = "💻  Local uniquement",
             ["📺 General television"] = "📺 Télévision générale",
+            ["Could not export the report: "] = "Impossible d'exporter le rapport : ",
+            ["Live"] = "Direct",
+            ["PRE"] = "PRÉ",
+            ["Current accent: {0}"] = "Accent actuel : {0}",
+            ["Installing..."] = "Installation en cours...",
+            ["  → The RTX backend will fall back to the standard mpv GPU pipeline automatically."] = "  → Le backend RTX retombera automatiquement sur le pipeline mpv GPU standard.",
+            ["Could not start 7-Zip."] = "Impossible de lancer 7-Zip.",
+            ["RTX VSR test interrupted: {0}"] = "Test RTX VSR interrompu : {0}",
+            ["Could not play this stream."] = "Impossible de lire ce flux.",
         };
 
     private static readonly IReadOnlyDictionary<string, string> English =

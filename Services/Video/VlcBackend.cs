@@ -26,7 +26,7 @@ public sealed class VlcBackend : IVideoBackend
         _player.Playing += (_, _) => Playing?.Invoke();
         _player.Paused += (_, _) => Paused?.Invoke();
         _player.EndReached += (_, _) => { _hasMedia = false; Ended?.Invoke(PlaybackEndReason.NaturalEnd); };
-        _player.EncounteredError += (_, _) => { _hasMedia = false; Failed?.Invoke("Impossible de lire ce flux."); };
+        _player.EncounteredError += (_, _) => { _hasMedia = false; Failed?.Invoke("Could not play this stream."); };
     }
 
     public string Name => "VLC bitmap";
@@ -88,7 +88,8 @@ public sealed class VlcBackend : IVideoBackend
     public VideoStats GetStats()
     {
         uint w = 0, h = 0;
-        try { _player.Size(0, ref w, ref h); } catch { }
+        try { _player.Size(0, ref w, ref h); }
+        catch (Exception ex) { DebugConsole.Trace("VLC video size unavailable: " + ex.Message); }
 
         var st = _player.Media?.Statistics;
         return new VideoStats(
@@ -113,8 +114,9 @@ public sealed class VlcBackend : IVideoBackend
                 .Select(t => new VideoTrack(t.Id, string.IsNullOrWhiteSpace(t.Name) ? LocalizationService.Format("Track {0}", t.Id) : t.Name))
                 .ToList();
         }
-        catch
+        catch (Exception ex)
         {
+            DebugConsole.Trace("VLC track list unavailable: " + ex.Message);
             return [];
         }
     }
@@ -133,8 +135,9 @@ public sealed class VlcBackend : IVideoBackend
                 .Select(t => new VideoTrack(t.Id, string.IsNullOrWhiteSpace(t.Name) ? LocalizationService.Format("Track {0}", t.Id) : t.Name))
                 .ToList();
         }
-        catch
+        catch (Exception ex)
         {
+            DebugConsole.Trace("VLC track list unavailable: " + ex.Message);
             return [];
         }
     }
@@ -146,7 +149,8 @@ public sealed class VlcBackend : IVideoBackend
 
     public void Dispose()
     {
-        try { _player.Stop(); } catch { }
+        try { _player.Stop(); }
+        catch (Exception ex) { DebugConsole.Trace("VLC stop during dispose: " + ex.Message); }
         _player.Dispose();
         _libVlc.Dispose();
     }

@@ -138,7 +138,7 @@ public static class ElyFlowService
                     .FirstOrDefault(path => Path.GetFileName(path).Contains("fruc", StringComparison.OrdinalIgnoreCase));
                 if (!string.IsNullOrWhiteSpace(fruc)) return fruc;
             }
-            catch { }
+            catch (Exception ex) { DebugConsole.Trace("FRUC runtime scan: " + ex.Message); }
         }
 
         return "";
@@ -156,7 +156,7 @@ public static class ElyFlowService
                 return (true, name, obj["DriverVersion"]?.ToString() ?? "");
             }
         }
-        catch { }
+        catch (Exception ex) { DebugConsole.Trace("GPU probe (WMI): " + ex.Message); }
 
         return (false, "", "");
     }
@@ -170,7 +170,7 @@ public static class ElyFlowService
                 var info = FileVersionInfo.GetVersionInfo(path);
                 return FirstNonEmpty(info.ProductVersion, info.FileVersion, nativeVersion, "unknown");
             }
-            catch { }
+            catch (Exception ex) { DebugConsole.Trace("FRUC runtime version: " + ex.Message); }
         }
 
         return FirstNonEmpty(nativeVersion, "unknown");

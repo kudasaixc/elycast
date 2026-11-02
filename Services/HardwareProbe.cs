@@ -54,7 +54,7 @@ public static class HardwareProbe
                 break;
             }
         }
-        catch { }
+        catch (Exception ex) { DebugConsole.Trace("CPU probe (WMI): " + ex.Message); }
 
         double ramGb = 0;
         try
@@ -64,7 +64,7 @@ public static class HardwareProbe
                 if (double.TryParse(o["TotalPhysicalMemory"]?.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var bytes))
                     ramGb = Math.Round(bytes / (1024.0 * 1024.0 * 1024.0), 1);
         }
-        catch { }
+        catch (Exception ex) { DebugConsole.Trace("Memory probe (WMI): " + ex.Message); }
 
         var gpus = new List<GpuInfo>();
         try
@@ -84,7 +84,7 @@ public static class HardwareProbe
                     IsRtx: name.Contains("RTX", StringComparison.OrdinalIgnoreCase)));
             }
         }
-        catch { }
+        catch (Exception ex) { DebugConsole.Trace("GPU probe (WMI): " + ex.Message); }
 
         var nvapi = false;
         try
@@ -92,7 +92,7 @@ public static class HardwareProbe
             nvapi = File.Exists(Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.System), "nvapi64.dll"));
         }
-        catch { }
+        catch (Exception ex) { DebugConsole.Trace("NVAPI probe: " + ex.Message); }
 
         return new HardwareInfo(cpuName, cores, threads, ramGb, gpus, nvapi);
     }

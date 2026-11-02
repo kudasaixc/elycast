@@ -80,7 +80,7 @@ public sealed class HardwareDetector
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw)))[..20];
     }
 
-    private static void Query(string query, Action<ManagementObject> visit) { try { using var s = new ManagementObjectSearcher(query); foreach (var o in s.Get().Cast<ManagementObject>()) visit(o); } catch { } }
+    private static void Query(string query, Action<ManagementObject> visit) { try { using var s = new ManagementObjectSearcher(query); foreach (var o in s.Get().Cast<ManagementObject>()) visit(o); } catch (Exception ex) { DebugConsole.Trace("WMI query failed (" + query + "): " + ex.Message); } }
     private static string Text(ManagementObject o, string n, string d) => o[n]?.ToString() ?? d;
     private static int Int(ManagementObject o, string n) => int.TryParse(o[n]?.ToString(), out var v) ? v : 0;
     private static uint UInt(ManagementObject o, string n) => uint.TryParse(o[n]?.ToString(), out var v) ? v : 0;

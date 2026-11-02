@@ -56,7 +56,11 @@ public sealed class MagpieUpscalerService
             .FirstOrDefault(p =>
             {
                 try { return string.Equals(p.MainModule?.FileName, exePath, StringComparison.OrdinalIgnoreCase); }
-                catch { return true; }
+                catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+                {
+                    // An elevated or exiting Magpie hides its module path: assume it is ours.
+                    return true;
+                }
             });
         if (existing != null)
         {
@@ -78,7 +82,11 @@ public sealed class MagpieUpscalerService
             HideMagpieWindows(process.Id);
             return true;
         }
-        catch { return false; }
+        catch (Exception ex)
+        {
+            DebugConsole.Warn("Magpie could not start: " + ex.Message);
+            return false;
+        }
     }
 
     public bool IsRunning(string? exePath = null) =>
@@ -86,7 +94,7 @@ public sealed class MagpieUpscalerService
         {
             if (string.IsNullOrWhiteSpace(exePath)) return true;
             try { return string.Equals(p.MainModule?.FileName, exePath, StringComparison.OrdinalIgnoreCase); }
-            catch { return true; }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { return true; }
         });
 
     public void ConfigureForEngine(string engine)

@@ -44,7 +44,11 @@ public static class ProfileStore
             var bytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(clear), null, DataProtectionScope.CurrentUser);
             return Convert.ToBase64String(bytes);
         }
-        catch { return ""; }
+        catch (CryptographicException ex)
+        {
+            DebugConsole.Warn("The password could not be protected; it was not saved: " + ex.Message);
+            return "";
+        }
     }
 
     public static string Unprotect(string protectedB64)
@@ -55,7 +59,12 @@ public static class ProfileStore
             var bytes = ProtectedData.Unprotect(Convert.FromBase64String(protectedB64), null, DataProtectionScope.CurrentUser);
             return Encoding.UTF8.GetString(bytes);
         }
-        catch { return ""; }
+        catch (Exception ex) when (ex is CryptographicException or FormatException)
+        {
+            // DPAPI data is bound to the Windows account that wrote it.
+            DebugConsole.Warn("A saved password could not be decrypted (profile from another Windows account?). Enter it again.");
+            return "";
+        }
     }
 
     public static string FolderPath => Dir;

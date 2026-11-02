@@ -102,7 +102,8 @@ public sealed class AudioVisualEngine : IDisposable
         _running = false;
         var thread = _thread;
         var reader = _reader;
-        try { if (thread != null) thread.Join(500); } catch { }
+        try { thread?.Join(500); }
+        catch (ThreadStateException) { /* the analysis thread never started */ }
         _thread = null;
         _reader = null;
 

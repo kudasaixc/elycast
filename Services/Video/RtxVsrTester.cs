@@ -113,17 +113,18 @@ public static class RtxVsrTester
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
-            return new VsrTestResult(VsrTestOutcome.Failed, "Test RTX VSR interrompu : " + ex.Message);
+            return new VsrTestResult(VsrTestOutcome.Failed, LocalizationService.Format("RTX VSR test interrupted: {0}", ex.Message));
         }
         finally
         {
             // Same teardown order as RecreateVideoBackend: dispose the backend
             // while its surface is still parented, then drop the surface.
-            try { backend?.Dispose(); } catch { }
+            try { backend?.Dispose(); }
+            catch (Exception ex) { DebugConsole.Trace("RTX VSR test: backend dispose: " + ex.Message); }
             if (hidden != null)
             {
-                try { hidden.Content = null; } catch { }
-                try { hidden.Close(); } catch { }
+                try { hidden.Content = null; hidden.Close(); }
+                catch (Exception ex) { DebugConsole.Trace("RTX VSR test: window close: " + ex.Message); }
             }
         }
     }

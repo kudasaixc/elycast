@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using Elysium_Cast_IPTV.Infrastructure;
 using Elysium_Cast_IPTV.Services;
 using Elysium_Cast_IPTV.Services.ElySmart;
 using Elysium_Cast_IPTV.Services.Video;
@@ -59,7 +60,7 @@ public partial class OnboardingWindow : Window
     private void Window_Drag(object sender, MouseButtonEventArgs e)
     {
         if (e.ButtonState == MouseButtonState.Pressed)
-            try { DragMove(); } catch { /* resize edge */ }
+            try { DragMove(); } catch (InvalidOperationException) { /* button released on a resize edge */ }
     }
 
     // ---------------------------------------------------------------- steps
@@ -151,7 +152,10 @@ public partial class OnboardingWindow : Window
         if (dlg.ShowDialog(this) == true) ObM3uBox.Text = dlg.FileName;
     }
 
-    private async void ObTestConnection_Click(object sender, RoutedEventArgs e)
+    private void ObTestConnection_Click(object sender, RoutedEventArgs e) =>
+        AsyncExtensions.FireAndLog(TestConnectionAsync, "Onboarding connection test");
+
+    private async Task TestConnectionAsync()
     {
         ObTestBtn.IsEnabled = false;
         ObTestStatus.Text = LocalizationService.T("Connecting...");
@@ -193,7 +197,7 @@ public partial class OnboardingWindow : Window
         if (((FrameworkElement)sender).Tag is not SolidColorBrush brush) return;
         _accentHex = brush.Color.ToString();
         ThemeManager.Apply(brush.Color);
-        AccentValue.Text = "Accent actuel : " + _accentHex;
+        AccentValue.Text = LocalizationService.Format("Current accent: {0}", _accentHex);
     }
 
     private List<string> SelectedInterests()
@@ -313,12 +317,15 @@ public partial class OnboardingWindow : Window
     }
 
     // ------------------------------------------------------------- install
-    private async void Install_Click(object sender, RoutedEventArgs e)
+    private void Install_Click(object sender, RoutedEventArgs e) =>
+        AsyncExtensions.FireAndLog(InstallAsync, "Onboarding installation");
+
+    private async Task InstallAsync()
     {
         if (_installBusy) return;
         _installBusy = true;
         InstallBtn.IsEnabled = false;
-        InstallBtn.Content = "Installation en cours…";
+        InstallBtn.Content = LocalizationService.T("Installing...");
         try
         {
             var backend = SelectedEngine();
@@ -392,7 +399,7 @@ public partial class OnboardingWindow : Window
                         }
                         else
                         {
-                            Log("  → Le backend RTX retombera automatiquement sur le pipeline mpv GPU standard.");
+                            Log("  → The RTX backend will fall back to the standard mpv GPU pipeline automatically.");
                         }
                         break;
                 }

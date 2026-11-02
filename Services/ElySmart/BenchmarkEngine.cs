@@ -59,7 +59,12 @@ public sealed class BenchmarkEngine
 
     public static BenchmarkReport? LoadLast()
     {
-        try { return File.Exists(ReportPath) ? JsonSerializer.Deserialize<BenchmarkReport>(File.ReadAllText(ReportPath)) : null; } catch { return null; }
+        try { return File.Exists(ReportPath) ? JsonSerializer.Deserialize<BenchmarkReport>(File.ReadAllText(ReportPath)) : null; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            DebugConsole.Warn("ELYSMART: the last report is unreadable and will be ignored (" + ex.Message + ").");
+            return null;
+        }
     }
     private static async Task SaveAsync(BenchmarkReport report, CancellationToken token)
     {
@@ -106,7 +111,7 @@ public sealed class BenchmarkEngine
             return new("storage-sequential", "Storage", Math.Clamp((int)(Math.Min(read, write) / 12), 15, 100), sw.Elapsed,
                 new[] { new ElySmartMetric("Read", read, "MB/s", MetricProvenance.Measured, "Includes the file-system cache"), new ElySmartMetric("Write", write, "MB/s", MetricProvenance.Measured, "Throughput observed by ElyCast") }, "ok", "128 MB temporary file; application measurement, not a raw NVMe benchmark");
         }
-        finally { try { File.Delete(path); } catch { } }
+        finally { try { File.Delete(path); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { DebugConsole.Trace("Benchmark temp file cleanup: " + ex.Message); } }
     }
 
     private static IReadOnlyList<BenchmarkResult> CapabilityBenchmarks(HardwareSnapshot hw)

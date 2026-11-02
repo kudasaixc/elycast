@@ -181,7 +181,11 @@ public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
             if (!EnumDisplaySettings(info.Device, -1 /* ENUM_CURRENT_SETTINGS */, ref mode)) return 0;
             return mode.DisplayFrequency is >= 20 and <= 1000 ? mode.DisplayFrequency : 0;
         }
-        catch { return 0; }
+        catch (Exception ex)
+        {
+            DebugConsole.Trace("Display refresh rate unavailable: " + ex.Message);
+            return 0;
+        }
     }
 
     /// <summary>

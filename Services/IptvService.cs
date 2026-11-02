@@ -20,7 +20,8 @@ public class IptvService
 
     public string BaseUrl { get; private set; } = "";
     public string Username { get; private set; } = "";
-    public string Password { get; private set; } = "";
+    // Kept private: Xtream embeds it in request and stream URLs, which must never be logged.
+    private string _password = "";
     public bool IsXtream { get; private set; }
     public string ProfileKey { get; private set; } = "";
     private readonly HttpClient _http;
@@ -28,9 +29,13 @@ public class IptvService
     public IptvService() : this(Http) { }
     internal IptvService(HttpClient http) => _http = http;
 
+    // Many IPTV panels only answer clients that look like a mainstream player,
+    // so requests identify as VLC. Changing it breaks playback on those panels.
+    private const string CompatibleUserAgent = "VLC/3.0 LibVLC/3.0";
+
     static IptvService()
     {
-        if (!Http.DefaultRequestHeaders.UserAgent.TryParseAdd("VLC/3.0 LibVLC/3.0"))
+        if (!Http.DefaultRequestHeaders.UserAgent.TryParseAdd(CompatibleUserAgent))
             Http.DefaultRequestHeaders.UserAgent.ParseAdd("ElyCast/2.0");
     }
 
@@ -61,7 +66,7 @@ public class IptvService
         if (BaseUrl.EndsWith("/player_api.php", StringComparison.OrdinalIgnoreCase))
             BaseUrl = BaseUrl[..^15];
         Username = username.Trim();
-        Password = password;
+        _password = password;
         IsXtream = true;
         ProfileKey = $"{BaseUrl}|{Username}";
 
@@ -91,7 +96,7 @@ public class IptvService
     {
         var requestUrl =
             $"{BaseUrl}/player_api.php?username={Uri.EscapeDataString(Username)}" +
-            $"&password={Uri.EscapeDataString(Password)}&action={action}";
+            $"&password={Uri.EscapeDataString(_password)}&action={action}";
 
         using var response = await _http.GetAsync(requestUrl, ct);
         response.EnsureSuccessStatusCode();
@@ -106,7 +111,7 @@ public class IptvService
             : StreamUrl("live", channel.StreamId.ToString(), LiveExt);
 
     private string StreamUrl(string kind, string id, string? extension) =>
-        $"{BaseUrl}/{kind}/{Uri.EscapeDataString(Username)}/{Uri.EscapeDataString(Password)}/{Uri.EscapeDataString(id)}.{Uri.EscapeDataString(string.IsNullOrWhiteSpace(extension) ? "mp4" : extension)}";
+        $"{BaseUrl}/{kind}/{Uri.EscapeDataString(Username)}/{Uri.EscapeDataString(_password)}/{Uri.EscapeDataString(id)}.{Uri.EscapeDataString(string.IsNullOrWhiteSpace(extension) ? "mp4" : extension)}";
 
     private static Dictionary<string, string> CategoryMap(IEnumerable<Category> categories) => categories
         .Where(c => c != null && !string.IsNullOrWhiteSpace(c.CategoryId))
@@ -206,7 +211,7 @@ public class IptvService
     {
         if (string.IsNullOrEmpty(s)) return "";
         try { return System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(s)); }
-        catch { return s; }
+        catch (FormatException) { return s; } // some panels send plain text
     }
 
     private static DateTime FromUnix(string? ts) =>

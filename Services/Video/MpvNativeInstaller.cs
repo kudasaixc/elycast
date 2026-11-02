@@ -100,7 +100,7 @@ public sealed partial class MpvNativeInstaller
             CreateNoWindow = true
         };
 
-        using var process = Process.Start(psi) ?? throw new InvalidOperationException("Impossible de lancer 7-Zip.");
+        using var process = Process.Start(psi) ?? throw new InvalidOperationException(LocalizationService.T("Could not start 7-Zip."));
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync();

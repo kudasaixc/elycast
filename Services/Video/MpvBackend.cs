@@ -305,27 +305,30 @@ public sealed class MpvBackend : IVideoBackend
         Try(() => _player.ExecuteCommand(["seek", seconds, "absolute"]));
     }
 
+    // Property reads are polled while media loads, when many properties are
+    // legitimately unavailable: a neutral value is the expected answer.
     private long GetLong(string property)
     {
         try { return _player.GetPropertyLong(property); }
-        catch { return 0; }
+        catch (Exception) { return 0; }
     }
 
     private double GetDouble(string property)
     {
         try { return _player.GetPropertyDouble(property); }
-        catch { return 0; }
+        catch (Exception) { return 0; }
     }
 
     private string GetString(string property)
     {
         try { return _player.GetPropertyString(property) ?? ""; }
-        catch { return ""; }
+        catch (Exception) { return ""; }
     }
 
     private static void Try(Action action)
     {
-        try { action(); } catch { }
+        try { action(); }
+        catch (Exception ex) { DebugConsole.Trace("mpv best-effort call failed: " + ex.Message); }
     }
 
     private static void Try(string step, Action action)

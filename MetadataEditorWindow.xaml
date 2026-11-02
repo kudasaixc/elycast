@@ -5,7 +5,7 @@
         WindowStartupLocation="CenterOwner" WindowStyle="None" AllowsTransparency="True"
         Background="Transparent" ShowInTaskbar="False" ResizeMode="NoResize"
         FontFamily="{StaticResource UiFont}" KeyDown="Window_KeyDown">
-    <Border CornerRadius="18" Background="#FF0C0714" BorderBrush="{DynamicResource CardStroke}"
+    <Border CornerRadius="18" Background="{DynamicResource DialogBrush}" BorderBrush="{DynamicResource CardStroke}"
             BorderThickness="1" MouseLeftButtonDown="Header_MouseDown">
         <Border.Effect>
             <DropShadowEffect BlurRadius="34" ShadowDepth="0" Opacity="0.65" Color="Black"/>
@@ -41,7 +41,7 @@
 
                 <StackPanel Grid.Column="0" Margin="0,4,22,0">
                     <Grid Width="184" Height="184">
-                        <Border CornerRadius="14" Background="#33000000">
+                        <Border CornerRadius="14" Background="{StaticResource Black20Brush}">
                             <TextBlock Text="♪" FontSize="52" FontWeight="Bold"
                                        Foreground="{DynamicResource AccentSoftBrush}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
