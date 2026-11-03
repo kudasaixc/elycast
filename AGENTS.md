@@ -278,6 +278,8 @@ dotnet restore "ElyCast TV Player.csproj"
 dotnet build "ElyCast TV Player.csproj" -c Release -p:Platform=x64
 ```
 
+Local installation/update: `scripts/install.ps1` runs `build.ps1`, publishes the framework-dependent single-file app (same recipe as CI), adds the out-of-repo binaries from `%LOCALAPPDATA%\ElyCast\redist` (`nvidia\NvOFFRUC.dll`, `nvidia\cudart64_110.dll`, `mpv\libmpv-2.dll`), closes only the installed copy, mirrors into `%LOCALAPPDATA%\Programs\ElyCast`, writes the Start menu/desktop shortcuts and the HKCU Apps & features entry, then deletes `bin` and `artifacts\Release` so a single runnable ElyCast exists. `scripts/uninstall.ps1` is shipped next to the executable.
+
 Useful smoke hook:
 
 ```powershell

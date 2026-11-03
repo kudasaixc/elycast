@@ -113,6 +113,17 @@ Requirements:
 
 Downloaded dependencies are installed under `%APPDATA%\ElyCast\tools`, never in the repository.
 
+### Install or update from source
+
+`scripts/install.ps1` builds this checkout and installs it per user (no administrator rights) in `%LOCALAPPDATA%\Programs\ElyCast`, with Start menu and desktop shortcuts and an Apps & features entry. To update, pull and run it again: the running copy is closed, files are replaced and settings in `%APPDATA%\ElyCast` are kept. The build executables are removed from the checkout afterwards so only the installed ElyCast remains.
+
+```powershell
+git pull
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -Launch
+```
+
+Binaries that are not in the repository are taken from `%LOCALAPPDATA%\ElyCast\redist` when present: `nvidia\NvOFFRUC.dll` and `nvidia\cudart64_110.dll` (ELYFLOW frame generation) and `mpv\libmpv-2.dll`. Uninstall from Apps & features or with `uninstall.ps1` in the install folder (`-RemoveUserData` also deletes settings and the library).
+
 ## Build from source
 
 Build the native component before the WPF application:
