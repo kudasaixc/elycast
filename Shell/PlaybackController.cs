@@ -45,7 +45,17 @@ internal sealed class PlaybackController
     private DispatcherTimer? _reconnectTimer;
     private CancellationTokenSource? _epgCts;
     private EpgEntry? _epgNow;
+    // A press or drag on the seek bar owns the slider value until release, so the
+    // progress timer cannot pull the thumb back mid-gesture. The gesture remembers
+    // the playback it started on and only commits to that same playback.
     private bool _userSeeking;
+    private bool _trackScrub;
+    private int _seekGeneration;
+    private IVideoBackend? _seekBackend;
+    // mpv seeks asynchronously: until time-pos reaches the target, the timer keeps
+    // showing the target instead of snapping the thumb back to the old position.
+    private long? _pendingSeekMs;
+    private long _pendingSeekUntil;
     private bool _loadingSubtitleChoices;
     private bool _loadingAudioChoices;
 
@@ -70,9 +80,16 @@ internal sealed class PlaybackController
         _epgTimer.Tick += (_, _) => UpdateEpgProgress();
         _progressTimer.Tick += (_, _) => UpdateSeek();
 
-        _view.SeekSlider.AddHandler(Thumb.DragStartedEvent, new DragStartedEventHandler((_, _) => _userSeeking = true));
-        _view.SeekSlider.AddHandler(Thumb.DragCompletedEvent, new DragCompletedEventHandler((_, _) => { SeekToSlider(); _userSeeking = false; }));
-        _view.SeekSlider.AddHandler(UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler((_, _) => SeekToSlider()), true);
+        // Handled events too: the Slider's own class handler marks a track press handled
+        // after moving the value to the click point (IsMoveToPointEnabled).
+        var slider = _view.SeekSlider;
+        slider.AddHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(SeekSlider_Pressed), true);
+        slider.AddHandler(UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler(SeekSlider_Released), true);
+        slider.PreviewMouseMove += SeekSlider_MouseMove;
+        slider.LostMouseCapture += (_, _) => { if (_trackScrub) EndSeekGesture(commit: true); };
+        slider.AddHandler(Thumb.DragStartedEvent, new DragStartedEventHandler((_, _) => BeginSeekGesture()));
+        slider.AddHandler(Thumb.DragDeltaEvent, new DragDeltaEventHandler((_, _) => ShowScrubTime()));
+        slider.AddHandler(Thumb.DragCompletedEvent, new DragCompletedEventHandler((_, _) => EndSeekGesture(commit: true)));
     }
 
     public ObservableCollection<TrackOption> SubtitleOptions { get; } = new();
@@ -103,7 +120,8 @@ internal sealed class PlaybackController
             _vm.ShowOverlay("File not found on disk.", spinning: false); return;
         }
         _reconnectTimer?.Stop();
-        _userSeeking = false;
+        EndSeekGesture(commit: false);
+        _pendingSeekMs = null;
         var generation = _session.NextGeneration();
         CancelEpgRequest();
         _session.Current = item;
@@ -314,34 +332,89 @@ internal sealed class PlaybackController
         var len = backend.LengthMs;
         var pos = backend.PositionMs;
         if (len <= 0) { _vm.TotalTimeText = "-"; _vm.UpdateSkipButtons(0, 0); return; }
-
-        if (!_userSeeking)
-        {
-            _vm.SeekMaximum = len / 1000.0;
-            _vm.SeekPosition = Math.Clamp(pos / 1000.0, 0, _vm.SeekMaximum);
-        }
-        _vm.CurrentTimeText = PlaybackText.FormatTime(pos);
         _vm.TotalTimeText = PlaybackText.FormatTime(len);
+        if (_userSeeking) return; // the gesture owns the thumb and the time readout
+
+        if (_pendingSeekMs is { } target)
+        {
+            if (Math.Abs(pos - target) > 1500 && Environment.TickCount64 < _pendingSeekUntil) pos = target;
+            else _pendingSeekMs = null;
+        }
+        _vm.SeekMaximum = len / 1000.0;
+        _vm.SeekPosition = Math.Clamp(pos / 1000.0, 0, _vm.SeekMaximum);
+        _vm.CurrentTimeText = PlaybackText.FormatTime(pos);
         _vm.UpdateSkipButtons(len, pos);
     }
 
-    private void SeekToSlider()
+    private void SeekSlider_Pressed(object sender, MouseButtonEventArgs e)
     {
-        var backend = _session.Backend;
-        if (backend == null || backend.LengthMs <= 0) return;
-        backend.PositionMs = (long)(_vm.SeekPosition * 1000);
-        _vm.CurrentTimeText = PlaybackText.FormatTime(backend.PositionMs);
+        BeginSeekGesture();
+        // A press on the thumb is a Thumb drag (DragDelta/DragCompleted). A press on the
+        // rail already jumped there; capture the mouse so the thumb follows until release.
+        if (SeekTrack() is not { } track || track.Thumb?.IsMouseOver == true) return;
+        _trackScrub = _view.SeekSlider.CaptureMouse();
+        ShowScrubTime();
     }
+
+    private void SeekSlider_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_trackScrub || SeekTrack() is not { } track) return;
+        _view.SeekSlider.SetCurrentValue(RangeBase.ValueProperty, track.ValueFromPoint(e.GetPosition(track)));
+        ShowScrubTime();
+    }
+
+    private void SeekSlider_Released(object sender, MouseButtonEventArgs e)
+    {
+        // Thumb drags commit on DragCompleted, raised after this preview event.
+        if (_trackScrub || SeekTrack()?.Thumb?.IsDragging != true) EndSeekGesture(commit: true);
+    }
+
+    private Track? SeekTrack() => _view.SeekSlider.Template?.FindName("PART_Track", _view.SeekSlider) as Track;
+
+    private void BeginSeekGesture()
+    {
+        if (_userSeeking) return;
+        _userSeeking = true;
+        _seekGeneration = _session.Generation;
+        _seekBackend = _session.Backend;
+    }
+
+    private void EndSeekGesture(bool commit)
+    {
+        if (!_userSeeking) return;
+        _userSeeking = false;
+        if (_trackScrub)
+        {
+            _trackScrub = false; // before the release: it raises LostMouseCapture
+            if (Mouse.Captured == _view.SeekSlider) _view.SeekSlider.ReleaseMouseCapture();
+        }
+        var backend = _seekBackend;
+        _seekBackend = null;
+        if (commit && backend != null && _session.IsCurrent(_seekGeneration, backend))
+            SeekTo(backend, (long)(_view.SeekSlider.Value * 1000));
+    }
+
+    private void ShowScrubTime() =>
+        _vm.CurrentTimeText = PlaybackText.FormatTime((long)(_view.SeekSlider.Value * 1000));
 
     public void SeekRelative(long deltaMs)
     {
         var backend = _session.Backend;
         if (backend == null || backend.LengthMs <= 0) return;
-        var t = Math.Clamp(backend.PositionMs + deltaMs, 0, backend.LengthMs);
+        SeekTo(backend, backend.PositionMs + deltaMs);
+    }
+
+    private void SeekTo(IVideoBackend backend, long targetMs)
+    {
+        var len = backend.LengthMs;
+        if (len <= 0) return;
+        var t = Math.Clamp(targetMs, 0, len);
         backend.PositionMs = t;
+        _pendingSeekMs = t;
+        _pendingSeekUntil = Environment.TickCount64 + 3000;
         _vm.SeekPosition = t / 1000.0;
         _vm.CurrentTimeText = PlaybackText.FormatTime(t);
-        _vm.UpdateSkipButtons(backend.LengthMs, t);
+        _vm.UpdateSkipButtons(len, t);
     }
 
     // ============ AUDIO / SUBTITLE TRACKS ============
