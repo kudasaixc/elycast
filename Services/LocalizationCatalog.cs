@@ -924,6 +924,7 @@ internal static class LocalizationCatalog
             ["Could not start 7-Zip."] = "Impossible de lancer 7-Zip.",
             ["RTX VSR test interrupted: {0}"] = "Test RTX VSR interrompu : {0}",
             ["Could not play this stream."] = "Impossible de lire ce flux.",
+            [" (GLSL shaders suspended)"] = " (shaders GLSL suspendus)",
             // Clip export
             ["{0}p (source)"] = "{0}p (source)",
             ["{0}p (upscaled)"] = "{0}p (agrandi)",

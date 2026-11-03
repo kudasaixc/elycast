@@ -61,9 +61,13 @@ public static class PlaybackText
         else upscale = $"1:1 ({LocalizationService.T("native")}, {st.Scaler})";
 
         // The AI chain either upscales (display > source) or falls back to
-        // its CAS/NVSharpen sharpening pass - make that visible.
+        // its CAS/NVSharpen sharpening pass - make that visible. A GPU
+        // pre-upscale alone ("RTX VSR ×2") carries no GLSL chain to label.
+        var gpuOnly = !st.Shaders.Contains(" + ", StringComparison.Ordinal) &&
+                      (st.Shaders.StartsWith("RTX VSR", StringComparison.Ordinal) || st.Shaders.StartsWith("VPP GPU", StringComparison.Ordinal));
         var shaders = string.IsNullOrEmpty(st.Shaders)
             ? LocalizationService.T("none (mpv scaler)")
+            : gpuOnly ? st.Shaders
             : st.Shaders + LocalizationService.T(ratio > 1.02 ? "  [AI upscale active]" : "  [sharpening only, display ≤ source]");
 
         return

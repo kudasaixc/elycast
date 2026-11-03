@@ -50,6 +50,8 @@ public class PlaybackTextTests
     {
         Assert.Contains("[AI upscale active]", PlaybackText.VideoStats(Stats(720, 1440, "FSRCNNX"), "x"));
         Assert.Contains("[sharpening only", PlaybackText.VideoStats(Stats(1440, 720, "FSRCNNX"), "x"));
+        Assert.DoesNotContain("[sharpening only", PlaybackText.VideoStats(Stats(1080, 1080, "RTX VSR ×2 (GLSL shaders suspended)"), "x"));
+        Assert.Contains("[sharpening only", PlaybackText.VideoStats(Stats(1080, 1080, "RTX VSR ×2 + Anime4K"), "x"));
     }
 
     [Fact]

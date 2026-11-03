@@ -56,6 +56,10 @@ public partial class App : Application
         // 1) bring up the debug console immediately
         DebugConsole.Initialize();
 
+        // Before any D3D11 device exists: hybrid laptops otherwise run the
+        // whole video pipeline on the integrated GPU.
+        Services.Video.GpuPreference.EnsureHighPerformance();
+
         // 2) play the animated boot sequence (~5.5s). Backend-specific native
         //    libraries are initialized later by the selected video backend.
         DebugConsole.RunBootSequence(StateStore.Settings.BootSeconds, () =>

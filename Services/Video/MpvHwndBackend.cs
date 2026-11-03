@@ -48,11 +48,12 @@ public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
     private int _targetProbeAttempts;
     private long _targetProbeBaseline;
     private double _activeVppRatio;
+    private string? _appliedVf;
     private readonly DispatcherTimer _playbackStateProbe = new() { Interval = TimeSpan.FromMilliseconds(500) };
     private bool _observedActiveMedia;
     private long _lastObservedPositionMs;
     private long _lastObservedLengthMs;
-    private bool _elyCoreShadersSuppressed;
+    private bool _aiShadersSuppressed;
     private ulong _elyCoreRenderedBaseline;
     private ulong _elyCoreInterpolatedBaseline;
     private ulong _elyCorePresentedBaseline;
@@ -259,7 +260,7 @@ public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
 
     private void ApplyShaderSettings()
     {
-        _elyCoreShadersSuppressed = false;
+        _aiShadersSuppressed = false;
 
         // "None": no enhancement at all - clear shaders, lightest scaler.
         if (_upMethod == "none")
@@ -310,6 +311,7 @@ public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
         {
             SetProp("hwdec", "hwdec", "auto");
             SetProp("vf", "vf", "");
+            _appliedVf = "";
             _activeVppRatio = 0;
 
             if (!_hasMedia)
@@ -321,7 +323,7 @@ public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
                 if (ShaderCatalog.IsShaderMethod(_upMethod))
                 {
                     SetProp("glsl-shaders", "glsl-shaders", "");
-                    _elyCoreShadersSuppressed = true;
+                    _aiShadersSuppressed = true;
                 }
                 return;
             }
@@ -361,16 +363,16 @@ public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
             // ringing. Keep a high-quality conventional downscaler instead.
             var shouldSuppress = (renderHeight <= sourceHeight || shouldUseVsr) &&
                                  ShaderCatalog.IsShaderMethod(_upMethod);
-            if (shouldSuppress && !_elyCoreShadersSuppressed)
+            if (shouldSuppress && !_aiShadersSuppressed)
             {
                 SetProp("glsl-shaders", "glsl-shaders", "");
                 SetProp("scale", "scale", "ewa_lanczossharp");
-                _elyCoreShadersSuppressed = true;
+                _aiShadersSuppressed = true;
                 DebugConsole.Info(shouldUseVsr
                     ? $"ELYCORE: GLSL shaders suspended; RTX VSR handles {vsrRatio:0.0#}x upscaling."
                     : $"ELYCORE: AI shaders suspended while downscaling ({sourceHeight}p -> {renderHeight}p).");
             }
-            else if (!shouldSuppress && _elyCoreShadersSuppressed)
+            else if (!shouldSuppress && _aiShadersSuppressed)
             {
                 ApplyShaderSettings();
                 DebugConsole.Info($"ELYCORE: AI shaders re-enabled for upscaling ({sourceHeight}p -> {renderHeight}p).");
@@ -378,34 +380,77 @@ public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
             return;
         }
 
+        var srcWidth = _hasMedia ? GetLong("width") : 0;
         var srcHeight = _hasMedia ? GetLong("height") : 0;
-        if (_upTargetHeight > 0 && srcHeight <= 0 && _hasMedia)
+        // RTX VSR without an explicit target follows the output size: a blind
+        // 2x turned a 1080p source into 2160p for a 1080p window, then mpv
+        // downscaled it again (and ran the GLSL chain at 4K).
+        var vsrToOutput = _rtxVsr && _upTargetHeight == 0;
+        if ((_upTargetHeight > 0 || vsrToOutput) && srcHeight <= 0 && _hasMedia)
         {
             StartTargetProbe();
             return;
         }
 
         // VSR is specified up to 4x; beyond that mpv's scalers take over.
-        var ratio = _upTargetHeight > 0 && srcHeight > 0
-            ? Math.Clamp(_upTargetHeight / (double)srcHeight, 1.0, 4.0)
-            : _rtxVsr ? 2.0 : 0.0;
+        var ratio = 0.0;
+        if (_upTargetHeight > 0 && srcHeight > 0)
+            ratio = Math.Clamp(_upTargetHeight / (double)srcHeight, 1.0, 4.0);
+        else if (vsrToOutput && srcHeight > 0 && srcWidth > 0)
+        {
+            var (outWidth, outHeight) = OutputPixels();
+            if (outHeight <= 0)
+            {
+                StartTargetProbe();
+                return;
+            }
+            ratio = Math.Clamp(Math.Min(outWidth / (double)srcWidth, outHeight / (double)srcHeight), 1.0, 4.0);
+        }
 
-        if (ratio > 1.02)
+        var useVpp = ratio > 1.02;
+        var mode = _rtxVsr ? "nvidia" : "standard";
+        var vf = useVpp ? string.Create(CultureInfo.InvariantCulture, $"d3d11vpp=scale={ratio:0.0#}:scaling-mode={mode}") : "";
+        // Re-setting an identical vf reinitializes the filter chain (a visible
+        // hitch), which resizes and zaps would otherwise trigger every time.
+        if (!string.Equals(vf, _appliedVf, StringComparison.Ordinal))
         {
-            var mode = _rtxVsr ? "nvidia" : "standard";
-            var vf = string.Create(CultureInfo.InvariantCulture, $"d3d11vpp=scale={ratio:0.0#}:scaling-mode={mode}");
-            SetProp("hwdec=d3d11va", "hwdec", "d3d11va");
+            SetProp("hwdec", "hwdec", useVpp || _rtxVsr ? "d3d11va" : "auto");
             SetProp("vf=" + vf, "vf", vf);
-            _activeVppRatio = ratio;
-            DebugConsole.Info($"mpv(HWND): GPU pre-upscale ({mode}) {ratio:0.0#}x" + (srcHeight > 0 ? $" ({srcHeight}p -> ~{(int)(srcHeight * ratio)}p)" : ""));
+            _appliedVf = vf;
+            if (useVpp)
+                DebugConsole.Info($"mpv(HWND): GPU pre-upscale ({mode}) {ratio:0.0#}x" + (srcHeight > 0 ? $" ({srcHeight}p -> ~{(int)(srcHeight * ratio)}p)" : ""));
+            else if (_rtxVsr && srcHeight > 0)
+                DebugConsole.Info($"mpv(HWND): RTX VSR idle, the output is not larger than the source ({srcHeight}p).");
         }
-        else
+        _activeVppRatio = useVpp ? ratio : 0;
+
+        // While RTX VSR enlarges the picture, the GLSL chain would run on the
+        // already upscaled frame (Anime4K restore at 4K): same policy as ELYCORE.
+        var suppress = _rtxVsr && useVpp && ShaderCatalog.IsShaderMethod(_upMethod);
+        if (suppress && !_aiShadersSuppressed)
         {
-            // Source already at/above the target: nothing to pre-upscale.
-            SetProp("hwdec", "hwdec", _rtxVsr ? "d3d11va" : "auto");
-            SetProp("vf", "vf", "");
-            _activeVppRatio = 0;
+            SetProp("glsl-shaders", "glsl-shaders", "");
+            SetProp("scale", "scale", "ewa_lanczossharp");
+            _aiShadersSuppressed = true;
+            DebugConsole.Info($"mpv(HWND): GLSL shaders suspended; RTX VSR handles {ratio:0.0#}x upscaling.");
         }
+        else if (!suppress && _aiShadersSuppressed)
+        {
+            ApplyShaderSettings();
+            DebugConsole.Info("mpv(HWND): GLSL shaders re-enabled.");
+        }
+    }
+
+    // Size of the video output in physical pixels (mpv's OSD matches the window).
+    private (long Width, long Height) OutputPixels()
+    {
+        var width = GetLong("osd-width");
+        var height = GetLong("osd-height");
+        if (width > 0 && height > 0) return (width, height);
+        var source = PresentationSource.FromVisual(_host);
+        if (source?.CompositionTarget == null || _host.ActualHeight <= 0) return (0, 0);
+        var scale = source.CompositionTarget.TransformToDevice;
+        return ((long)(_host.ActualWidth * scale.M11), (long)(_host.ActualHeight * scale.M22));
     }
 
     private void StartTargetProbe()
@@ -572,7 +617,7 @@ public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
 
             // The new stream's resolution may differ from the previous one:
             // re-evaluate the GPU pre-upscale ratio once it is known.
-            if (_upTargetHeight > 0 || _elyCore)
+            if (_upTargetHeight > 0 || _elyCore || _rtxVsr)
                 StartTargetProbe();
 
             // Report the full ELYCORE pipeline state once frames flow, then a
@@ -740,6 +785,7 @@ public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
         {
             vpp = _activeVppRatio > 0
                 ? (_rtxVsr ? "RTX VSR" : "VPP GPU") + string.Create(CultureInfo.InvariantCulture, $" ×{_activeVppRatio:0.0#}")
+                  + (_aiShadersSuppressed ? LocalizationService.T(" (GLSL shaders suspended)") : "")
                 : _rtxVsr ? LocalizationService.T("RTX VSR (idle)") : "";
         }
         if (vpp.Length == 0) return shaders;
@@ -812,6 +858,11 @@ public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
             // the full GPU pipeline is safe here (unlike LibMPVSharp's path).
             SetProp("vo=gpu-next", "vo", "gpu-next");
             SetProp("gpu-api=d3d11", "gpu-api", "d3d11");
+            // On hybrid laptops the display is wired to the integrated GPU, which
+            // is the default D3D11 adapter: RTX VSR then silently cannot work and
+            // the whole pipeline runs on the iGPU. The factory only selects this
+            // mode when an NVIDIA driver exists.
+            if (_rtxVsr) SetProp("d3d11-adapter=NVIDIA", "d3d11-adapter", "NVIDIA");
         }
         // hwdec and vf (d3d11vpp pre-upscale / RTX VSR) are owned by
         // ApplyTargetScale, reached through ApplyStoredUpscaling below.
@@ -896,7 +947,9 @@ public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
 
     private void OnHostSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (_elyCore && _hasMedia)
+        // ELYCORE and output-sized RTX VSR depend on the window size
+        // (fullscreen, resize); the probe debounces the new geometry.
+        if (_hasMedia && (_elyCore || (_rtxVsr && _upTargetHeight == 0)))
             StartTargetProbe();
     }
 

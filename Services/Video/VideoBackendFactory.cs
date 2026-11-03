@@ -106,6 +106,6 @@ public static class VideoBackendFactory
     // nvapi64.dll only ships with the NVIDIA driver - cheap and reliable vendor
     // probe. Whether the GPU/driver actually supports VSR (RTX 20+, ≥ 531) is
     // decided by the driver itself: unsupported setups get standard VPP scaling.
-    private static bool HasNvidiaDriver() =>
+    internal static bool HasNvidiaDriver() =>
         File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "nvapi64.dll"));
 }
