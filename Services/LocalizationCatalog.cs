@@ -938,6 +938,12 @@ internal static class LocalizationCatalog
             [" (GLSL shaders suspended)"] = " (shaders GLSL suspendus)",
             // Clip export
             ["No subtitles"] = "Sans sous-titres",
+            ["Corner of the ElyCast watermark"] = "Coin du filigrane ElyCast",
+            ["Watermark: bottom right"] = "Filigrane : en bas à droite",
+            ["Watermark: bottom left"] = "Filigrane : en bas à gauche",
+            ["Watermark: top right"] = "Filigrane : en haut à droite",
+            ["Watermark: top left"] = "Filigrane : en haut à gauche",
+            ["The ElyCast watermark is missing from the installation."] = "Le filigrane ElyCast est absent de l'installation.",
             ["Video format of the clip"] = "Format vidéo du clip",
             ["AV1, smallest file"] = "AV1, fichier le plus léger",
             ["HEVC, small file"] = "HEVC, fichier léger",

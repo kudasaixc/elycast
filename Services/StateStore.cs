@@ -126,6 +126,7 @@ public static class StateStore
         s.ElyColorCustomFilters ??= new List<ElyColorFilter>();
         s.ElyColorCustomFilters.RemoveAll(filter => filter == null);
         s.VideoEffects = Video.ShaderCatalog.NormalizeEffects(s.VideoEffects);
+        s.ClipWatermarkPosition = Export.ClipExportPlanner.WatermarkSetting(Export.ClipExportPlanner.ParseWatermarkPosition(s.ClipWatermarkPosition));
         foreach (var filter in s.ElyColorCustomFilters)
             filter.VideoEffects = Video.ShaderCatalog.NormalizeEffects(filter.VideoEffects);
         s.ElySoundCustomProfile ??= ElySoundProfile.DefaultCustom();

@@ -367,6 +367,7 @@ public partial class MainWindow : Window
     private void ClipMarkStart_Click(object sender, RoutedEventArgs e) => _clip.MarkStart();
     private void ClipMarkEnd_Click(object sender, RoutedEventArgs e) => _clip.MarkEnd();
     private void ClipRange_Changed(object sender, TextChangedEventArgs e) { if (_composed) _clip.OnRangeTextChanged(); }
+    private void ClipWatermark_Changed(object sender, SelectionChangedEventArgs e) { if (_composed) _clip.OnWatermarkPositionChanged(); }
     private void ClipExport_Click(object sender, RoutedEventArgs e) => AsyncExtensions.FireAndLog(_clip.ExportRangeAsync, "Clip export");
     private void ClipRecord_Click(object sender, RoutedEventArgs e) => _clip.ToggleRecording();
     private void ClipCancel_Click(object sender, RoutedEventArgs e) => _clip.Cancel();

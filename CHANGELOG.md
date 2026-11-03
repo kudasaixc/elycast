@@ -8,6 +8,7 @@ All notable ElyCast changes are documented here. This project follows
 
 ### Added
 
+- Exported clips carry a discreet ElyCast logo watermark (with a margin and a light shadow), placed in the corner of your choice. It is part of every export and cannot be turned off.
 - Image effects that stack on any upscaling method, on screen and in exported clips: sharp colours (KrigBilateral chroma), darker lines, thinner lines, adaptive sharpening, vibrance and anime deband (Settings > Upscaling).
 - **ELYCOLOR Anime Ultra** and **ELYCOLOR Anime Eco+** profiles. Measured on an RTX 4050 Laptop with a 1080p anime in fullscreen: Anime Eco+ costs about the same as Anime4K Fast alone (9.6 W), Anime Ultra about 1 W more.
 - Every mpv shader now ships with ElyCast (with its license notices); nothing is downloaded on first use anymore.

@@ -38,6 +38,7 @@ internal sealed class ClipExportController
     private string? _audioTrackId;
     private IReadOnlyList<VideoTrack> _subtitleTracks = [];
     private string? _playingSubtitleId;
+    private bool _syncingWatermark;
 
     private MpvHwndBackend? _recordBackend;
     private PlayItem? _recordItem;
@@ -146,6 +147,9 @@ internal sealed class ClipExportController
             FillResolutions();
         }
         FillSubtitles(keepSelection: !changed);
+        _syncingWatermark = true;
+        ComboTags.Select(_view.ClipWatermarkCombo, _store.Settings.ClipWatermarkPosition);
+        _syncingWatermark = false;
         return true;
     }
 
@@ -202,7 +206,7 @@ internal sealed class ClipExportController
         _view.ClipProgress.Visibility = exporting ? Visibility.Visible : Visibility.Collapsed;
         _view.ClipOpenFolderBtn.Visibility = !exporting && _lastOutput != null ? Visibility.Visible : Visibility.Collapsed;
         _view.ClipStartBox.IsEnabled = _view.ClipEndBox.IsEnabled = !exporting;
-        _view.ClipResolutionCombo.IsEnabled = _view.ClipQualityCombo.IsEnabled = _view.ClipSubtitleCombo.IsEnabled = _view.ClipFormatCombo.IsEnabled = !exporting;
+        _view.ClipResolutionCombo.IsEnabled = _view.ClipQualityCombo.IsEnabled = _view.ClipSubtitleCombo.IsEnabled = _view.ClipFormatCombo.IsEnabled = _view.ClipWatermarkCombo.IsEnabled = !exporting;
         UpdateDuration();
         UpdateRecordText();
         RefreshButton();
@@ -220,6 +224,14 @@ internal sealed class ClipExportController
     }
 
     public void OnRangeTextChanged() => UpdateDuration();
+
+    // The watermark itself is not optional; only its corner is a choice.
+    public void OnWatermarkPositionChanged()
+    {
+        if (_syncingWatermark || _view.ClipWatermarkCombo.SelectedItem is not ComboBoxItem { Tag: string corner }) return;
+        _store.Settings.ClipWatermarkPosition = corner;
+        _store.Save();
+    }
 
     private void UpdateDuration()
     {
@@ -287,7 +299,8 @@ internal sealed class ClipExportController
             var subtitles = _view.ClipSubtitleCombo.SelectedItem is ComboBoxItem { Tag: string sid } && sid != "no" ? sid : null;
             var codec = _view.ClipFormatCombo.SelectedItem is ComboBoxItem { Tag: string c } &&
                         Enum.TryParse<ClipCodec>(c, out var parsedCodec) ? parsedCodec : ClipCodec.Av1;
-            var request = new ClipExportRequest(source, output, start, end, width, outHeight, quality, _audioTrackId, subtitles, codec);
+            var watermark = ClipExportPlanner.ParseWatermarkPosition(settings.ClipWatermarkPosition);
+            var request = new ClipExportRequest(source, output, start, end, width, outHeight, quality, _audioTrackId, subtitles, codec, watermark);
             DebugConsole.Info($"Clip export: {(start is { } s ? ClipExportPlanner.FormatTime(s) : "recording")}" +
                               $"{(end is { } e ? " -> " + ClipExportPlanner.FormatTime(e) : "")}, {width}x{outHeight}, {quality}, " +
                               $"pipeline: {string.Join(" + ", ClipExportPlanner.DescribePipeline(settings).DefaultIfEmpty("none"))}");

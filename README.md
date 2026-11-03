@@ -58,7 +58,7 @@ The September reliability update adds accent-insensitive, multiword search (`Ctr
 - **RTX Video Super Resolution** for compatible NVIDIA RTX GPUs.
 - **ELYFLOW** frame interpolation through NVIDIA Optical Flow and FRUC.
 - **ELYCOLOR** live image profiles for color, contrast, gamma, hue, and shader chains.
-- **Clip export**: save a range of a film or episode (or record a live channel) as an MP4 (AV1 10-bit by default for small files, HEVC or H.264) with optional burned-in subtitles and the upscaling shaders (Anime4K, FSRCNNX, NIS, FSR), ELYCOLOR and ELYSOUND+ applied. AI upscalers engage when the export resolution is above the source. RTX VSR and frame generation are display-only and are not exported.
+- **Clip export**: save a range of a film or episode (or record a live channel) as an MP4 (AV1 10-bit by default for small files, HEVC or H.264) with optional burned-in subtitles, a discreet ElyCast watermark in the corner of your choice, and the upscaling shaders (Anime4K, FSRCNNX, NIS, FSR), ELYCOLOR and ELYSOUND+ applied. AI upscalers engage when the export resolution is above the source. RTX VSR and frame generation are display-only and are not exported.
 - Built-in GLSL shaders (Anime4K, FSRCNNX, NIS, FSR, CAS) and stackable image effects: sharp colours (KrigBilateral chroma), darker or thinner lines, adaptive sharpening, vibrance and anime deband. Everything ships with ElyCast, nothing is downloaded.
 - **ELYCOLOR Anime Ultra** (every anime effect, best plugged in) and **ELYCOLOR Anime Eco+** (quiet everyday look) profiles.
 - Magpie external upscaling support.

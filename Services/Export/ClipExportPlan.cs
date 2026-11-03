@@ -13,6 +13,9 @@ public enum ClipQuality { Standard, High, Maximum }
 /// <summary>Video format of an exported clip.</summary>
 public enum ClipCodec { Av1, Hevc, H264 }
 
+/// <summary>Corner of the mandatory ElyCast watermark.</summary>
+public enum ClipWatermarkPosition { TopLeft, TopRight, BottomLeft, BottomRight }
+
 /// <summary>
 /// One clip export. <see cref="StartSeconds"/>/<see cref="EndSeconds"/> are
 /// absolute media positions; null exports the whole source (a live recording).
@@ -28,7 +31,8 @@ public sealed record ClipExportRequest(
     ClipQuality Quality,
     string? AudioTrackId = null,
     string? SubtitleTrackId = null,
-    ClipCodec Codec = ClipCodec.Av1);
+    ClipCodec Codec = ClipCodec.Av1,
+    ClipWatermarkPosition Watermark = ClipWatermarkPosition.BottomRight);
 
 /// <summary>
 /// WPF-free policy of the clip export: output geometry, default resolution,
@@ -211,8 +215,11 @@ public static class ClipExportPlanner
         // Exactly the output size: the shader WHEN conditions see the same
         // OUTPUT/LUMA ratio as a window of that size. 4:2:0 keeps the file
         // playable everywhere (vf=gpu otherwise emits 4:4:4).
+        // The watermark is composited on the final RGB frame, before the 4:2:0
+        // conversion, so it is never resampled by the upscalers.
+        var watermark = WatermarkGraph(WatermarkFile, request.OutputWidth, request.OutputHeight, request.Watermark);
         Set("vf", string.Create(CultureInfo.InvariantCulture,
-            $"gpu=w={request.OutputWidth}:h={request.OutputHeight},format={(IsTenBit(encoder) ? "yuv420p10" : "yuv420p")}"));
+            $"gpu=w={request.OutputWidth}:h={request.OutputHeight},lavfi=graph=%{System.Text.Encoding.UTF8.GetByteCount(watermark)}%{watermark},format={(IsTenBit(encoder) ? "yuv420p10" : "yuv420p")}"));
 
         // The clip is always stereo AAC, so the stereo ELYSOUND+ topology
         // (with its width stage) is the one that matches the output.
@@ -223,6 +230,49 @@ public static class ClipExportPlanner
             Set("af", $"@{ElySoundController.MpvLabel}:lavfi=[{ElySoundGraph.BuildTopology(true, values)}]");
         }
         return options;
+    }
+
+    /// <summary>The ElyCast logo shipped next to the executable; every export carries it.</summary>
+    public static string WatermarkFile => Path.Combine(AppContext.BaseDirectory, "watermark.png");
+
+    /// <summary>Persisted corner name ("bottom-right"...) to its position; unknown values fall back to bottom right.</summary>
+    public static ClipWatermarkPosition ParseWatermarkPosition(string? value) => value switch
+    {
+        "top-left" => ClipWatermarkPosition.TopLeft,
+        "top-right" => ClipWatermarkPosition.TopRight,
+        "bottom-left" => ClipWatermarkPosition.BottomLeft,
+        _ => ClipWatermarkPosition.BottomRight
+    };
+
+    public static string WatermarkSetting(ClipWatermarkPosition position) => position switch
+    {
+        ClipWatermarkPosition.TopLeft => "top-left",
+        ClipWatermarkPosition.TopRight => "top-right",
+        ClipWatermarkPosition.BottomLeft => "bottom-left",
+        _ => "bottom-right"
+    };
+
+    /// <summary>
+    /// libavfilter graph compositing the logo in a corner: 14% of the frame
+    /// width, a margin of 3% of the frame height on both sides (identical at
+    /// 720p and in 4K, clear of the picture edge), 60% opacity, and a soft
+    /// dark shadow so the white logo stays legible on bright scenes.
+    /// </summary>
+    public static string WatermarkGraph(string logoPath, int width, int height, ClipWatermarkPosition position)
+    {
+        var logoWidth = Math.Max(48, (int)Math.Round(width * 0.14) & ~1);
+        var margin = Math.Max(8, (int)Math.Round(height * 0.03));
+        var x = position is ClipWatermarkPosition.TopLeft or ClipWatermarkPosition.BottomLeft ? $"{margin}" : $"W-w-{margin}";
+        var y = position is ClipWatermarkPosition.TopLeft or ClipWatermarkPosition.TopRight ? $"{margin}" : $"H-h-{margin}";
+        var shadow = Math.Max(1, height / 540);
+        // Filter arguments: quoted at graph level, ':' escaped at option level.
+        var file = "'" + logoPath.Replace('\\', '/').Replace(":", "\\:") + "'";
+        return string.Create(CultureInfo.InvariantCulture,
+            $"movie={file},format=rgba,scale={logoWidth}:-1,split[logo][shade];" +
+            $"[shade]colorchannelmixer=rr=0:gg=0:bb=0:aa=0.35,boxblur={shadow * 2}:1[shadow];" +
+            $"[logo]colorchannelmixer=aa=0.6[mark];" +
+            $"[in][shadow]overlay=x={x}+{shadow}:y={y}+{shadow}[shaded];" +
+            $"[shaded][mark]overlay=x={x}:y={y}[out]");
     }
 
     public static string EncoderOptions(string encoder, ClipQuality quality)

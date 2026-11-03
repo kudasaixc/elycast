@@ -61,6 +61,8 @@ public class Settings
     public string UpscaleSharpen { get; set; } = "off"; // "off" | "low" | "medium" | "high"
     // Stackable image effects (ShaderCatalog.Effects ids), applied with any upscaling method.
     public List<string> VideoEffects { get; set; } = new();
+    // Corner of the mandatory clip-export watermark: top-left | top-right | bottom-left | bottom-right.
+    public string ClipWatermarkPosition { get; set; } = "bottom-right";
     public string ElyColorFilterId { get; set; } = "off";
     public List<ElyColorFilter> ElyColorCustomFilters { get; set; } = new();
     public bool ElySoundEnabled { get; set; } = false;

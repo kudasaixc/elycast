@@ -67,9 +67,9 @@ public class ClipExportPlannerTests
     {
         var options = Options(new Settings());
 
-        Assert.Equal("gpu=w=2560:h=1440,format=yuv420p", options["vf"]);
+        Assert.EndsWith(",format=yuv420p", options["vf"]);
         var av1 = ClipExportPlanner.BuildOptions(Request(), new Settings(), "av1_nvenc").ToDictionary(o => o.Key, o => o.Value);
-        Assert.Equal("gpu=w=2560:h=1440,format=yuv420p10", av1["vf"]);
+        Assert.EndsWith(",format=yuv420p10", av1["vf"]);
         Assert.Equal("1080", options["start"]);
         Assert.Equal("1260", options["end"]);
         Assert.Equal("C:/out/clip.mp4", options["o"]);
@@ -93,6 +93,42 @@ public class ClipExportPlannerTests
         Assert.Equal("libsvtav1", ClipExportPlanner.EncodersFor(ClipCodec.Av1)[^1]);
         Assert.Equal("libx265", ClipExportPlanner.EncodersFor(ClipCodec.Hevc)[^1]);
         Assert.Equal("libx264", ClipExportPlanner.EncodersFor(ClipCodec.H264)[^1]);
+    }
+
+    [Fact]
+    public void Every_export_carries_the_watermark_before_the_420_conversion()
+    {
+        var vf = Options(new Settings())["vf"];
+
+        Assert.StartsWith("gpu=w=2560:h=1440,lavfi=graph=%", vf);
+        Assert.Contains("watermark.png", vf);
+        Assert.EndsWith(",format=yuv420p", vf);
+        Assert.True(File.Exists(ClipExportPlanner.WatermarkFile), "watermark.png must ship next to the executable");
+    }
+
+    [Theory]
+    [InlineData(ClipWatermarkPosition.TopLeft, "x=43:y=43")]
+    [InlineData(ClipWatermarkPosition.TopRight, "x=W-w-43:y=43")]
+    [InlineData(ClipWatermarkPosition.BottomLeft, "x=43:y=H-h-43")]
+    [InlineData(ClipWatermarkPosition.BottomRight, "x=W-w-43:y=H-h-43")]
+    public void Watermark_sits_in_its_corner_with_a_margin(ClipWatermarkPosition position, string placement)
+    {
+        var graph = ClipExportPlanner.WatermarkGraph("C:\\Program Files\\ElyCast\\watermark.png", 2560, 1440, position);
+
+        Assert.Contains("overlay=" + placement + "[out]", graph);
+        Assert.Contains("scale=358:-1", graph);
+        Assert.Contains("movie='C\\:/Program Files/ElyCast/watermark.png'", graph);
+    }
+
+    [Theory]
+    [InlineData("top-left", ClipWatermarkPosition.TopLeft)]
+    [InlineData("bottom-left", ClipWatermarkPosition.BottomLeft)]
+    [InlineData("off", ClipWatermarkPosition.BottomRight)]
+    [InlineData(null, ClipWatermarkPosition.BottomRight)]
+    public void Watermark_setting_has_no_off_value(string? stored, ClipWatermarkPosition expected)
+    {
+        Assert.Equal(expected, ClipExportPlanner.ParseWatermarkPosition(stored));
+        Assert.Equal(expected, ClipExportPlanner.ParseWatermarkPosition(ClipExportPlanner.WatermarkSetting(expected)));
     }
 
     [Fact]

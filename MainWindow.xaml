@@ -1026,6 +1026,14 @@
                                             <ComboBoxItem Content="HEVC, small file" Tag="Hevc"/>
                                             <ComboBoxItem Content="H.264, plays everywhere" Tag="H264"/>
                                         </ComboBox>
+                                        <ComboBox x:Name="ClipWatermarkCombo" Height="32" Margin="0,8,0,0"
+                                                  Style="{StaticResource FieldCombo}" ToolTip="Corner of the ElyCast watermark"
+                                                  SelectionChanged="ClipWatermark_Changed">
+                                            <ComboBoxItem Content="Watermark: bottom right" Tag="bottom-right"/>
+                                            <ComboBoxItem Content="Watermark: bottom left" Tag="bottom-left"/>
+                                            <ComboBoxItem Content="Watermark: top right" Tag="top-right"/>
+                                            <ComboBoxItem Content="Watermark: top left" Tag="top-left"/>
+                                        </ComboBox>
                                         <ComboBox x:Name="ClipSubtitleCombo" Height="32" Margin="0,8,0,0" Visibility="Collapsed"
                                                   Style="{StaticResource FieldCombo}" ToolTip="Subtitles burned into the clip"/>
                                         <TextBlock x:Name="ClipPipelineText" Margin="0,10,0,0" FontSize="11" TextWrapping="Wrap"
