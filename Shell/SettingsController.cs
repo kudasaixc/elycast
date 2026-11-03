@@ -128,6 +128,7 @@ internal sealed class SettingsController
         ComboTags.Select(_view.UpscaleMethodCombo, s.UpscaleMethod);
         ComboTags.Select(_view.UpscaleSharpenCombo, s.UpscaleSharpen);
         _upscaling.BuildOsdModeCheckboxes();
+        _upscaling.BuildEffectCheckboxes();
         _upscaling.PopulateOsdCombo();
         _elyColor.Populate();
         _elySound.Populate();
@@ -164,6 +165,7 @@ internal sealed class SettingsController
         _vm.RefreshLanguage();
         _catalog.ShowSection(_catalog.Current);
         _upscaling.BuildOsdModeCheckboxes();
+        _upscaling.BuildEffectCheckboxes();
         _upscaling.PopulateOsdCombo();
         UpdateMpvStatus();
         _magpie.UpdateStatus();

@@ -125,6 +125,9 @@ public static class StateStore
         s.ElySmartIgnoredHealthIssues.RemoveAll(value => !Enum.TryParse<ElySmart.HealthIssueKind>(value, out _));
         s.ElyColorCustomFilters ??= new List<ElyColorFilter>();
         s.ElyColorCustomFilters.RemoveAll(filter => filter == null);
+        s.VideoEffects = Video.ShaderCatalog.NormalizeEffects(s.VideoEffects);
+        foreach (var filter in s.ElyColorCustomFilters)
+            filter.VideoEffects = Video.ShaderCatalog.NormalizeEffects(filter.VideoEffects);
         s.ElySoundCustomProfile ??= ElySoundProfile.DefaultCustom();
         NormalizeElySoundProfile(s.ElySoundCustomProfile);
         s.OsdUpscaleModes ??= new List<string>();

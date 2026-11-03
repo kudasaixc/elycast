@@ -6,6 +6,7 @@ using Elysium_Cast_IPTV.Models;
 using Elysium_Cast_IPTV.Services;
 using Elysium_Cast_IPTV.Services.Pipeline;
 using Elysium_Cast_IPTV.Services.Playback;
+using Elysium_Cast_IPTV.Services.Video;
 
 namespace Elysium_Cast_IPTV.Shell.Panels;
 
@@ -113,6 +114,48 @@ internal sealed class UpscalingPanel
             cb.Unchecked += OnOsdModeToggled;
             _view.OsdModesPanel.Children.Add(cb);
         }
+    }
+
+    // Image effect switches (vibrance, chroma, line darkening...): they stack
+    // on whichever upscaling method is selected.
+    public void BuildEffectCheckboxes()
+    {
+        _view.VideoEffectsPanel.Children.Clear();
+        foreach (var effect in ShaderCatalog.Effects)
+        {
+            var cb = new CheckBox
+            {
+                Content = LocalizationService.T(effect.Label),
+                Tag = effect.Id,
+                Margin = new Thickness(0, 0, 18, 8),
+                MinWidth = 160,
+            };
+            cb.SetResourceReference(Control.ForegroundProperty, "TextBrush");
+            cb.Checked += OnEffectToggled;
+            cb.Unchecked += OnEffectToggled;
+            _view.VideoEffectsPanel.Children.Add(cb);
+        }
+        SyncEffects();
+    }
+
+    /// <summary>Reflects the persisted effects (e.g. after an ELYCOLOR profile applied its own).</summary>
+    public void SyncEffects()
+    {
+        _syncing = true;
+        foreach (var cb in _view.VideoEffectsPanel.Children.OfType<CheckBox>())
+            cb.IsChecked = cb.Tag is string id && Settings.VideoEffects.Contains(id);
+        _syncing = false;
+    }
+
+    private void OnEffectToggled(object sender, RoutedEventArgs e)
+    {
+        if (_gate.IsLoading || _syncing) return;
+        if (sender is not CheckBox cb || cb.Tag is not string id) return;
+        var effects = Settings.VideoEffects.Where(x => x != id).ToList();
+        if (cb.IsChecked == true) effects.Add(id);
+        Settings.VideoEffects = ShaderCatalog.NormalizeEffects(effects);
+        _store.Save();
+        Apply();
     }
 
     private void OnOsdModeToggled(object sender, RoutedEventArgs e)

@@ -1602,6 +1602,13 @@
                                                  </ComboBox>
                                              </Grid>
 
+                                             <TextBlock Text="Image effects" Margin="0,14,0,2"
+                                                        FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                             <TextBlock Text="Added to any upscaling method, on screen and in exported clips. Vibrance and anime deband cost almost nothing."
+                                                        FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap"
+                                                        Foreground="{DynamicResource FaintBrush}"/>
+                                             <WrapPanel x:Name="VideoEffectsPanel"/>
+
                                              <TextBlock Text="Modes shown in the playback bar" Margin="0,14,0,2"
                                                         FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                              <TextBlock Text="Select the modes shown in the quick selector below the playback bar."

@@ -142,8 +142,9 @@ public static class ClipExportPlanner
     public static IReadOnlyList<string> DescribePipeline(Settings settings)
     {
         var parts = new List<string>();
-        var shaders = ShaderCatalog.Describe(string.Join(";", ShaderCatalog.ChainFor(settings.UpscaleMethod, settings.UpscaleSharpen)));
+        var shaders = ShaderCatalog.Describe(string.Join(";", ShaderCatalog.ChainFor(settings.UpscaleMethod, settings.UpscaleSharpen, settings.VideoEffects)));
         if (!string.IsNullOrEmpty(shaders)) parts.Add(shaders);
+        if (settings.VideoEffects.Contains("deband")) parts.Add("Anime deband");
         var color = ElyColorCatalog.Active(settings);
         if (!color.Id.Equals("off", StringComparison.OrdinalIgnoreCase)) parts.Add(color.Name);
         if (settings.ElySoundEnabled) parts.Add(ElySoundProfiles.Active(settings).Name);
@@ -192,7 +193,8 @@ public static class ClipExportPlanner
         Set("dscale", "mitchell");
         Set("deband", "yes");
         var method = settings.UpscaleMethod;
-        var chain = ShaderCatalog.ChainFor(method, settings.UpscaleSharpen)
+        foreach (var (name, value) in ShaderCatalog.DebandOptions(settings.VideoEffects)) Set(name, value);
+        var chain = ShaderCatalog.ChainFor(method, settings.UpscaleSharpen, settings.VideoEffects)
             .Select(ShaderCatalog.PathFor).Where(File.Exists).Select(p => p.Replace('\\', '/'));
         Set("glsl-shaders", string.Join(";", chain));
         // "none" maps to bilinear on screen to save GPU; an export is offline,

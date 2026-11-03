@@ -34,6 +34,46 @@ public static class ElyColorCatalog
         },
         new()
         {
+            // Full anime pipeline, best plugged in: KrigBilateral chroma,
+            // Anime4K Fast restore, darker lines, adaptive sharpening,
+            // vibrance and anime deband. Vibrance carries most of the colour
+            // boost, so global saturation stays lower than Vivid Anime and
+            // already vivid glows do not clip. Measured on an RTX 4050 Laptop
+            // (1080p fullscreen): about 10 W, 1 W more than Anime4K alone.
+            Id = "elycolor-anime-ultra",
+            Name = "ELYCOLOR Anime Ultra",
+            IncludeVideoPipeline = true,
+            VideoBackend = "mpv-gpu",
+            UpscalerEngine = "off",
+            UpscaleTargetHeight = 0,
+            UpscaleMethod = "anime4k-fast",
+            UpscaleSharpen = "off",
+            VideoEffects = ["chroma", "darken", "sharpen", "vibrance", "deband"],
+            Saturation = 12,
+            Brightness = 0,
+            Contrast = 10,
+            Gamma = -2
+        },
+        new()
+        {
+            // Quiet everyday anime look (classroom, battery): Anime4K Fast
+            // restore plus the near-free vibrance and anime deband.
+            Id = "elycolor-anime-eco",
+            Name = "ELYCOLOR Anime Eco+",
+            IncludeVideoPipeline = true,
+            VideoBackend = "mpv-gpu",
+            UpscalerEngine = "off",
+            UpscaleTargetHeight = 0,
+            UpscaleMethod = "anime4k-fast",
+            UpscaleSharpen = "off",
+            VideoEffects = ["vibrance", "deband"],
+            Saturation = 14,
+            Brightness = 0,
+            Contrast = 8,
+            Gamma = -2
+        },
+        new()
+        {
             // Subtle pop for live-action: skin must stay natural, so about
             // half the anime boost, and no black-floor lift.
             Id = "elycolor-film",

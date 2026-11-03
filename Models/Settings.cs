@@ -59,6 +59,8 @@ public class Settings
     public int UpscaleTargetHeight { get; set; } = 0; // 0 | 1080 | 1440 | 2160 | 4320
     public string UpscaleMethod { get; set; } = "none"; // method id, "none" = off
     public string UpscaleSharpen { get; set; } = "off"; // "off" | "low" | "medium" | "high"
+    // Stackable image effects (ShaderCatalog.Effects ids), applied with any upscaling method.
+    public List<string> VideoEffects { get; set; } = new();
     public string ElyColorFilterId { get; set; } = "off";
     public List<ElyColorFilter> ElyColorCustomFilters { get; set; } = new();
     public bool ElySoundEnabled { get; set; } = false;
@@ -96,6 +98,7 @@ public class ElyColorFilter
     public int UpscaleTargetHeight { get; set; } = 0;
     public string UpscaleMethod { get; set; } = "none";
     public string UpscaleSharpen { get; set; } = "off";
+    public List<string> VideoEffects { get; set; } = new();
     public int Saturation { get; set; }
     public int Brightness { get; set; }
     public int Contrast { get; set; }

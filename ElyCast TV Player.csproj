@@ -28,6 +28,10 @@
     <Resource Include="Assets\ElyCastLogo.png" />
     <None Include="Assets\ElyCastLogo.png" Link="ElyCastLogo.png" CopyToOutputDirectory="PreserveNewest" />
     <Resource Include="Assets\AudioBackgrounds\*.jpg" />
+    <!-- Every mpv shader ships with ElyCast (no download): loose files next
+         to the executable, also when published as a single file. -->
+    <None Update="Assets\Shaders\*" Link="shaders\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Compile Remove="tests\**\*.cs" />
   </ItemGroup>
 

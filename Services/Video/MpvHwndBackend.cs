@@ -40,6 +40,7 @@ public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
     private int _upTargetHeight;
     private string _upMethod = "ewa_lanczossharp";
     private string _upSharpen = "off";
+    private List<string> _upEffects = new();
 
     // GPU pre-upscale (target height / RTX VSR): the d3d11vpp ratio depends on
     // the source height, unknown until the stream decodes - the probe timer
@@ -195,11 +196,12 @@ public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
     /// <paramref name="method"/> = mpv scaler; <paramref name="sharpen"/> =
     /// off/low/medium/high unsharp mask.
     /// </summary>
-    public void ApplyUpscaling(int targetHeight, string method, string sharpen)
+    public void ApplyUpscaling(int targetHeight, string method, string sharpen, IReadOnlyList<string>? effects = null)
     {
         _upTargetHeight = targetHeight;
         _upMethod = string.IsNullOrWhiteSpace(method) ? "ewa_lanczossharp" : method;
         _upSharpen = string.IsNullOrWhiteSpace(sharpen) ? "off" : sharpen;
+        _upEffects = ShaderCatalog.NormalizeEffects(effects);
         ApplyStoredUpscaling();
     }
 
@@ -261,11 +263,13 @@ public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
     private void ApplyShaderSettings()
     {
         _aiShadersSuppressed = false;
+        foreach (var (name, value) in ShaderCatalog.DebandOptions(_upEffects))
+            SetProp(name, name, value);
 
-        // "None": no enhancement at all - clear shaders, lightest scaler.
+        // "None": no upscaler at all - only the image effects, lightest scaler.
         if (_upMethod == "none")
         {
-            SetProp("glsl-shaders", "glsl-shaders", "");
+            SetProp("glsl-shaders", "glsl-shaders", ShaderList(ShaderCatalog.EffectChain(_upEffects)));
             SetProp("scale", "scale", "bilinear");
         }
         else
@@ -275,20 +279,11 @@ public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
             // source, so each method also carries a CAS / NVSharpen companion
             // gated to "display ≤ source" - the sharpen setting tunes those
             // companions (mpv's own --sharpen option is a silent no-op on
-            // vo=gpu-next). Missing files are skipped here; ShaderInstaller
-            // downloads them and re-applies.
-            var chainFiles = ShaderCatalog.ChainFor(_upMethod, _upSharpen);
-            var existing = chainFiles.Select(ShaderCatalog.PathFor).Where(File.Exists)
-                .Select(p => p.Replace('\\', '/')).ToArray();
-            if (existing.Length < chainFiles.Count)
-            {
-                var skipped = chainFiles.Where(f => !File.Exists(ShaderCatalog.PathFor(f)));
-                DebugConsole.Warn("mpv(HWND): shaders missing (download in progress?): " + string.Join(", ", skipped));
-            }
-
-            // mpv path lists use ';' on Windows. The GLSL upscalers target the
-            // window size themselves; mpv's scaler handles what they leave over.
-            SetProp("glsl-shaders", "glsl-shaders", string.Join(";", existing));
+            // vo=gpu-next). Tuned companions not generated yet are skipped
+            // here; ShaderInstaller generates them and re-applies.
+            // The GLSL upscalers target the window size themselves; mpv's
+            // scaler handles what they leave over.
+            SetProp("glsl-shaders", "glsl-shaders", ShaderList(ShaderCatalog.ChainFor(_upMethod, _upSharpen, _upEffects)));
             SetProp("scale", "scale", ShaderCatalog.IsShaderMethod(_upMethod) ? "ewa_lanczossharp" : _upMethod);
         }
 
@@ -322,7 +317,7 @@ public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
                 // re-enable it immediately when real upscaling is detected.
                 if (ShaderCatalog.IsShaderMethod(_upMethod))
                 {
-                    SetProp("glsl-shaders", "glsl-shaders", "");
+                    SetProp("glsl-shaders", "glsl-shaders", ShaderList(ShaderCatalog.EffectChain(_upEffects)));
                     _aiShadersSuppressed = true;
                 }
                 return;
@@ -365,7 +360,7 @@ public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
                                  ShaderCatalog.IsShaderMethod(_upMethod);
             if (shouldSuppress && !_aiShadersSuppressed)
             {
-                SetProp("glsl-shaders", "glsl-shaders", "");
+                SetProp("glsl-shaders", "glsl-shaders", ShaderList(ShaderCatalog.EffectChain(_upEffects)));
                 SetProp("scale", "scale", "ewa_lanczossharp");
                 _aiShadersSuppressed = true;
                 DebugConsole.Info(shouldUseVsr
@@ -429,7 +424,7 @@ public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
         var suppress = _rtxVsr && useVpp && ShaderCatalog.IsShaderMethod(_upMethod);
         if (suppress && !_aiShadersSuppressed)
         {
-            SetProp("glsl-shaders", "glsl-shaders", "");
+            SetProp("glsl-shaders", "glsl-shaders", ShaderList(ShaderCatalog.EffectChain(_upEffects)));
             SetProp("scale", "scale", "ewa_lanczossharp");
             _aiShadersSuppressed = true;
             DebugConsole.Info($"mpv(HWND): GLSL shaders suspended; RTX VSR handles {ratio:0.0#}x upscaling.");
@@ -439,6 +434,20 @@ public sealed class MpvHwndBackend : IVideoBackend, IElySoundBackend
             ApplyShaderSettings();
             DebugConsole.Info("mpv(HWND): GLSL shaders re-enabled.");
         }
+    }
+
+    // mpv path list (';' on Windows) of the shader files present on disk.
+    // Suspending the upscaler chain keeps the image effects (EffectChain).
+    private static string ShaderList(IEnumerable<string> files)
+    {
+        var paths = new List<string>();
+        foreach (var file in files)
+        {
+            var path = ShaderCatalog.PathFor(file);
+            if (File.Exists(path)) paths.Add(path.Replace('\\', '/'));
+            else DebugConsole.Warn("mpv(HWND): shader not available yet: " + file);
+        }
+        return string.Join(";", paths);
     }
 
     // Size of the video output in physical pixels (mpv's OSD matches the window).

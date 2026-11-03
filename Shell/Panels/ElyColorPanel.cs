@@ -5,6 +5,7 @@ using Elysium_Cast_IPTV.Models;
 using Elysium_Cast_IPTV.Services;
 using Elysium_Cast_IPTV.Services.Pipeline;
 using Elysium_Cast_IPTV.Services.Playback;
+using Elysium_Cast_IPTV.Services.Video;
 
 namespace Elysium_Cast_IPTV.Shell.Panels;
 
@@ -106,6 +107,7 @@ internal sealed class ElyColorPanel
             s.UpscaleTargetHeight = filter.UpscaleTargetHeight;
             s.UpscaleMethod = filter.UpscaleMethod;
             s.UpscaleSharpen = filter.UpscaleSharpen;
+            s.VideoEffects = ShaderCatalog.NormalizeEffects(filter.VideoEffects);
 
             ComboTags.Select(_view.BackendCombo, s.VideoBackend);
             ComboTags.Select(_view.UpscalerEngineCombo, s.UpscalerEngine);
@@ -113,6 +115,7 @@ internal sealed class ElyColorPanel
             ComboTags.Select(_view.UpscaleMethodCombo, s.UpscaleMethod);
             ComboTags.Select(_view.UpscaleSharpenCombo, s.UpscaleSharpen);
             _upscaling.SyncCombos();
+            _upscaling.SyncEffects();
         }
 
         if (persist)
@@ -179,6 +182,7 @@ internal sealed class ElyColorPanel
             UpscaleTargetHeight = Settings.UpscaleTargetHeight,
             UpscaleMethod = Settings.UpscaleMethod,
             UpscaleSharpen = Settings.UpscaleSharpen,
+            VideoEffects = Settings.VideoEffects.ToList(),
             Saturation = current.Saturation,
             Brightness = current.Brightness,
             Contrast = current.Contrast,
@@ -232,6 +236,9 @@ internal sealed class ElyColorPanel
             UpscaleTargetHeight = int.TryParse(ComboTags.Of(_view.ElyColorTargetCombo, Settings.UpscaleTargetHeight.ToString()), out var h) ? h : 0,
             UpscaleMethod = ComboTags.Of(_view.ElyColorMethodCombo, Settings.UpscaleMethod),
             UpscaleSharpen = ComboTags.Of(_view.ElyColorSharpenCombo, Settings.UpscaleSharpen),
+            // The editor has no effect switches: a pipeline profile records the
+            // effects active in the upscaling settings.
+            VideoEffects = Settings.VideoEffects.ToList(),
             Saturation = (int)Math.Round(_view.ElyColorSaturationSlider.Value),
             Brightness = (int)Math.Round(_view.ElyColorBrightnessSlider.Value),
             Contrast = (int)Math.Round(_view.ElyColorContrastSlider.Value),

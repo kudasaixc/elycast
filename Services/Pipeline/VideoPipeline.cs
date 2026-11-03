@@ -65,8 +65,8 @@ public sealed class VideoPipeline
         // The backend (or the settings) may have changed during the download.
         if (_session.Backend is MpvHwndBackend mpv)
         {
-            mpv.ApplyUpscaling(s.UpscaleTargetHeight, s.UpscaleMethod, s.UpscaleSharpen);
-            DebugConsole.Info($"Upscaling: target={(s.UpscaleTargetHeight == 0 ? "native" : s.UpscaleTargetHeight + "p")}, method={s.UpscaleMethod}, sharpness={s.UpscaleSharpen}");
+            mpv.ApplyUpscaling(s.UpscaleTargetHeight, s.UpscaleMethod, s.UpscaleSharpen, s.VideoEffects);
+            DebugConsole.Info($"Upscaling: target={(s.UpscaleTargetHeight == 0 ? "native" : s.UpscaleTargetHeight + "p")}, method={s.UpscaleMethod}, sharpness={s.UpscaleSharpen}, effects={(s.VideoEffects.Count == 0 ? "none" : string.Join("+", s.VideoEffects))}");
         }
     }
 
