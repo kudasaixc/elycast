@@ -34,7 +34,6 @@ public partial class MainWindow : Window
     private readonly ElyColorPanel _elyColor;
     private readonly ElySoundPanel _elySound;
     private readonly ElyFlowPanel _elyFlow;
-    private readonly ElySmartPanel _elySmart;
     private readonly MagpiePanel _magpie;
     private readonly SettingsController _settings;
     private readonly WindowChromeController _chrome;
@@ -80,11 +79,9 @@ public partial class MainWindow : Window
         _elyColor = new ElyColorPanel(this, session, store, services.Pipeline, gate, _backendHost, _upscaling);
         _elySound = new ElySoundPanel(this, session, store, services.Pipeline, gate);
         _elyFlow = new ElyFlowPanel(this, store, services.Pipeline, gate);
-        _elySmart = new ElySmartPanel(this, session, store, _visualizer, services.Benchmark, services.PerformanceHistory,
-            services.HealthAnalyzer, services.Notifications, services.Optimizer);
         _magpie = new MagpiePanel(this, store, services.Magpie);
         _settings = new SettingsController(this, vm, session, store, gate, services.Pipeline, _playback, _visualizer,
-            _backendHost, _catalog, _music, _connection, _upscaling, _elyColor, _elySound, _elyFlow, _elySmart, _magpie,
+            _backendHost, _catalog, _music, _connection, _upscaling, _elyColor, _elySound, _elyFlow, _magpie,
             services.MpvInstaller, _osd);
         _chrome = new WindowChromeController(this, vm, session, _osd, _overlay);
         _console = new PlayerConsoleCommands(Dispatcher, session, services.Library, store, _catalog, _playback, _connection,
@@ -122,7 +119,6 @@ public partial class MainWindow : Window
         _music.LoadAsync().Forget("Local library load");
         _connection.ApplyOnboardingPreferences();
         _diagnostics.StartIfRequested();
-        _elySmart.Initialize();
 
         // Keep the airspace overlay (owned window) glued to the video area as the
         // window moves or resizes. An owned window follows the main window
@@ -257,7 +253,6 @@ public partial class MainWindow : Window
         _visualizer.Hide();
         Shutdown("stopping audio analysis", _visualizer.Dispose);
         Shutdown("releasing the Windows media controls", _mediaTransport.Dispose);
-        Shutdown("stopping ELYSMART", _elySmart.Dispose);
         _elySound.FlushPending();
         base.OnClosing(e);
         Shutdown("failed to save state", _services.Store.Save);
@@ -417,13 +412,6 @@ public partial class MainWindow : Window
     private void ElyFlowSetting_Changed(object sender, RoutedEventArgs e) { if (_composed) _elyFlow.OnSettingChanged(); }
     private void ElyFlowCombo_Changed(object sender, SelectionChangedEventArgs e) { if (_composed) _elyFlow.OnSettingChanged(); }
     private void ElyFlowSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { if (_composed) _elyFlow.OnBufferChanged(); }
-
-    private void ElySmartRun_Click(object sender, RoutedEventArgs e) => AsyncExtensions.FireAndLog(_elySmart.RunBenchmarkAsync, "ELYSMART benchmark");
-    private void ElySmartCancel_Click(object sender, RoutedEventArgs e) => _elySmart.CancelBenchmark();
-    private void ElySmartAutoSwitch_Click(object sender, RoutedEventArgs e) => _elySmart.OnAutoOptimizeToggled();
-    private void ElySmartNotificationsSwitch_Click(object sender, RoutedEventArgs e) => _elySmart.OnNotificationsToggled();
-    private void ElySmartApply_Click(object sender, RoutedEventArgs e) => _elySmart.ApplyRecommendation();
-    private void ElySmartExport_Click(object sender, RoutedEventArgs e) => _elySmart.ExportReport();
 
     private void BrowseMagpie_Click(object sender, RoutedEventArgs e) => _magpie.Browse();
     private void InstallMagpie_Click(object sender, RoutedEventArgs e) => AsyncExtensions.FireAndLog(_magpie.InstallAsync, "Magpie installation");

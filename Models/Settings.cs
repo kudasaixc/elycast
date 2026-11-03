@@ -37,10 +37,6 @@ public class Settings
     public bool AudioVisualizerShake { get; set; } = true;
     public string AudioVisualizerRenderer { get; set; } = "classic"; // "classic" | "audiocore"
     public string AudioBrowseMode { get; set; } = "albums";
-    public bool ElySmartAutoOptimizeDecorative { get; set; }
-    public bool ElySmartNotificationsEnabled { get; set; } = true;
-    public string ElySmartWorkload { get; set; } = "Mixed";
-    public List<string> ElySmartIgnoredHealthIssues { get; set; } = new();
 
     // Playback
     public bool ShowStats { get; set; } = false;

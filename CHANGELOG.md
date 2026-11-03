@@ -15,6 +15,10 @@ All notable ElyCast changes are documented here. This project follows
 - **Clip export**: the player's scissors button exports a range of a film, episode or local video (for example 18:00 to 21:00) as an MP4 (AV1 by default, HEVC or H.264) with every active ElyCast enhancement and, optionally, the chosen subtitle track baked in: the upscaling shader chain (Anime4K, FSRCNNX, NVIDIA Image Scaling, FSR, CAS), ELYCOLOR and ELYSOUND+. On live channels it records the stream from the current moment, then exports the recording the same way. Clips are saved to `Videos\ElyCast`; AV1 and HEVC are 10-bit and about half and two thirds the size of H.264 at the same measured quality; NVENC, AMF or Quick Sync is used when available, a software encoder otherwise.
 - `scripts/install.ps1` installs or updates a per-user ElyCast from source (shortcuts, Apps & features entry, out-of-repo NVIDIA and libmpv binaries) and `uninstall.ps1` removes it.
 
+### Removed
+
+- **ELYSMART** (synthetic benchmark, scores, health notifications, runtime monitor and decorative auto-optimizer). It measured nothing the player actually depends on and kept a background sampler running. The first-run wizard now recommends the video engine instantly from the detected hardware and your content choices.
+
 ### Changed
 
 - Accent-tinted surfaces (side panels, video stage, dialogs, the now-playing subtitle and the list counter) now follow the chosen accent colour instead of staying violet.
@@ -25,7 +29,6 @@ All notable ElyCast changes are documented here. This project follows
 - Changing the interface language no longer reconnects the auto-connect profile or reopens the local library in the middle of playback.
 - English sessions no longer show French messages for VLC playback errors, the onboarding installation status, the accent label, and the RTX VSR test.
 - A saved password that cannot be decrypted (for example, a profile copied from another Windows account) is now reported instead of silently emptied.
-- Exporting the ELYSMART report to a locked or protected location shows a status message instead of the generic error dialog.
 - ElyCast no longer fails to start when its console output is redirected.
 
 ### Internal
@@ -42,6 +45,10 @@ All notable ElyCast changes are documented here. This project follows
 - Language selection in the first-run wizard and in Settings > Interface.
 - Accent-insensitive multiword search across titles, artists, albums, and categories, with Ctrl+F focusing the relevant search field.
 - Automatic recovery from the last valid encrypted state or profile backup.
+
+### Removed
+
+- **ELYSMART** (synthetic benchmark, scores, health notifications, runtime monitor and decorative auto-optimizer). It measured nothing the player actually depends on and kept a background sampler running. The first-run wizard now recommends the video engine instantly from the detected hardware and your content choices.
 
 ### Changed
 
@@ -88,6 +95,10 @@ All notable ElyCast changes are documented here. This project follows
 - **AudioCore+**: a native D3D11 audio visualizer scene through ELYCORE, including the background, separable Gaussian blur, dimmer, zoom, pan, parallax, bars, particles, and shader-rasterized shockwaves.
 - The classic WPF renderer and AudioCore+ now share one canonical simulation, including positions, quantized colors, pen widths, and settings.
 
+### Removed
+
+- **ELYSMART** (synthetic benchmark, scores, health notifications, runtime monitor and decorative auto-optimizer). It measured nothing the player actually depends on and kept a background sampler running. The first-run wizard now recommends the video engine instantly from the detected hardware and your content choices.
+
 ### Changed
 
 - AudioCore+ visualizer cadence is decoupled from display refresh and can target 30 to 360 FPS.
@@ -112,6 +123,10 @@ All notable ElyCast changes are documented here. This project follows
 - Redesigned local Music area with album, artist, genre, and playlist groups, artwork, details, contextual playback, queueing, shuffle, and repeat.
 - Metadata editor that writes title, artist, album, genre, track number, disc number, and artwork directly to files.
 - AudioCore+ foundations, including native renderer selection, ELYCORE gating, and FRUC bypass for audio.
+
+### Removed
+
+- **ELYSMART** (synthetic benchmark, scores, health notifications, runtime monitor and decorative auto-optimizer). It measured nothing the player actually depends on and kept a background sampler running. The first-run wizard now recommends the video engine instantly from the detected hardware and your content choices.
 
 ### Changed
 

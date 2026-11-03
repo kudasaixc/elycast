@@ -120,9 +120,6 @@ public static class StateStore
             ? s.AudioVisualizerRenderer : "classic";
         s.AudioBrowseMode = s.AudioBrowseMode is "albums" or "artists" or "genres" or "playlists" or "tracks"
             ? s.AudioBrowseMode : "albums";
-        s.ElySmartWorkload = s.ElySmartWorkload is "Iptv" or "Films" or "Series" or "Anime" or "Audio" or "Mixed" ? s.ElySmartWorkload : "Mixed";
-        s.ElySmartIgnoredHealthIssues ??= new List<string>();
-        s.ElySmartIgnoredHealthIssues.RemoveAll(value => !Enum.TryParse<ElySmart.HealthIssueKind>(value, out _));
         s.ElyColorCustomFilters ??= new List<ElyColorFilter>();
         s.ElyColorCustomFilters.RemoveAll(filter => filter == null);
         s.VideoEffects = Video.ShaderCatalog.NormalizeEffects(s.VideoEffects);

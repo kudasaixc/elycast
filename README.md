@@ -75,7 +75,6 @@ The September reliability update adds accent-insensitive, multiword search (`Ctr
 ### Performance intelligence
 
 - First-run hardware detection, benchmark, engine recommendation, and compatibility tests.
-- **ELYSMART** measures the machine, explains recommendations, tracks sustained player health, exports diagnostics, and keeps detected, estimated, and measured facts distinct.
 
 ## Video backends
 
@@ -165,7 +164,6 @@ Services/Library/             Catalogue, favourites, and local library rules
 Services/Pipeline/            Upscaling, ELYCOLOR, ELYSOUND+, and ELYFLOW application
 Services/Localization*.cs     Fast English/French runtime localization
 Services/Audio/               Metadata, FFT analysis, artwork, and ELYSOUND+
-Services/ElySmart/            Benchmarks, scoring, recommendations, and monitoring
 Services/Video/               mpv/VLC backends, HWND hosting, shaders, and native interop
 native/ElyFlow.Native/        ELYCORE C++20 renderer and AudioCore+ scene
 Assets/                       Application visuals

@@ -135,9 +135,14 @@ public static class HardwareProbe
             backend = "elycore";
             vsr = vsrCapable;
             fruc = elyflow.FrucCapable;
-            reason = "NVIDIA GPU + native ELYCORE renderer available: zero-copy D3D11 pipeline"
-                     + (vsr ? " with RTX VSR" : "")
-                     + (fruc ? " and FRUC interpolation (ELYFLOW)" : "") + ".";
+            // Whole sentences so the onboarding can look each one up in the catalog.
+            reason = (vsr, fruc) switch
+            {
+                (true, true) => "NVIDIA GPU + native ELYCORE renderer available: zero-copy D3D11 pipeline with RTX VSR and FRUC interpolation (ELYFLOW).",
+                (true, false) => "NVIDIA GPU + native ELYCORE renderer available: zero-copy D3D11 pipeline with RTX VSR.",
+                (false, true) => "NVIDIA GPU + native ELYCORE renderer available: zero-copy D3D11 pipeline and FRUC interpolation (ELYFLOW).",
+                _ => "NVIDIA GPU + native ELYCORE renderer available: zero-copy D3D11 pipeline."
+            };
         }
         else if (hw.NvidiaDriverPresent && vsrCapable)
         {

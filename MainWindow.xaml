@@ -2070,38 +2070,6 @@
 
                                             <StackPanel x:Name="SettingsSystemPanel" Visibility="Collapsed">
 
-                                            <TextBlock Text="ELYSMART" Margin="0,26,0,6" FontSize="11"
-                                                       FontWeight="SemiBold" Foreground="{DynamicResource AccentBBrush}"/>
-                                            <TextBlock Text="Check how ElyCast runs on your PC and review suggested settings before applying them."
-                                                       Foreground="{DynamicResource FaintBrush}" TextWrapping="Wrap" Margin="0,0,0,14"/>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="260"/></Grid.ColumnDefinitions>
-                                                <TextBlock Text="Primary use" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}"/>
-                                                <ComboBox x:Name="ElySmartProfileCombo" Grid.Column="1" Height="40" Style="{StaticResource FieldCombo}">
-                                                    <ComboBoxItem Tag="Iptv" Content="IPTV: stability"/><ComboBoxItem Tag="Movies" Content="Movies: quality"/>
-                                                    <ComboBoxItem Tag="Series" Content="Series: balance"/><ComboBoxItem Tag="Anime" Content="Anime: Anime4K"/>
-                                                    <ComboBoxItem Tag="Audio" Content="Audio: visualizer"/><ComboBoxItem Tag="Mixed" Content="Mixed"/>
-                                                </ComboBox>
-                                            </Grid>
-                                            <CheckBox x:Name="ElySmartNotificationsSwitch" Style="{StaticResource Switch}" Margin="0,12,0,0"
-                                                      Content="Show ELYSMART notifications" Click="ElySmartNotificationsSwitch_Click"/>
-                                            <CheckBox x:Name="ElySmartAutoSwitch" Style="{StaticResource Switch}" Margin="0,12,0,0"
-                                                      Content="Automatically optimize decorative effects only" Click="ElySmartAutoSwitch_Click"/>
-                                            <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                                                <Button x:Name="ElySmartRunButton" Content="Optimize ElyCast automatically" Style="{StaticResource PrimaryButton}" Width="280" Height="44" Click="ElySmartRun_Click"/>
-                                                <Button x:Name="ElySmartCancelButton" Content="Cancel" Style="{StaticResource GhostButton}" Width="100" Height="44" Margin="10,0,0,0" Visibility="Collapsed" Click="ElySmartCancel_Click"/>
-                                                <Button x:Name="ElySmartApplyButton" Content="Apply" Style="{StaticResource GhostButton}" Width="110" Height="44" Margin="10,0,0,0" Visibility="Collapsed" Click="ElySmartApply_Click"/>
-                                                <Button x:Name="ElySmartExportButton" Content="Export" Style="{StaticResource GhostButton}" Width="110" Height="44" Margin="10,0,0,0" Click="ElySmartExport_Click"/>
-                                            </StackPanel>
-                                            <ProgressBar x:Name="ElySmartProgress" Height="7" Margin="0,14,0,0" Minimum="0" Maximum="100" Visibility="Collapsed"/>
-                                            <TextBlock x:Name="ElySmartStatusText" Margin="0,10,0,0" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Text="No analysis has been run."/>
-                                            <Border Margin="0,12,0,8" Padding="14" CornerRadius="8" Background="{StaticResource Black13Brush}" BorderBrush="{DynamicResource CardStroke}" BorderThickness="1">
-                                                <TextBlock x:Name="ElySmartReportText" FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource FaintBrush}" TextWrapping="Wrap" Text="The detailed report will appear here."/>
-                                            </Border>
-                                            <TextBlock Text="REAL-TIME DIAGNOSTICS: 5 MINUTES" Margin="0,18,0,7" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource MutedBrush}"/>
-                                            <local:ElySmartDiagnosticSurface x:Name="ElySmartDiagnosticGraph" Height="180"/>
-                                            <TextBlock x:Name="ElySmartLiveMetricsText" Margin="0,7,0,0" FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource FaintBrush}" Text="Waiting for the first measurements..."/>
-
                                              <TextBlock Text="STARTUP" Margin="0,26,0,6" FontSize="11"
                                                        FontWeight="SemiBold" Foreground="{DynamicResource MutedBrush}"/>
                                             <CheckBox x:Name="ZapSwitch" Style="{StaticResource Switch}"

@@ -37,7 +37,6 @@ internal sealed class SettingsController
     private readonly ElyColorPanel _elyColor;
     private readonly ElySoundPanel _elySound;
     private readonly ElyFlowPanel _elyFlow;
-    private readonly ElySmartPanel _elySmart;
     private readonly MagpiePanel _magpie;
     private readonly MpvNativeInstaller _mpvInstaller;
     private readonly OsdController _osd;
@@ -48,7 +47,7 @@ internal sealed class SettingsController
         UiLoadGate gate, VideoPipeline pipeline, PlaybackController playback, AudioVisualizerController visualizer,
         BackendHost backendHost, CatalogController catalog, MusicLibraryController music, ConnectionController connection,
         UpscalingPanel upscaling, ElyColorPanel elyColor, ElySoundPanel elySound, ElyFlowPanel elyFlow,
-        ElySmartPanel elySmart, MagpiePanel magpie, MpvNativeInstaller mpvInstaller, OsdController osd)
+        MagpiePanel magpie, MpvNativeInstaller mpvInstaller, OsdController osd)
     {
         _osd = osd;
         _view = view;
@@ -67,7 +66,6 @@ internal sealed class SettingsController
         _elyColor = elyColor;
         _elySound = elySound;
         _elyFlow = elyFlow;
-        _elySmart = elySmart;
         _magpie = magpie;
         _mpvInstaller = mpvInstaller;
 
@@ -75,8 +73,6 @@ internal sealed class SettingsController
         _catalog.SettingsRequested += OpenPanel;
         _catalog.SettingsCloseRequested += ClosePanel;
         _magpie.SettingsRequested += OpenPanel;
-        _elySmart.ConfigurationApplied += OnElySmartConfigurationApplied;
-        _elySmart.DecorativeSettingsChanged += _visualizer.ApplySettings;
     }
 
     private Settings Settings => _store.Settings;
@@ -111,9 +107,6 @@ internal sealed class SettingsController
         _view.AudioParticleCountSlider.Value = s.AudioParticleCount;
         _view.AudioParticleDistanceSlider.Value = s.AudioParticleDistance * 100;
         _view.AudioBackgroundCombo.IsEnabled = true;
-        _view.ElySmartAutoSwitch.IsChecked = s.ElySmartAutoOptimizeDecorative;
-        _view.ElySmartNotificationsSwitch.IsChecked = s.ElySmartNotificationsEnabled;
-        ComboTags.Select(_view.ElySmartProfileCombo, s.ElySmartWorkload);
         _view.StatsSwitch.IsChecked = s.ShowStats;
         _view.ReconnectSwitch.IsChecked = s.AutoReconnect;
         _view.RememberVolSwitch.IsChecked = s.RememberVolume;
@@ -172,7 +165,6 @@ internal sealed class SettingsController
         _elyFlow.UpdateGate();
         _visualizer.RefreshRendererStatus();
         _playback.UpdateStats();
-        _elySmart.RefreshReport();
         if (_session.Current != null)
             _vm.NowPlayingSubtitle = PlaybackText.NowPlayingSubtitle(_session.Current);
         _music.RefreshOpenPanel();
@@ -224,15 +216,6 @@ internal sealed class SettingsController
             _backendHost.Recreate(replayCurrent: true);
         else
             _pipeline.ApplyAll();
-    }
-
-    private void OnElySmartConfigurationApplied()
-    {
-        LoadIntoUi();
-        _visualizer.ApplySettings();
-        _upscaling.Apply();
-        _pipeline.ApplyElyColor();
-        _pipeline.ApplyElySound();
     }
 
     // ============ AUDIO PLAYER ============

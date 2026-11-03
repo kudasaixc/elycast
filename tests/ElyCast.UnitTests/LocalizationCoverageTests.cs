@@ -15,7 +15,7 @@ public partial class LocalizationCoverageTests
     // Product names, technical identifiers and units are deliberately not translated.
     private static readonly HashSet<string> Untranslated = new(StringComparer.Ordinal)
     {
-        "ElyCast", "ELYCAST AUDIO", "Elycast Audio", "ELYCAST AudioCore+", "ELYCOLOR", "ELYFLOW", "ELYSMART", "ELYSOUND+",
+        "ElyCast", "ELYCAST AUDIO", "Elycast Audio", "ELYCAST AudioCore+", "ELYCOLOR", "ELYFLOW", "ELYSOUND+",
         "Audio", "ANIMATION", "gain", ".ts", "FSR", "FSRCNNX", "FSRCNNX HQ", "AMD FSR + CAS", "Catmull-Rom", "Lanczos",
         "Mitchell", "Spline36", "NVIDIA Image Scaling", "NVIDIA Optical Flow FRUC", "RTX Video Super Resolution",
         "Xtream Codes", "📡  Xtream Codes", "📄  Playlist M3U", "Magpie - Anime4K", "Magpie - FSR", "Magpie - FSRCNNX",

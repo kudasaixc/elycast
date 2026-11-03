@@ -1,5 +1,4 @@
 using Elysium_Cast_IPTV.Services;
-using Elysium_Cast_IPTV.Services.ElySmart;
 using Elysium_Cast_IPTV.Services.Export;
 using Elysium_Cast_IPTV.Services.Library;
 using Elysium_Cast_IPTV.Services.Pipeline;
@@ -29,11 +28,6 @@ public static class AppServices
         services.AddSingleton<MagpieUpscalerService>();
         services.AddSingleton<MpvNativeInstaller>();
         services.AddSingleton<AudioVisualEngine>();
-        services.AddSingleton<BenchmarkEngine>();
-        services.AddSingleton<PerformanceHistory>();
-        services.AddSingleton<HealthAnalyzer>();
-        services.AddSingleton<NotificationEngine>();
-        services.AddSingleton<RuntimeOptimizer>();
         services.AddSingleton<ClipExporter>();
         services.AddSingleton<ShellServices>();
         services.AddTransient<MainWindow>();

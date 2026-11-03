@@ -5,14 +5,13 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Elysium_Cast_IPTV.Infrastructure;
 using Elysium_Cast_IPTV.Services;
-using Elysium_Cast_IPTV.Services.ElySmart;
 using Elysium_Cast_IPTV.Services.Video;
 
 namespace Elysium_Cast_IPTV;
 
 /// <summary>
 /// First-run wizard: profile name, connection method, accent colour, content
-/// preferences, an ELYSMART measured benchmark with explainable recommendations, then the
+/// preferences, a hardware probe with an editable engine recommendation, then the
 /// dependency download (libmpv, shaders) and the RTX VSR functional test.
 /// Nothing is persisted until the user finishes or skips.
 /// </summary>
@@ -22,9 +21,8 @@ public partial class OnboardingWindow : Window
     private string _connection = "xtream";
     private string _accentHex = StateStore.Settings.AccentColor;
     private string _language = LocalizationService.Normalize(StateStore.Settings.Language);
-    private HardwareSnapshot? _hardware;
-    private BenchmarkReport? _elySmartReport;
-    private CancellationTokenSource? _elySmartCts;
+    private HardwareInfo? _hardware;
+    private EngineRecommendation? _recommendation;
     private bool _hardwareProbed;
     private bool _installDone;
     private bool _installBusy;
@@ -91,7 +89,7 @@ public partial class OnboardingWindow : Window
             NextBtn.IsEnabled = true;
         }
 
-        if (_step == 4) _ = RunElySmartAsync();
+        if (_step == 4) AsyncExtensions.FireAndLog(ProbeHardwareAsync, "Onboarding hardware probe");
     }
 
     private void Next_Click(object sender, RoutedEventArgs e)
@@ -106,13 +104,11 @@ public partial class OnboardingWindow : Window
 
     private void Back_Click(object sender, RoutedEventArgs e)
     {
-        if (_step == 4) _elySmartCts?.Cancel();
         ShowStep(_step - 1);
     }
 
     private void Skip_Click(object sender, RoutedEventArgs e)
     {
-        _elySmartCts?.Cancel();
         DebugConsole.Info("Onboarding wizard skipped; default configuration retained.");
         Persist(applyEngine: false);
         DialogResult = true;
@@ -209,64 +205,40 @@ public partial class OnboardingWindow : Window
     }
 
     // ------------------------------------------------------------ hardware
-    private async Task RunElySmartAsync()
+    private async Task ProbeHardwareAsync()
     {
         if (_hardwareProbed) return;
         _hardwareProbed = true;
-        _elySmartCts = new CancellationTokenSource();
-        ElySmartOnboardingProgress.Visibility = Visibility.Visible;
-        ElySmartCancelButton.Visibility = Visibility.Visible;
         NextBtn.IsEnabled = false;
-        DebugConsole.Step("Onboarding: ELYSMART benchmark...");
-        var workload = WorkloadFromInterests(SelectedInterests());
-        var progress = new Progress<BenchmarkProgress>(p =>
-        {
-            ElySmartOnboardingProgress.Value = p.Percent;
-            ElySmartStageText.Text = LocalizationService.T(p.Stage) + " - " + LocalizationService.T(p.Detail);
-        });
+        DebugConsole.Step("Onboarding: hardware probe...");
         try
         {
-            var report = await new BenchmarkEngine().RunAsync(workload, progress, _elySmartCts.Token);
-            if (report.Cancelled) { ElySmartStageText.Text = LocalizationService.T("Analysis canceled. Return to this step to run it again."); _hardwareProbed = false; return; }
-            _elySmartReport = report;
-            _hardware = report.Hardware;
-            var hw = report.Hardware;
-            var gpuLines = hw.Gpus.Count == 0 ? LocalizationService.T("GPU ......... not detected") : string.Join("\n", hw.Gpus.Select(g => $"GPU ......... {g.Name}" + (string.IsNullOrWhiteSpace(g.Driver) ? "" : $" (driver {g.Driver})")));
-            HwSummary.Text = LocalizationService.Format("CPU ......... {0} ({1} cores / {2} threads)\nRAM ......... {3:0.#} GB\n{4}\nScore ....... {5}/100: {6} (provisional, {7}% coverage)",
-                LocalizationService.T(hw.Cpu), hw.Cores, hw.Threads, hw.RamGb, gpuLines, report.GlobalScore, LocalizationService.T(report.Rating), report.MeasurementCoveragePercent);
-            var c = report.Configuration;
-            var reasons = report.Recommendations.Take(3).Select(r => LocalizationService.Format("• {0}: {1} (confidence {2}%)",
-                LocalizationService.T(r.Title), LocalizationService.T(r.Reason), r.Confidence));
-            RecoText.Text = LocalizationService.T("ELYSMART recommends:") + "\n" + string.Join("\n", reasons);
-            SelectCombo(EngineCombo, c.Renderer);
-            VsrSwitch.IsChecked = c.RtxVsr;
-            FrucSwitch.IsChecked = c.ElyFlow;
+            var interests = SelectedInterests();
+            var hw = await Task.Run(HardwareProbe.Detect);
+            var reco = await Task.Run(() => HardwareProbe.Recommend(hw, interests));
+            _hardware = hw;
+            _recommendation = reco;
+            var gpuLines = hw.Gpus.Count == 0 ? LocalizationService.T("GPU ......... not detected") : string.Join("\n", hw.Gpus.Select(g => $"GPU ......... {g.Name}" + (string.IsNullOrWhiteSpace(g.DriverVersion) ? "" : $" (driver {g.DriverVersion})")));
+            HwSummary.Text = LocalizationService.Format("CPU ......... {0} ({1} cores / {2} threads)\nRAM ......... {3:0.#} GB\n{4}",
+                LocalizationService.T(hw.CpuName), hw.CpuCores, hw.CpuThreads, hw.RamGb, gpuLines);
+            RecoText.Text = LocalizationService.T(reco.Reason);
+            SelectCombo(EngineCombo, reco.VideoBackend);
+            VsrSwitch.IsChecked = reco.ElyFlowVsr;
+            FrucSwitch.IsChecked = reco.ElyFlowFruc;
             UpdateEngineToggles();
-            NextBtn.IsEnabled = true;
-            DebugConsole.Info($"Onboarding ELYSMART: score={report.GlobalScore}, backend={c.Renderer}, VSR={c.RtxVsr}, ELYFLOW={c.ElyFlow}, upscale={c.Upscaling}");
+            DebugConsole.Info($"Onboarding recommendation: backend={reco.VideoBackend}, VSR={reco.ElyFlowVsr}, ELYFLOW={reco.ElyFlowFruc}, upscale={reco.UpscaleMethod}");
         }
         catch (Exception ex)
         {
             _hardwareProbed = false;
-            ElySmartStageText.Text = LocalizationService.T("ELYSMART could not finish: ") + ex.Message;
-            DebugConsole.Exception("Onboarding ELYSMART", ex);
+            RecoText.Text = LocalizationService.T("Hardware analysis failed: ") + ex.Message;
+            DebugConsole.Exception("Onboarding hardware probe", ex);
         }
         finally
         {
-            ElySmartOnboardingProgress.Visibility = Visibility.Collapsed;
-            ElySmartCancelButton.Visibility = Visibility.Collapsed;
-            _elySmartCts?.Dispose(); _elySmartCts = null;
+            NextBtn.IsEnabled = true;
         }
     }
-
-    private static ElySmartWorkload WorkloadFromInterests(IReadOnlyCollection<string> interests)
-    {
-        if (interests.Count != 1) return ElySmartWorkload.Mixed;
-        var interest = interests.First();
-        return interest switch { "anime" => ElySmartWorkload.Anime, "cinema" => ElySmartWorkload.Films, "music" => ElySmartWorkload.Audio, "sport" or "tv" => ElySmartWorkload.Iptv, _ => ElySmartWorkload.Mixed };
-    }
-
-    private void ElySmartCancel_Click(object sender, RoutedEventArgs e) => _elySmartCts?.Cancel();
 
     private void UpdateEngineToggles()
     {
@@ -280,7 +252,7 @@ public partial class OnboardingWindow : Window
                 FrucSwitch.IsEnabled = frucCapable;
                 if (!frucCapable) FrucSwitch.IsChecked = false;
                 FrucSwitch.ToolTip = frucCapable ? null : LocalizationService.T("NVIDIA FRUC runtime unavailable on this PC.");
-                VsrSwitch.IsEnabled = _hardware?.Gpus.Any(g => g.Rtx) == true;
+                VsrSwitch.IsEnabled = _hardware != null && HardwareProbe.SupportsRtxVsr(_hardware);
                 VsrSwitch.ToolTip = LocalizationService.T("Native ELYCORE pass independent from FRUC interpolation.");
                 break;
             case "rtx-sdk":
@@ -355,7 +327,7 @@ public partial class OnboardingWindow : Window
             }
 
             // 2) GLSL shaders for the recommended upscaling method.
-            var method = _elySmartReport?.Configuration.Upscaling ?? StateStore.Settings.UpscaleMethod;
+            var method = _recommendation?.UpscaleMethod ?? StateStore.Settings.UpscaleMethod;
             if (ShaderCatalog.MissingFor(method, "off").Count > 0)
             {
                 Log(LocalizationService.Format("• Downloading shaders ({0})...", method));
@@ -454,17 +426,10 @@ public partial class OnboardingWindow : Window
             s.VideoBackend = SelectedEngine();
             s.ElyFlowRtxVsrEnabled = VsrSwitch.IsChecked == true;
             s.ElyFlowEnabled = s.VideoBackend == "elycore" && FrucSwitch.IsChecked == true;
-            if (_elySmartReport != null)
+            if (_recommendation != null)
             {
-                var c = _elySmartReport.Configuration;
-                s.UpscaleMethod = c.Upscaling;
-                s.ElyColorFilterId = c.ElyColor;
-                s.ElySoundEnabled = c.ElySound;
-                s.AudioVisualizerTargetFps = c.VisualizerFps;
-                s.AudioParticleCount = c.Particles;
-                s.AudioBackgroundMouseParallax = c.Parallax;
-                s.AudioBackgroundBlur = c.Blur;
-                s.ElySmartWorkload = _elySmartReport.Profile.ToString();
+                s.UpscaleMethod = _recommendation.UpscaleMethod;
+                s.ElyColorFilterId = _recommendation.ElyColorFilterId;
             }
         }
 

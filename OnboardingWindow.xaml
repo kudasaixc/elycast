@@ -300,9 +300,6 @@
                                 <TextBlock x:Name="RecoText" FontSize="13" TextWrapping="Wrap"
                                            Text="Preparing recommendation..."/>
                             </Border>
-                            <TextBlock x:Name="ElySmartStageText" Margin="0,0,0,7" FontSize="12" Foreground="{DynamicResource MutedBrush}" Text="ELYSMART is preparing the measured analysis..."/>
-                            <ProgressBar x:Name="ElySmartOnboardingProgress" Height="7" Minimum="0" Maximum="100" Visibility="Collapsed"/>
-                            <Button x:Name="ElySmartCancelButton" Content="Cancel analysis" Style="{StaticResource GhostButton}" Width="150" Height="36" HorizontalAlignment="Left" Margin="0,9,0,14" Visibility="Collapsed" Click="ElySmartCancel_Click"/>
                             <Grid MaxWidth="640" HorizontalAlignment="Left">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="220"/>

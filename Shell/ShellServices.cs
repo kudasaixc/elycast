@@ -1,5 +1,4 @@
 using Elysium_Cast_IPTV.Services;
-using Elysium_Cast_IPTV.Services.ElySmart;
 using Elysium_Cast_IPTV.Services.Export;
 using Elysium_Cast_IPTV.Services.Library;
 using Elysium_Cast_IPTV.Services.Pipeline;
@@ -22,10 +21,5 @@ public sealed record ShellServices(
     MagpieUpscalerService Magpie,
     MpvNativeInstaller MpvInstaller,
     AudioVisualEngine AudioEngine,
-    BenchmarkEngine Benchmark,
-    PerformanceHistory PerformanceHistory,
-    HealthAnalyzer HealthAnalyzer,
-    NotificationEngine Notifications,
-    RuntimeOptimizer Optimizer,
     ShaderInstaller Shaders,
     ClipExporter ClipExporter);
