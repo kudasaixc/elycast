@@ -891,6 +891,11 @@
                                                             Click="UpscalerBtn_Click" ToolTip="Enable external Magpie / FSR upscaling">
                                                         <TextBlock Text="FSR" FontSize="10" FontWeight="Bold" Foreground="White"/>
                                                     </Button>
+                                                    <Button x:Name="ClipBtn" Style="{StaticResource IconButton}" Margin="0,0,12,0"
+                                                            Click="ClipBtn_Click" ToolTip="Export a clip with ElyCast enhancements" Visibility="Collapsed">
+                                                        <Path Data="M 3,3 A 2,2 0 1 1 3,7 A 2,2 0 1 1 3,3 Z M 3,9 A 2,2 0 1 1 3,13 A 2,2 0 1 1 3,9 Z M 4.6,6.2 L 14,12 M 4.6,9.8 L 14,4"
+                                                              Stroke="White" StrokeThickness="1.4" Stretch="Uniform" Width="16" Height="16"/>
+                                                    </Button>
                                                     <Button x:Name="StatsBtn" Style="{StaticResource IconButton}" Margin="0,0,12,0"
                                                             Click="StatsBtn_Click" ToolTip="Live statistics">
                                                         <Path Data="M2,14 V8 M6,14 V4 M10,14 V9 M14,14 V2" Stroke="White" StrokeThickness="1.6"
@@ -945,6 +950,101 @@
                                     <Path x:Name="CenterTransportIcon" Fill="White" Stretch="Uniform" Width="34" Height="34"
                                           Data="M 4,2 L 11,2 L 11,18 L 4,18 Z M 15,2 L 22,2 L 22,18 L 15,18 Z"/>
                                 </Grid>
+
+                                <!-- CLIP EXPORT: non-modal card, the OSD stays usable to seek and mark. -->
+                                <Border x:Name="ClipPanel" Visibility="Collapsed" Panel.ZIndex="40" Width="340"
+                                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,76,16,0"
+                                        Padding="18,16" CornerRadius="14" Cursor="Arrow"
+                                        Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource CardStroke}" BorderThickness="1">
+                                    <StackPanel>
+                                        <Grid>
+                                            <TextBlock Text="EXPORT CLIP" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource AccentBBrush}"/>
+                                            <Button Style="{StaticResource IconButton}" Width="28" Height="28" HorizontalAlignment="Right"
+                                                    Click="ClipClose_Click" ToolTip="Close panel">
+                                                <Path Data="M 3,3 L 13,13 M 13,3 L 3,13" Stroke="White" StrokeThickness="1.6"
+                                                      Stretch="Uniform" Width="10" Height="10"/>
+                                            </Button>
+                                        </Grid>
+                                        <TextBlock x:Name="ClipTitleText" Margin="0,6,0,0" FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextBrush}" TextTrimming="CharacterEllipsis"/>
+
+                                        <StackPanel x:Name="ClipRangePanel" Margin="0,12,0,0">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="60"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Start" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}"/>
+                                                <TextBox x:Name="ClipStartBox" Grid.Column="1" Height="36" FontSize="13" Style="{StaticResource FieldBox}"
+                                                         Tag="18:00" TextChanged="ClipRange_Changed"/>
+                                                <Button Grid.Column="2" Margin="8,0,0,0" Height="36" Padding="10,0" FontSize="12"
+                                                        Style="{StaticResource GhostButton}" Content="Now" Click="ClipMarkStart_Click"
+                                                        ToolTip="Use the current playback position"/>
+                                            </Grid>
+                                            <Grid Margin="0,8,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="60"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="End" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}"/>
+                                                <TextBox x:Name="ClipEndBox" Grid.Column="1" Height="36" FontSize="13" Style="{StaticResource FieldBox}"
+                                                         Tag="21:00" TextChanged="ClipRange_Changed"/>
+                                                <Button Grid.Column="2" Margin="8,0,0,0" Height="36" Padding="10,0" FontSize="12"
+                                                        Style="{StaticResource GhostButton}" Content="Now" Click="ClipMarkEnd_Click"
+                                                        ToolTip="Use the current playback position"/>
+                                            </Grid>
+                                            <TextBlock x:Name="ClipDurationText" Margin="0,6,0,0" FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
+                                        </StackPanel>
+
+                                        <StackPanel x:Name="ClipLivePanel" Margin="0,12,0,0" Visibility="Collapsed">
+                                            <TextBlock x:Name="ClipRecordText" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"/>
+                                            <Button x:Name="ClipRecordBtn" Margin="0,10,0,0" Height="38" FontSize="13"
+                                                    Style="{StaticResource PrimaryButton}" Content="Start recording" Click="ClipRecord_Click"/>
+                                        </StackPanel>
+
+                                        <Grid Margin="0,12,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ComboBox x:Name="ClipResolutionCombo" Height="32" Style="{StaticResource FieldCombo}"
+                                                      ToolTip="Output resolution: AI upscalers engage above the source size"/>
+                                            <ComboBox x:Name="ClipQualityCombo" Grid.Column="2" Height="32" Style="{StaticResource FieldCombo}"
+                                                      ToolTip="Encoding quality" SelectedIndex="1">
+                                                <ComboBoxItem Content="Standard" Tag="Standard"/>
+                                                <ComboBoxItem Content="High quality" Tag="High"/>
+                                                <ComboBoxItem Content="Maximum" Tag="Maximum"/>
+                                            </ComboBox>
+                                        </Grid>
+                                        <TextBlock x:Name="ClipPipelineText" Margin="0,10,0,0" FontSize="11" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource AccentSoftBrush}"/>
+                                        <TextBlock Margin="0,4,0,0" FontSize="10" TextWrapping="Wrap" Foreground="{DynamicResource FaintBrush}"
+                                                   Text="RTX VSR and frame generation only affect the display and are not exported."/>
+
+                                        <ProgressBar x:Name="ClipProgress" Height="4" Minimum="0" Maximum="100" Margin="0,12,0,0"
+                                                     Visibility="Collapsed" Foreground="{DynamicResource AccentABrush}"
+                                                     Background="{StaticResource White20Brush}" BorderThickness="0"/>
+                                        <TextBlock x:Name="ClipStatusText" Margin="0,8,0,0" FontSize="12" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource TextBrush}"/>
+                                        <Grid Margin="0,10,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Button x:Name="ClipExportBtn" Height="38" FontSize="13" Style="{StaticResource PrimaryButton}"
+                                                    Content="Export" Click="ClipExport_Click"/>
+                                            <Button x:Name="ClipCancelBtn" Grid.ColumnSpan="2" Height="38" FontSize="13" Visibility="Collapsed"
+                                                    Style="{StaticResource GhostButton}" Content="Cancel" Click="ClipCancel_Click"/>
+                                            <Button x:Name="ClipOpenFolderBtn" Grid.Column="1" Margin="8,0,0,0" Height="38" Padding="12,0"
+                                                    FontSize="12" Visibility="Collapsed" Style="{StaticResource GhostButton}"
+                                                    Content="Show file" Click="ClipOpenFolder_Click"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
 
                                 <Button x:Name="CloseOverlayBtn" Visibility="Collapsed"
                                         Panel.ZIndex="50"

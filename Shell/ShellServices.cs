@@ -1,5 +1,6 @@
 using Elysium_Cast_IPTV.Services;
 using Elysium_Cast_IPTV.Services.ElySmart;
+using Elysium_Cast_IPTV.Services.Export;
 using Elysium_Cast_IPTV.Services.Library;
 using Elysium_Cast_IPTV.Services.Pipeline;
 using Elysium_Cast_IPTV.Services.Playback;
@@ -25,4 +26,6 @@ public sealed record ShellServices(
     PerformanceHistory PerformanceHistory,
     HealthAnalyzer HealthAnalyzer,
     NotificationEngine Notifications,
-    RuntimeOptimizer Optimizer);
+    RuntimeOptimizer Optimizer,
+    ShaderInstaller Shaders,
+    ClipExporter ClipExporter);

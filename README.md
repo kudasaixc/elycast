@@ -58,6 +58,7 @@ The September reliability update adds accent-insensitive, multiword search (`Ctr
 - **RTX Video Super Resolution** for compatible NVIDIA RTX GPUs.
 - **ELYFLOW** frame interpolation through NVIDIA Optical Flow and FRUC.
 - **ELYCOLOR** live image profiles for color, contrast, gamma, hue, and shader chains.
+- **Clip export**: save a range of a film or episode (or record a live channel) as an MP4 with the upscaling shaders (Anime4K, FSRCNNX, NIS, FSR), ELYCOLOR and ELYSOUND+ applied. AI upscalers engage when the export resolution is above the source. RTX VSR and frame generation are display-only and are not exported.
 - GLSL shader and Magpie upscaling support.
 
 ### Audio

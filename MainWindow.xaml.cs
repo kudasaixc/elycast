@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     private readonly CatalogController _catalog;
     private readonly MusicLibraryController _music;
     private readonly ConnectionController _connection;
+    private readonly ClipExportController _clip;
     private readonly UpscalingPanel _upscaling;
     private readonly ElyColorPanel _elyColor;
     private readonly ElySoundPanel _elySound;
@@ -73,6 +74,7 @@ public partial class MainWindow : Window
         _catalog = new CatalogController(this, vm, session, services.Library, services.Queue, _playback, _osd);
         _music = new MusicLibraryController(this, vm, session, services.Library, services.Queue, store, _playback, _osd,
             _catalog, services.LocalLibrary, gate);
+        _clip = new ClipExportController(this, session, services.Library, store, services.Shaders, services.ClipExporter, _playback);
         _connection = new ConnectionController(this, vm, session, services.Library, store, services.Profiles, _playback, _catalog, _music, _overlay);
         _upscaling = new UpscalingPanel(this, session, store, services.Pipeline, gate);
         _elyColor = new ElyColorPanel(this, session, store, services.Pipeline, gate, _backendHost, _upscaling);
@@ -153,6 +155,7 @@ public partial class MainWindow : Window
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape && _osd.IsPanelOpen) { _settings.CloseAllPanels(); e.Handled = true; return; }
+        if (e.Key == Key.Escape && _clip.IsOpen) { _clip.Close(); e.Handled = true; return; }
         if (e.Key == Key.Escape && _chrome.IsFullscreen) { _chrome.ToggleFullscreen(); return; }
         if (e.Key == Key.F11) { _chrome.ToggleFullscreen(); return; }
         if (!PlayerView.IsVisible || SettingsPanel.Visibility == Visibility.Visible) return;
@@ -180,7 +183,7 @@ public partial class MainWindow : Window
     private void OverlayRoot_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (!_services.Session.HasMedia || _osd.IsPanelOpen) return;
-        if (IsInteractive(e.OriginalSource as DependencyObject)) return;
+        if (IsInteractive(e.OriginalSource as DependencyObject) || _clip.Contains(e.OriginalSource as DependencyObject)) return;
         if (!OsdController.IsInPlayPauseZone(e.GetPosition(OverlayRoot), OverlayRoot.ActualWidth, OverlayRoot.ActualHeight)) return;
         ClickToPause();
         e.Handled = true;
@@ -246,6 +249,7 @@ public partial class MainWindow : Window
         _connection.CancelConnect();
         _catalog.CancelPendingLoads();
         _music.CancelImport();
+        _clip.Shutdown();
         _playback.Shutdown();
         _catalog.StopSearchTimer();
         _osd.StopTimer();
@@ -356,6 +360,17 @@ public partial class MainWindow : Window
     private void Audio_Changed(object sender, SelectionChangedEventArgs e) { if (_composed) _playback.OnAudioSelectionChanged(); }
     private void StatsBtn_Click(object sender, RoutedEventArgs e) => _playback.ToggleStats();
     private void CloseOverlay_Click(object sender, RoutedEventArgs e) => _settings.CloseAllPanels();
+
+    // ============ CLIP EXPORT ============
+    private void ClipBtn_Click(object sender, RoutedEventArgs e) => _clip.Toggle();
+    private void ClipClose_Click(object sender, RoutedEventArgs e) => _clip.Close();
+    private void ClipMarkStart_Click(object sender, RoutedEventArgs e) => _clip.MarkStart();
+    private void ClipMarkEnd_Click(object sender, RoutedEventArgs e) => _clip.MarkEnd();
+    private void ClipRange_Changed(object sender, TextChangedEventArgs e) { if (_composed) _clip.OnRangeTextChanged(); }
+    private void ClipExport_Click(object sender, RoutedEventArgs e) => AsyncExtensions.FireAndLog(_clip.ExportRangeAsync, "Clip export");
+    private void ClipRecord_Click(object sender, RoutedEventArgs e) => _clip.ToggleRecording();
+    private void ClipCancel_Click(object sender, RoutedEventArgs e) => _clip.Cancel();
+    private void ClipOpenFolder_Click(object sender, RoutedEventArgs e) => _clip.OpenFolder();
 
     // ============ SETTINGS ============
     private void Language_Changed(object sender, SelectionChangedEventArgs e) { if (_composed) _settings.OnLanguageChanged(); }

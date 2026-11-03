@@ -87,6 +87,9 @@ internal sealed class PlaybackController
     /// <summary>Media started or ended: OSD rows that depend on playback refresh.</summary>
     public event Action? MediaStateChanged;
 
+    /// <summary>Raised just before the backend opens a new media (per-file options must be cleared).</summary>
+    public event Action? PlaybackStarting;
+
     private Settings Settings => _store.Settings;
 
     // ============ PLAY ============
@@ -128,6 +131,7 @@ internal sealed class PlaybackController
             var url = _library.Source.GetStreamUrl(item);
             DebugConsole.Info($"Play [{item.KindLabel}] {item.Name}");
             backend.Volume = (int)_view.VolumeSlider.Value;
+            PlaybackStarting?.Invoke();
             backend.Play(url);
             _vm.ShowPlayGlyph = false;
             _visualizer.Start(item);
@@ -170,6 +174,7 @@ internal sealed class PlaybackController
         _vm.ShowOverlay("Loading (local file)...", spinning: true);
         DebugConsole.Info("playfile -> " + path);
         backend.Volume = (int)_view.VolumeSlider.Value;
+        PlaybackStarting?.Invoke();
         backend.Play(path);
         _vm.ShowPlayGlyph = false;
     }

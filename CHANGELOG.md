@@ -6,6 +6,10 @@ All notable ElyCast changes are documented here. This project follows
 
 ## [Unreleased]
 
+### Added
+
+- **Clip export**: the player's scissors button exports a range of a film, episode or local video (for example 18:00 to 21:00) as an H.264/AAC MP4 with every active ElyCast enhancement baked in: the upscaling shader chain (Anime4K, FSRCNNX, NVIDIA Image Scaling, FSR, CAS), ELYCOLOR and ELYSOUND+. On live channels it records the stream from the current moment, then exports the recording the same way. Clips are saved to `Videos\ElyCast`; NVENC, AMF or Quick Sync is used when available, libx264 otherwise.
+
 ### Changed
 
 - Accent-tinted surfaces (side panels, video stage, dialogs, the now-playing subtitle and the list counter) now follow the chosen accent colour instead of staying violet.
