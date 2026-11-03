@@ -36,6 +36,8 @@ internal sealed class ClipExportController
     private string? _source;
     private int _displayWidth, _displayHeight, _sourceHeight;
     private string? _audioTrackId;
+    private IReadOnlyList<VideoTrack> _subtitleTracks = [];
+    private string? _playingSubtitleId;
 
     private MpvHwndBackend? _recordBackend;
     private PlayItem? _recordItem;
@@ -122,11 +124,17 @@ internal sealed class ClipExportController
             _sourceHeight = ParseInt(mpv.GetOption("height"));
             var aid = mpv.GetOption("aid");
             _audioTrackId = int.TryParse(aid, out _) ? aid : null;
+            _subtitleTracks = mpv.GetSubtitleTracks();
+            var sid = mpv.GetOption("sid");
+            _playingSubtitleId = int.TryParse(sid, out _) ? sid : null;
         }
         else
         {
+            // Only mpv track ids map onto the export instance.
             _displayWidth = _displayHeight = _sourceHeight = 0;
             _audioTrackId = null;
+            _subtitleTracks = [];
+            _playingSubtitleId = null;
         }
 
         if (changed)
@@ -137,7 +145,20 @@ internal sealed class ClipExportController
             _view.ClipEndBox.Text = ClipExportPlanner.FormatTime(length > 0 ? Math.Min(length, position + 60) : position + 60);
             FillResolutions();
         }
+        FillSubtitles(keepSelection: !changed);
         return true;
+    }
+
+    private void FillSubtitles(bool keepSelection)
+    {
+        var combo = _view.ClipSubtitleCombo;
+        var previous = keepSelection && combo.SelectedItem is ComboBoxItem { Tag: string tag } ? tag : _playingSubtitleId;
+        combo.Items.Clear();
+        combo.Items.Add(new ComboBoxItem { Content = LocalizationService.T("No subtitles"), Tag = "no" });
+        foreach (var track in _subtitleTracks)
+            combo.Items.Add(new ComboBoxItem { Content = track.Name, Tag = track.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) });
+        combo.SelectedItem = combo.Items.OfType<ComboBoxItem>().FirstOrDefault(i => Equals(i.Tag, previous)) ?? combo.Items[0];
+        combo.Visibility = _subtitleTracks.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void FillResolutions()
@@ -181,7 +202,7 @@ internal sealed class ClipExportController
         _view.ClipProgress.Visibility = exporting ? Visibility.Visible : Visibility.Collapsed;
         _view.ClipOpenFolderBtn.Visibility = !exporting && _lastOutput != null ? Visibility.Visible : Visibility.Collapsed;
         _view.ClipStartBox.IsEnabled = _view.ClipEndBox.IsEnabled = !exporting;
-        _view.ClipResolutionCombo.IsEnabled = _view.ClipQualityCombo.IsEnabled = !exporting;
+        _view.ClipResolutionCombo.IsEnabled = _view.ClipQualityCombo.IsEnabled = _view.ClipSubtitleCombo.IsEnabled = _view.ClipFormatCombo.IsEnabled = !exporting;
         UpdateDuration();
         UpdateRecordText();
         RefreshButton();
@@ -263,7 +284,10 @@ internal sealed class ClipExportController
             }
 
             SetStatus("Exporting...");
-            var request = new ClipExportRequest(source, output, start, end, width, outHeight, quality, _audioTrackId);
+            var subtitles = _view.ClipSubtitleCombo.SelectedItem is ComboBoxItem { Tag: string sid } && sid != "no" ? sid : null;
+            var codec = _view.ClipFormatCombo.SelectedItem is ComboBoxItem { Tag: string c } &&
+                        Enum.TryParse<ClipCodec>(c, out var parsedCodec) ? parsedCodec : ClipCodec.Av1;
+            var request = new ClipExportRequest(source, output, start, end, width, outHeight, quality, _audioTrackId, subtitles, codec);
             DebugConsole.Info($"Clip export: {(start is { } s ? ClipExportPlanner.FormatTime(s) : "recording")}" +
                               $"{(end is { } e ? " -> " + ClipExportPlanner.FormatTime(e) : "")}, {width}x{outHeight}, {quality}, " +
                               $"pipeline: {string.Join(" + ", ClipExportPlanner.DescribePipeline(settings).DefaultIfEmpty("none"))}");

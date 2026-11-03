@@ -68,11 +68,31 @@ public class ClipExportPlannerTests
         var options = Options(new Settings());
 
         Assert.Equal("gpu=w=2560:h=1440,format=yuv420p", options["vf"]);
+        var av1 = ClipExportPlanner.BuildOptions(Request(), new Settings(), "av1_nvenc").ToDictionary(o => o.Key, o => o.Value);
+        Assert.Equal("gpu=w=2560:h=1440,format=yuv420p10", av1["vf"]);
         Assert.Equal("1080", options["start"]);
         Assert.Equal("1260", options["end"]);
         Assert.Equal("C:/out/clip.mp4", options["o"]);
         Assert.Equal("libx264", options["ovc"]);
         Assert.Equal("no", options["terminal"]);
+    }
+
+    [Fact]
+    public void Subtitles_are_burned_only_when_a_track_is_chosen()
+    {
+        Assert.Equal("no", Options(new Settings())["sid"]);
+        var withSubs = ClipExportPlanner.BuildOptions(Request() with { SubtitleTrackId = "2" }, new Settings(), "libx264")
+            .ToDictionary(o => o.Key, o => o.Value);
+        Assert.Equal("2", withSubs["sid"]);
+    }
+
+    [Fact]
+    public void Every_format_ends_with_a_software_encoder()
+    {
+        Assert.Equal("av1_nvenc", ClipExportPlanner.EncodersFor(ClipCodec.Av1)[0]);
+        Assert.Equal("libsvtav1", ClipExportPlanner.EncodersFor(ClipCodec.Av1)[^1]);
+        Assert.Equal("libx265", ClipExportPlanner.EncodersFor(ClipCodec.Hevc)[^1]);
+        Assert.Equal("libx264", ClipExportPlanner.EncodersFor(ClipCodec.H264)[^1]);
     }
 
     [Fact]
@@ -127,6 +147,8 @@ public class ClipExportPlannerTests
     [Theory]
     [InlineData("h264_nvenc", "cq=19")]
     [InlineData("libx264", "crf=18")]
+    [InlineData("av1_nvenc", "cq=32")]
+    [InlineData("hevc_nvenc", "profile=main10")]
     public void High_quality_maps_to_encoder_rate_control(string encoder, string expected) =>
         Assert.Contains(expected, ClipExportPlanner.EncoderOptions(encoder, ClipQuality.High));
 }

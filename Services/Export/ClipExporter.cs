@@ -38,17 +38,17 @@ public sealed class ClipExporter
         IProgress<ClipExportProgress>? progress, CancellationToken cancellationToken)
     {
         // Options are built on the caller's thread: Settings belongs to the UI.
-        var attempts = Encoders()
+        var attempts = Encoders(request.Codec)
             .Select(encoder => (Encoder: encoder, Options: ClipExportPlanner.BuildOptions(request, settings, encoder)))
             .ToList();
         return Task.Factory.StartNew(() => Run(request, attempts, progress, cancellationToken),
             cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
-    private static IEnumerable<string> Encoders()
+    private static IEnumerable<string> Encoders(ClipCodec codec)
     {
         lock (EncoderLock)
-            return ClipExportPlanner.EncoderPreference.Where(e => !UnavailableEncoders.Contains(e)).ToList();
+            return ClipExportPlanner.EncodersFor(codec).Where(e => !UnavailableEncoders.Contains(e)).ToList();
     }
 
     private static ClipExportResult Run(ClipExportRequest request,

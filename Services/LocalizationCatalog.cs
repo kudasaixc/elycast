@@ -926,6 +926,12 @@ internal static class LocalizationCatalog
             ["Could not play this stream."] = "Impossible de lire ce flux.",
             [" (GLSL shaders suspended)"] = " (shaders GLSL suspendus)",
             // Clip export
+            ["No subtitles"] = "Sans sous-titres",
+            ["Video format of the clip"] = "Format vidéo du clip",
+            ["AV1, smallest file"] = "AV1, fichier le plus léger",
+            ["HEVC, small file"] = "HEVC, fichier léger",
+            ["H.264, plays everywhere"] = "H.264, lisible partout",
+            ["Subtitles burned into the clip"] = "Sous-titres incrustés dans le clip",
             ["{0}p (source)"] = "{0}p (source)",
             ["{0}p (upscaled)"] = "{0}p (agrandi)",
             ["No enhancement is active: the clip is exported as played."] = "Aucune amélioration active : le clip est exporté tel quel.",

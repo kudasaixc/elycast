@@ -8,7 +8,7 @@ All notable ElyCast changes are documented here. This project follows
 
 ### Added
 
-- **Clip export**: the player's scissors button exports a range of a film, episode or local video (for example 18:00 to 21:00) as an H.264/AAC MP4 with every active ElyCast enhancement baked in: the upscaling shader chain (Anime4K, FSRCNNX, NVIDIA Image Scaling, FSR, CAS), ELYCOLOR and ELYSOUND+. On live channels it records the stream from the current moment, then exports the recording the same way. Clips are saved to `Videos\ElyCast`; NVENC, AMF or Quick Sync is used when available, libx264 otherwise.
+- **Clip export**: the player's scissors button exports a range of a film, episode or local video (for example 18:00 to 21:00) as an MP4 (AV1 by default, HEVC or H.264) with every active ElyCast enhancement and, optionally, the chosen subtitle track baked in: the upscaling shader chain (Anime4K, FSRCNNX, NVIDIA Image Scaling, FSR, CAS), ELYCOLOR and ELYSOUND+. On live channels it records the stream from the current moment, then exports the recording the same way. Clips are saved to `Videos\ElyCast`; AV1 and HEVC are 10-bit and about half and two thirds the size of H.264 at the same measured quality; NVENC, AMF or Quick Sync is used when available, a software encoder otherwise.
 - `scripts/install.ps1` installs or updates a per-user ElyCast from source (shortcuts, Apps & features entry, out-of-repo NVIDIA and libmpv binaries) and `uninstall.ps1` removes it.
 
 ### Changed

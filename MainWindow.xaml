@@ -1020,6 +1020,14 @@
                                                 <ComboBoxItem Content="Maximum" Tag="Maximum"/>
                                             </ComboBox>
                                         </Grid>
+                                        <ComboBox x:Name="ClipFormatCombo" Height="32" Margin="0,8,0,0" SelectedIndex="0"
+                                                  Style="{StaticResource FieldCombo}" ToolTip="Video format of the clip">
+                                            <ComboBoxItem Content="AV1, smallest file" Tag="Av1"/>
+                                            <ComboBoxItem Content="HEVC, small file" Tag="Hevc"/>
+                                            <ComboBoxItem Content="H.264, plays everywhere" Tag="H264"/>
+                                        </ComboBox>
+                                        <ComboBox x:Name="ClipSubtitleCombo" Height="32" Margin="0,8,0,0" Visibility="Collapsed"
+                                                  Style="{StaticResource FieldCombo}" ToolTip="Subtitles burned into the clip"/>
                                         <TextBlock x:Name="ClipPipelineText" Margin="0,10,0,0" FontSize="11" TextWrapping="Wrap"
                                                    Foreground="{DynamicResource AccentSoftBrush}"/>
                                         <TextBlock Margin="0,4,0,0" FontSize="10" TextWrapping="Wrap" Foreground="{DynamicResource FaintBrush}"
