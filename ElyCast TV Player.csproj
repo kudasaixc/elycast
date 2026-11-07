@@ -28,9 +28,10 @@
     <Resource Include="Assets\ElyCastLogo.png" />
     <None Include="Assets\ElyCastLogo.png" Link="ElyCastLogo.png" CopyToOutputDirectory="PreserveNewest" />
     <Resource Include="Assets\AudioBackgrounds\*.jpg" />
-    <!-- Mandatory watermark of exported clips. -->
-    <None Update="Assets\Export\watermark.png" Link="watermark.png"
-          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!-- Mandatory watermark of exported clips: embedded in ElyCast.dll so an
+         installation cannot lose it (see Services/Export/WatermarkAsset.cs). -->
+    <None Remove="Assets\Export\watermark.png" />
+    <EmbeddedResource Include="Assets\Export\watermark.png" LogicalName="ElyCast.Export.watermark.png" />
     <!-- Every mpv shader ships with ElyCast (no download): loose files next
          to the executable, also when published as a single file. -->
     <None Update="Assets\Shaders\*" Link="shaders\%(Filename)%(Extension)"

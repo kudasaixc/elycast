@@ -857,7 +857,7 @@ internal static class LocalizationCatalog
             ["Watermark: bottom left"] = "Filigrane : en bas à gauche",
             ["Watermark: top right"] = "Filigrane : en haut à droite",
             ["Watermark: top left"] = "Filigrane : en haut à gauche",
-            ["The ElyCast watermark is missing from the installation."] = "Le filigrane ElyCast est absent de l'installation.",
+            ["The ElyCast watermark could not be prepared for the export."] = "Le filigrane ElyCast n'a pas pu être préparé pour l'export.",
             ["Video format of the clip"] = "Format vidéo du clip",
             ["AV1, smallest file"] = "AV1, fichier le plus léger",
             ["HEVC, small file"] = "HEVC, fichier léger",

@@ -58,8 +58,12 @@ public sealed class ClipExporter
         if (!EnsureLibMpv())
             return new(ClipExportOutcome.Failed, "libmpv is not installed. Install mpv from the playback settings.");
         // Every export carries the ElyCast watermark: never encode without it.
-        if (!File.Exists(ClipExportPlanner.WatermarkFile))
-            return new(ClipExportOutcome.Failed, "The ElyCast watermark is missing from the installation.");
+        // The logo is embedded in ElyCast.dll, so only a cache write can fail here.
+        if (!WatermarkAsset.TryMaterialize(out var watermarkError))
+        {
+            DebugConsole.Error($"Clip export: watermark could not be written to the cache ({watermarkError}).");
+            return new(ClipExportOutcome.Failed, "The ElyCast watermark could not be prepared for the export.");
+        }
 
         var folder = Path.GetDirectoryName(request.OutputPath);
         if (!string.IsNullOrEmpty(folder)) Directory.CreateDirectory(folder);

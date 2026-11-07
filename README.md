@@ -116,7 +116,7 @@ Downloaded dependencies are installed under `%APPDATA%\ElyCast\tools`, never in 
 
 ### Install or update from source
 
-`scripts/install.ps1` builds this checkout and installs it per user (no administrator rights) in `%LOCALAPPDATA%\Programs\ElyCast`, with Start menu and desktop shortcuts and an Apps & features entry. To update, pull and run it again: the running copy is closed, files are replaced and settings in `%APPDATA%\ElyCast` are kept. The build executables are removed from the checkout afterwards so only the installed ElyCast remains.
+`scripts/install.ps1` builds this checkout and installs it per user (no administrator rights) in `%LOCALAPPDATA%\Programs\ElyCast`, with Start menu and desktop shortcuts and an Apps & features entry. To update, pull and run it again: the running copy is closed, files are replaced and settings in `%APPDATA%\ElyCast` are kept. The development build in the checkout is kept; add `-RemoveBuildOutput` to delete `bin` and `artifacts\Release` after a successful install so only the installed ElyCast remains.
 
 ```powershell
 git pull
@@ -196,6 +196,8 @@ Local profiles, favorites, settings, and library entries stay under `%APPDATA%\E
 ## License
 
 ElyCast is distributed under the [Mozilla Public License 2.0](LICENSE). Third-party libraries, SDKs, and runtimes remain subject to their own licenses.
+
+The bundled mpv shaders in [`Assets/Shaders`](Assets/Shaders) keep their own licenses (MIT, BSD-2-Clause, and LGPL-3.0-or-later for FSRCNNX and KrigBilateral). They ship as separate, unmodified, replaceable source files next to the executable, together with [`THIRD-PARTY-NOTICES.md`](Assets/Shaders/THIRD-PARTY-NOTICES.md) and the LGPL/GPL texts. Keep those files in every distribution.
 
 <p align="center">
   <strong>ElyCast: your content, your hardware, your experience.</strong>

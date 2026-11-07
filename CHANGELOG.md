@@ -26,6 +26,9 @@ All notable ElyCast changes are documented here. This project follows
 
 ### Fixed
 
+- Clip export can no longer break because `watermark.png` is missing from an installation: the logo is embedded in `ElyCast.dll` and written to the per-user cache before each export.
+- `scripts/install.ps1` no longer deletes the development build (`bin`, `artifacts\Release`) of the checkout, and never after a failed install. Pass `-RemoveBuildOutput` to opt in after a successful install.
+- The CI release components now include the bundled `shaders\` folder with its license notices.
 - Changing the interface language no longer reconnects the auto-connect profile or reopens the local library in the middle of playback.
 - English sessions no longer show French messages for VLC playback errors, the onboarding installation status, the accent label, and the RTX VSR test.
 - A saved password that cannot be decrypted (for example, a profile copied from another Windows account) is now reported instead of silently emptied.

@@ -5,7 +5,11 @@ param(
     # Reuse the native renderer already built in native/ElyFlow.Native/bin/Release.
     [switch]$SkipNativeBuild,
     [switch]$NoDesktopShortcut,
-    [switch]$Launch
+    [switch]$Launch,
+    # Opt-in: after a successful install, delete the build executables left
+    # in the checkout (bin, artifacts\Release) so only the installed copy
+    # remains runnable. Off by default to keep the development build.
+    [switch]$RemoveBuildOutput
 )
 
 # Builds ElyCast from this checkout and installs or updates the single
@@ -98,12 +102,15 @@ try {
 
     $commit = (& git -C $root rev-parse --short HEAD 2>$null)
     Write-Host "ElyCast $version$(if ($commit) { " ($commit)" }) installed in $InstallDir" -ForegroundColor Green
+    if ($RemoveBuildOutput) {
+        # Only after a successful install: drop the intermediate executables
+        # the build left in the checkout (obj keeps builds incremental).
+        foreach ($path in (Join-Path $root 'artifacts\Release'), (Join-Path $root 'bin')) {
+            if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+    }
     if ($Launch) { Start-Process -FilePath $exe -WorkingDirectory $InstallDir }
 }
 finally {
-    # Keep exactly one runnable ElyCast on the machine: drop the intermediate
-    # executables the build left in the checkout (obj keeps builds incremental).
-    foreach ($path in $staging, (Join-Path $root 'artifacts\Release'), (Join-Path $root 'bin')) {
-        if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue }
-    }
+    if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue }
 }

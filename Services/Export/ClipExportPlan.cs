@@ -232,8 +232,8 @@ public static class ClipExportPlanner
         return options;
     }
 
-    /// <summary>The ElyCast logo shipped next to the executable; every export carries it.</summary>
-    public static string WatermarkFile => Path.Combine(AppContext.BaseDirectory, "watermark.png");
+    /// <summary>The ElyCast logo every export carries, materialized from ElyCast.dll by <see cref="WatermarkAsset"/>.</summary>
+    public static string WatermarkFile => WatermarkAsset.FilePath;
 
     /// <summary>Persisted corner name ("bottom-right"...) to its position; unknown values fall back to bottom right.</summary>
     public static ClipWatermarkPosition ParseWatermarkPosition(string? value) => value switch

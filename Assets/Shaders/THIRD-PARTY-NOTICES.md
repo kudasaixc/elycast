@@ -14,7 +14,7 @@ original copyright header.
 | `FSRCNNX_x2_8-0-4-1.glsl`, `FSRCNNX_x2_16-0-4-1.glsl` | igv | LGPL-3.0-or-later | https://github.com/igv/FSRCNN-TensorFlow (release 1.1) |
 | `KrigBilateral.glsl` | igv | LGPL-3.0-or-later | https://gist.github.com/igv/a015fc885d5c22e6891820ad89555637 |
 | `adaptive-sharpen.glsl` | bacondither (port by igv) | BSD-2-Clause | https://gist.github.com/igv/8a77e4eb8276753b54bb94c1c50c317e |
-| `ElyCast_Vibrance.glsl` | ElyCast | ElyCast license | this repository |
+| `ElyCast_Vibrance.glsl` | ElyCast | MPL-2.0 | this repository |
 
 The LGPL-licensed shaders are distributed as their complete, modifiable
 source; their license texts are `LGPL-3.0.txt` and `GPL-3.0.txt` in this

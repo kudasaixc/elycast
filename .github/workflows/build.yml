@@ -53,6 +53,7 @@ jobs:
             artifacts/publish/ElyCast.exe
             artifacts/publish/ElyCastLogo.png
             artifacts/publish/glfw3.dll
+            artifacts/publish/shaders/
             native/ElyFlow.Native/bin/Release/ElyFlow.Native.dll
           if-no-files-found: error
           retention-days: 7

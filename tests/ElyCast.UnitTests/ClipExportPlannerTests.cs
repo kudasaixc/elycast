@@ -103,7 +103,16 @@ public class ClipExportPlannerTests
         Assert.StartsWith("gpu=w=2560:h=1440,lavfi=graph=%", vf);
         Assert.Contains("watermark.png", vf);
         Assert.EndsWith(",format=yuv420p", vf);
-        Assert.True(File.Exists(ClipExportPlanner.WatermarkFile), "watermark.png must ship next to the executable");
+        Assert.Equal(WatermarkAsset.FilePath, ClipExportPlanner.WatermarkFile);
+    }
+
+    [Fact]
+    public void Watermark_is_embedded_in_the_assembly()
+    {
+        var logo = WatermarkAsset.ReadEmbedded();
+
+        Assert.True(logo.Length > 1024, "the embedded watermark must be the real logo");
+        Assert.Equal(new byte[] { 0x89, 0x50, 0x4E, 0x47 }, logo[..4]); // PNG signature
     }
 
     [Theory]
